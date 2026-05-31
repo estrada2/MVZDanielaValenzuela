@@ -218,26 +218,6 @@ probarConexion();
 
 async function guardarClientesSupabase() {
 
- const { error } = await supabaseClient
-   .from('clientes')
-   .upsert(
-      clientes.map(c => ({
-         id: c.id,
-         nombre: c.nombre,
-         telefono: c.telefono || null,
-         email: c.email || null
-      }))
-   );
-
- if(error){
-    console.error(error);
- }else{
-    console.log("Clientes sincronizados");
- }
-
-}
-async function guardarClientesSupabase() {
-
  const clientesSinId =
    clientes.map(c => ({
 
@@ -266,6 +246,33 @@ async function guardarClientesSupabase() {
  }
 
 }
+
+async function cargarClientesSupabase(){
+
+ const { data, error } = await supabaseClient
+   .from('clientes')
+   .select('*');
+
+ if(error){
+
+   console.error(error);
+
+   return;
+
+ }
+
+ clientes = data || [];
+
+ console.log("Clientes cargados:",clientes);
+
+ if(typeof renderClientes === "function"){
+
+    renderClientes();
+
+ }
+
+}
+
 
 window.addEventListener(
  "load",
