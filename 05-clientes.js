@@ -77,12 +77,21 @@ function renderClientes() {
     const lista = $('lista-clientes');
     if(!lista) return;
     lista.innerHTML = "";
-    let filtrados = clientes.filter(c => c.owner.toLowerCase().includes(buscador) || c.phone.includes(buscador) || c.address.toLowerCase().includes(buscador));
+    const coincide = valor => String(valor || '').toLowerCase().includes(buscador);
+    let filtrados = clientes.filter(c =>
+        coincide(c.owner) ||
+        coincide(c.phone) ||
+        coincide(c.address) ||
+        (c.mascotas || []).some(m => coincide(m.name))
+    );
     if($('contador-registros')) {
         $('contador-registros').innerText = `${filtrados.length} expedientes`;
     }
     if(filtrados.length === 0) { lista.innerHTML = `<div class="text-center text-gray-400 text-xs py-12">Sin resultados.</div>`; return; }
     filtrados.forEach(c => {
+        const mascotasCoincidentes = buscador
+            ? (c.mascotas || []).filter(m => coincide(m.name)).map(m => m.name)
+            : [];
         const div = document.createElement('div');
         div.className = "p-4 bg-gray-50 rounded-xl border border-gray-200 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 hover:bg-gray-100/70 transition-all";
         div.innerHTML = `
@@ -90,6 +99,7 @@ function renderClientes() {
                 <h4 class="text-sm font-bold text-slate-900">${c.owner}</h4>
                 <p class="text-xs text-gray-500">📍 ${c.address} • 📱 ${c.phone}</p>
                 <p class="text-[11px] font-bold text-blue-700">${c.mascotas ? c.mascotas.length : 0} mascotas en archivo</p>
+                ${mascotasCoincidentes.length ? `<p class="text-[11px] font-semibold text-emerald-700">Mascota encontrada: ${mascotasCoincidentes.join(', ')}</p>` : ''}
             </div>
             <div class="flex items-center gap-2 w-full sm:w-auto justify-end">
                 <button onclick="verMascotasCliente(${c.id})" class="bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold px-3 py-2 rounded-lg shadow-2xs">Mascotas</button>

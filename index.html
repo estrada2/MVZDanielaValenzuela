@@ -107,7 +107,7 @@
                     <div class="bg-white p-4 rounded-2xl border border-gray-200 shadow-xs flex flex-col sm:flex-row gap-3 items-center justify-between">
                         <div class="relative w-full sm:w-96">
                             <i data-lucide="search" class="w-4 h-4 text-gray-400 absolute left-3.5 top-3"></i>
-                            <input type="text" id="buscador" oninput="renderClientes()" placeholder="Buscar por dueño, cel o dirección..." class="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-blue-500 bg-gray-50/50">
+                            <input type="text" id="buscador" oninput="renderClientes()" placeholder="Buscar dueño, mascota, cel o dirección..." class="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-blue-500 bg-gray-50/50">
                         </div>
                         <div class="flex items-center gap-3 w-full sm:w-auto justify-end">
                             <span class="text-xs font-bold text-blue-700 bg-blue-50 px-3 py-2 rounded-xl border border-blue-100" id="contador-registros">0 expedientes</span>
@@ -857,15 +857,15 @@
         <button onclick="switchTab('finanzas')" class="flex flex-col items-center text-blue-200"><i data-lucide="dollar-sign" class="w-5 h-5"></i><span class="text-[10px] mt-1">Servicios</span></button>
     </nav>
 
-    <script src="00-supabase.js"></script>
-    <script src="01-core.js"></script>
-    <script src="02-firmas.js"></script>
-    <script src="03-pdf.js"></script>
-    <script src="04-consultas.js"></script>
-    <script src="05-clientes.js"></script>
-    <script src="06-agenda.js"></script>
-    <script src="07-inventario-finanzas.js"></script>
-    <script src="08-main.js"></script>
+    <script src="js/00-supabase.js"></script>
+    <script src="js/01-core.js"></script>
+    <script src="js/02-firmas.js"></script>
+    <script src="js/03-pdf.js"></script>
+    <script src="js/04-consultas.js"></script>
+    <script src="js/05-clientes.js"></script>
+    <script src="js/06-agenda.js"></script>
+    <script src="js/07-inventario-finanzas.js"></script>
+    <script src="js/08-main.js"></script>
 
 </body>
 </html>
