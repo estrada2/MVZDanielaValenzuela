@@ -218,25 +218,35 @@ probarConexion();
 
 async function guardarClientesSupabase() {
 
-console.log(clientes);
+ const clientesSupabase =
+ clientes.map(c => ({
 
-const clientesSinId =
-clientes.map(c=>({
+    nombre: c.owner,
 
-    nombre: c.nombre,
-
-    telefono: c.telefono || null,
+    telefono: c.phone || null,
 
     email: c.email || null
 
-}));
+ }));
 
-const { error } =
-await supabaseClient
-.from('clientes')
-.insert(clientesSinId);
 
-console.log(error);
+ const { error } =
+ await supabaseClient
+ .from('clientes')
+ .insert(clientesSupabase);
+
+
+ if(error){
+
+   console.error(error);
+
+ }else{
+
+   console.log(
+    "Clientes sincronizados"
+   );
+
+ }
 
 }
 
