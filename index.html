@@ -1,0 +1,795 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>VetHome Pro - MVZ Daniela Valenzuela</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+    <link rel="stylesheet" href="style.css">
+
+</head>
+<body class="h-screen flex overflow-hidden">
+
+    <aside class="w-68 sidebar-brand text-white flex flex-col justify-between hidden md:flex shrink-0 shadow-xl border-r border-slate-900">
+        <div class="p-5 flex-1 flex flex-col justify-between overflow-y-auto">
+            <div>
+                <div class="bg-white/10 p-4 rounded-xl mb-6 border border-white/10 backdrop-blur-xs flex flex-col items-center text-center">
+                    <div class="w-20 h-20 rounded-full bg-white p-1 mb-2 shadow-inner flex items-center justify-center overflow-hidden">
+                        <i data-lucide="heart-pulse" class="w-12 h-12 text-blue-900"></i>
+                    </div>
+                    <h1 class="text-base font-bold tracking-wide">Daniela Valenzuela</h1>
+                    <p class="text-[10px] text-blue-200 font-medium uppercase tracking-wider">Médico Veterinario Zootecnista</p>
+                </div>
+
+                <nav class="space-y-2">
+                    <button onclick="switchTab('clientes')" id="nav-clientes" class="w-full flex items-center gap-3 px-4 py-3 bg-amber-500 rounded-xl text-left font-bold text-slate-950 transition-all shadow-md">
+                        <i data-lucide="users" class="w-5 h-5"></i> Clientes y Mascotas
+                    </button>
+                    <button onclick="switchTab('agenda')" id="nav-agenda" class="w-full flex items-center gap-3 px-4 py-3 hover:bg-white/10 text-blue-100 hover:text-white rounded-xl text-left font-medium transition-all">
+                        <i data-lucide="calendar" class="w-5 h-5"></i> Agenda
+                    </button>
+                    <button onclick="switchTab('inventario')" id="nav-inventario" class="w-full flex items-center gap-3 px-4 py-3 hover:bg-white/10 text-blue-100 hover:text-white rounded-xl text-left font-medium transition-all">
+                        <i data-lucide="package" class="w-5 h-5"></i> Control de Stock
+                    </button>
+                    <button onclick="switchTab('finanzas')" id="nav-finanzas" class="w-full flex items-center gap-3 px-4 py-3 hover:bg-white/10 text-blue-100 hover:text-white rounded-xl text-left font-medium transition-all">
+                        <i data-lucide="dollar-sign" class="w-5 h-5"></i> Finanzas
+                    </button>
+                </nav>
+            </div>
+
+            <div class="mt-8 pt-4 border-t border-white/10 space-y-2">
+                <p class="text-[10px] text-blue-300 font-bold uppercase tracking-wider px-1">Sincronización iCloud+</p>
+                <button onclick="exportarAICloud()" class="w-full flex items-center gap-2 px-3 py-2 bg-blue-600/40 hover:bg-blue-600 text-xs font-semibold rounded-lg text-left text-white border border-blue-500/30 transition-all">
+                    <i data-lucide="cloud-lightning" class="w-4 h-4 text-blue-400"></i> Respaldar en iCloud Drive
+                </button>
+                <label class="w-full flex items-center gap-2 px-3 py-2 bg-slate-800 hover:bg-slate-700 text-xs font-semibold rounded-lg text-left text-blue-200 border border-slate-700 transition-all cursor-pointer">
+                    <i data-lucide="download-cloud" class="w-4 h-4 text-blue-400"></i> Cargar desde iCloud
+                    <input type="file" id="icloud-import-file" accept=".json" onchange="importarDesdeICloud(event)" class="hidden">
+                </label>
+            </div>
+        </div>
+        <div class="p-5 border-t border-white/10 text-[10px] text-blue-200/60 text-center font-semibold">
+            VetHome Pro v7.5 • Smart Checklist
+        </div>
+    </aside>
+
+    <main class="flex-1 flex flex-col overflow-hidden glass-main">
+        <header class="bg-white/80 border-b border-gray-200 h-16 flex items-center justify-between px-6 z-10 backdrop-blur-md">
+            <div class="flex items-center gap-3">
+                <h2 id="page-title" class="text-lg font-bold text-slate-800">Clientes y Mascotas</h2>
+            </div>
+            <div class="flex items-center gap-2 text-xs font-semibold text-blue-800 bg-blue-50 px-3 py-1.5 rounded-full border border-blue-100">
+                <i data-lucide="pen-tool" class="w-4 h-4 text-blue-600"></i> Sistema a Domicilio Activo
+            </div>
+        </header>
+
+        <div id="alertas-stock" class="bg-amber-50 border-b border-amber-200 px-6 py-2.5 hidden">
+            <div class="flex items-center gap-2 text-amber-800 text-xs font-semibold">
+                <i data-lucide="alert-triangle" class="w-4 h-4 text-amber-600 shrink-0"></i>
+                <span id="texto-alerta-stock">Atención: Insumos críticos próximos a agotarse.</span>
+            </div>
+        </div>
+
+        <div class="flex-1 overflow-y-auto p-6 space-y-6 pb-24 md:pb-6">
+            
+            <section id="view-clientes" class="space-y-6">
+                <div id="directorio-clientes-area" class="space-y-6">
+                    <div class="bg-white p-4 rounded-2xl border border-gray-200 shadow-xs flex flex-col sm:flex-row gap-3 items-center justify-between">
+                        <div class="relative w-full sm:w-96">
+                            <i data-lucide="search" class="w-4 h-4 text-gray-400 absolute left-3.5 top-3"></i>
+                            <input type="text" id="buscador" oninput="renderClientes()" placeholder="Buscar por dueño, cel o dirección..." class="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-blue-500 bg-gray-50/50">
+                        </div>
+                        <div class="flex items-center gap-3 w-full sm:w-auto justify-end">
+                            <span class="text-xs font-bold text-blue-700 bg-blue-50 px-3 py-2 rounded-xl border border-blue-100" id="contador-registros">0 expedientes</span>
+                            <button onclick="abrirModalCliente()" class="bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold px-4 py-2.5 rounded-xl flex items-center gap-2 shadow-xs transition-all">
+                                <i data-lucide="user-plus" class="w-4 h-4"></i> Registrar Nuevo Propietario
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="bg-white p-6 rounded-2xl border border-gray-200 shadow-xs flex flex-col min-h-[500px]">
+                        <div class="space-y-4" id="lista-clientes"></div>
+                    </div>
+                </div>
+
+                <div id="subpagina-mascotas-area" class="hidden space-y-4">
+                    <div class="bg-white p-4 rounded-2xl border flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+                        <div>
+                            <button onclick="volverAlDirectorioClientes()" class="text-xs font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 px-3 py-2 rounded-xl flex items-center gap-1.5 transition-all mb-1">
+                                <i data-lucide="arrow-left" class="w-4 h-4"></i> Volver al Directorio
+                            </button>
+                            <h3 class="text-lg font-bold text-slate-900" id="subpagina-cliente-titulo">Mascotas de: --</h3>
+                            <p class="text-xs text-gray-500" id="subpagina-cliente-detalles">📍 Dirección: --</p>
+                        </div>
+                        <button id="btn-subpagina-agregar-mascota" class="bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold px-4 py-2.5 rounded-xl flex items-center gap-2 shadow-xs transition-all">
+                            <i data-lucide="plus-circle" class="w-4 h-4"></i> Dar de Alta Nueva Mascota
+                        </button>
+                    </div>
+                    <div class="bg-white p-6 rounded-2xl border grid grid-cols-1 md:grid-cols-2 gap-4 min-h-[400px]" id="contenedor-subpagina-mascotas"></div>
+                </div>
+            </section>
+
+            <section id="view-agenda" class="hidden space-y-6">
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                    <div class="bg-white p-6 rounded-2xl border border-gray-200 shadow-xs space-y-4 h-fit">
+                        <h3 class="text-md font-bold text-slate-900 flex items-center gap-2" id="titulo-form-agenda">
+                            <i data-lucide="calendar-plus" class="text-blue-600 w-5 h-5"></i> Agendar Nueva Visita
+                        </h3>
+                        <form id="form-agenda" class="space-y-3" onsubmit="guardarCita(event)">
+                            <input type="hidden" id="edit-agenda-id">
+                            <div class="grid grid-cols-2 gap-2">
+                                <div>
+                                    <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Fecha</label>
+                                    <input type="date" id="agenda-fecha" required class="w-full px-3 py-2 border rounded-xl text-sm">
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Hora</label>
+                                    <input type="time" id="agenda-hora" required class="w-full px-3 py-2 border rounded-xl text-sm">
+                                </div>
+                            </div>
+                            <div>
+                                <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Asociar Propietario / Paciente</label>
+                                <select id="agenda-cliente-select" required onchange="autocompletarDireccionAgenda()" class="w-full px-3 py-2 border rounded-xl text-sm bg-white"></select>
+                            </div>
+                            <div>
+                                <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Dirección del Destino</label>
+                                <textarea id="agenda-direccion" required rows="2" class="w-full px-3 py-2 border rounded-xl text-sm" placeholder="Dirección exacta para mapeo..."></textarea>
+                            </div>
+                            <div>
+                                <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Notas / Motivo de Visita</label>
+                                <input type="text" id="agenda-notes" placeholder="ej. Vacunación Anual o Revisión" class="w-full px-3 py-2 border rounded-xl text-sm">
+                            </div>
+                            <div class="flex gap-2">
+                                <button type="submit" id="btn-guardar-agenda" class="flex-1 bg-blue-600 text-white font-bold py-2.5 rounded-xl text-sm hover:bg-blue-700 shadow-xs">
+                                    Agregar a la Agenda
+                                </button>
+                                <button type="button" id="btn-cancelar-agenda" onclick="cancelarEdicionAgenda()" class="hidden px-3 py-2.5 bg-gray-100 text-gray-600 font-medium rounded-xl text-sm hover:bg-gray-200">
+                                    Cancelar
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                    <div class="lg:col-span-2 bg-white p-6 rounded-2xl border border-gray-200 shadow-xs flex flex-col h-[550px]">
+                        <h3 class="text-sm font-bold text-gray-700 mb-3 uppercase tracking-wider">Cronograma de Consultas a Domicilio</h3>
+                        <div class="flex-1 overflow-y-auto space-y-3" id="lista-agenda"></div>
+                    </div>
+                </div>
+            </section>
+
+            <section id="view-nueva-consulta" class="hidden max-w-4xl mx-auto space-y-6">
+                <div class="bg-white p-6 rounded-2xl border border-gray-200 shadow-xs space-y-4">
+                    <h3 class="text-lg font-bold text-gray-900 border-b pb-2 flex justify-between items-center">
+                        <span>Formato Clínico de Consulta</span>
+                        <span id="badge-firma-status" class="text-xs bg-red-100 text-red-700 px-2.5 py-1 rounded-md font-bold uppercase tracking-wider">Falta Firma Responsiva</span>
+                    </h3>
+                    
+                    <form id="form-consulta" onsubmit="guardarConsulta(event)" class="space-y-4">
+                        <div class="bg-blue-50 p-4 rounded-xl border border-blue-100 flex flex-col sm:flex-row justify-between sm:items-center gap-3">
+                            <div>
+                                <span class="text-xs font-semibold text-blue-700 uppercase block">Paciente En Atención:</span>
+                                <span id="consulta-paciente-nombre" class="text-base font-bold text-blue-900">Ninguno seleccionado</span>
+                            </div>
+                            <button type="button" id="btn-abrir-responsiva-modal" onclick="abrirModalResponsivaFlotante()" class="bg-amber-500 hover:bg-amber-600 text-slate-950 text-xs font-bold px-4 py-2.5 rounded-xl flex items-center gap-2 shadow-sm transition-all">
+                                <i data-lucide="signature"></i> Abrir Contrato Responsiva
+                            </button>
+                        </div>
+
+                        <div class="bg-gray-50 p-4 rounded-xl border border-gray-200 space-y-4">
+                            <h4 class="text-xs font-bold text-slate-900 uppercase tracking-wider flex items-center gap-1.5">
+                                <i data-lucide="clipboard-check" class="text-blue-600 w-4 h-4"></i> Datos Generales de la Visita
+                            </h4>
+                            
+                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                <div>
+                                    <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Tipo de Consulta</label>
+                                    <select id="consulta-tipo-drop" onchange="actualizarVistaPorTipoConsulta()" class="w-full px-3 py-2 border rounded-xl text-sm bg-white outline-none font-bold text-blue-900">
+                                        <option value="Inicial">Consulta Médica Inicial</option>
+                                        <option value="Seguimiento">Consulta de Seguimiento</option>
+                                        <option value="Vacunacion">Vacunación / Profilaxis</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="grid grid-cols-3 gap-3">
+                            <div>
+                                <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Peso (kg)</label>
+                                <input type="number" step="0.01" id="weight" class="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Temp (°C)</label>
+                                <input type="number" step="0.1" id="temp" class="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Garrapatas</label>
+                                <select id="consulta-garrapatas" onchange="actualizarDisclaimerDinamico()" class="w-full px-3 py-2 border rounded-xl text-sm bg-white outline-none">
+                                    <option value="No">No</option>
+                                    <option value="Si">Sí</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div id="seccion-sintomas-main" class="space-y-4">
+                            <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                                <div>
+                                    <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Alimentación</label>
+                                    <select id="consulta-alimentacion" onchange="actualizarDisclaimerDinamico()" class="w-full px-3 py-2 border rounded-xl text-sm bg-white outline-none">
+                                        <option value="Croquetas">Solo Croquetas</option>
+                                        <option value="Casera">Comida Casera</option>
+                                        <option value="Mixta">Mixta (Casera y Croquetas)</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Estado de Ánimo</label>
+                                    <select id="consulta-animo-drop" onchange="actualizarDisclaimerDinamico()" class="w-full px-3 py-2 border rounded-xl text-sm bg-white outline-none">
+                                        <option value="Normal">Normal / Activo</option>
+                                        <option value="Decaido">Decaído / Apático</option>
+                                        <option value="Hiperexcitado">Hiperexcitado</option>
+                                        <option value="Agresivo">Agresivo</option>
+                                        <option value="Estresado">Estresado</option>
+                                    </select>
+                                </div>
+                            </div>
+                            
+                            <div>
+                                <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Motivo / Diagnóstico Preliminar</label>
+                                <input type="text" id="motivo" oninput="actualizarDisclaimerDinamico()" placeholder="Detalla el motivo de la consulta..." class="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm outline-none">
+                            </div>
+
+                            <div class="bg-slate-50 p-4 rounded-xl border border-gray-200 space-y-3">
+                                <label class="block text-xs font-bold text-gray-700 uppercase border-b pb-1">Reporte de Síntomas</label>
+                                <div class="flex items-center gap-2 mb-2">
+                                    <input type="checkbox" id="check-asintomatico" checked onchange="toggleSintomasInputsBase()" class="w-4 h-4 text-blue-600 rounded">
+                                    <label for="check-asintomatico" class="text-sm font-semibold text-emerald-700">✓ Paciente aparentemente Sano / Asintomático</label>
+                                </div>
+                                
+                                <div id="wrapper-sintomas-detalles" class="hidden space-y-3">
+                                    <p class="text-[11px] font-bold text-slate-500 uppercase tracking-wide">Seleccione los signos clínicos observados:</p>
+                                    <div class="flex flex-wrap gap-2">
+                                        <label class="chip-checkbox cursor-pointer">
+                                            <input type="checkbox" value="Vómito" class="sintoma-chk hidden" onchange="actualizarDisclaimerDinamico()">
+                                            <div class="px-3 py-1.5 border border-gray-300 rounded-xl text-xs bg-white text-gray-600 transition-all select-none">Vómito</div>
+                                        </label>
+                                        <label class="chip-checkbox cursor-pointer">
+                                            <input type="checkbox" value="Diarrea" class="sintoma-chk hidden" onchange="actualizarDisclaimerDinamico()">
+                                            <div class="px-3 py-1.5 border border-gray-300 rounded-xl text-xs bg-white text-gray-600 transition-all select-none">Diarrea</div>
+                                        </label>
+                                        <label class="chip-checkbox cursor-pointer">
+                                            <input type="checkbox" value="Fiebre" class="sintoma-chk hidden" onchange="actualizarDisclaimerDinamico()">
+                                            <div class="px-3 py-1.5 border border-gray-300 rounded-xl text-xs bg-white text-gray-600 transition-all select-none">Fiebre</div>
+                                        </label>
+                                        <label class="chip-checkbox cursor-pointer">
+                                            <input type="checkbox" value="Letargo / Decaimiento" class="sintoma-chk hidden" onchange="actualizarDisclaimerDinamico()">
+                                            <div class="px-3 py-1.5 border border-gray-300 rounded-xl text-xs bg-white text-gray-600 transition-all select-none">Letargo / Decaimiento</div>
+                                        </label>
+                                        <label class="chip-checkbox cursor-pointer">
+                                            <input type="checkbox" value="Falta de Apetito" class="sintoma-chk hidden" onchange="actualizarDisclaimerDinamico()">
+                                            <div class="px-3 py-1.5 border border-gray-300 rounded-xl text-xs bg-white text-gray-600 transition-all select-none">Falta de Apetito</div>
+                                        </label>
+                                        <label class="chip-checkbox cursor-pointer">
+                                            <input type="checkbox" value="Tos" class="sintoma-chk hidden" onchange="actualizarDisclaimerDinamico()">
+                                            <div class="px-3 py-1.5 border border-gray-300 rounded-xl text-xs bg-white text-gray-600 transition-all select-none">Tos</div>
+                                        </label>
+                                        <label class="chip-checkbox cursor-pointer">
+                                            <input type="checkbox" value="Secreciones" class="sintoma-chk hidden" onchange="actualizarDisclaimerDinamico()">
+                                            <div class="px-3 py-1.5 border border-gray-300 rounded-xl text-xs bg-white text-gray-600 transition-all select-none">Secreciones (Ocular/Nasal)</div>
+                                        </label>
+                                        <label class="chip-checkbox cursor-pointer">
+                                            <input type="checkbox" value="Prurito / Comezón" class="sintoma-chk hidden" onchange="actualizarDisclaimerDinamico()">
+                                            <div class="px-3 py-1.5 border border-gray-300 rounded-xl text-xs bg-white text-gray-600 transition-all select-none">Comezón intensa</div>
+                                        </label>
+                                        <label class="chip-checkbox cursor-pointer">
+                                            <input type="checkbox" value="Dolor" class="sintoma-chk hidden" onchange="actualizarDisclaimerDinamico()">
+                                            <div class="px-3 py-1.5 border border-gray-300 rounded-xl text-xs bg-white text-gray-600 transition-all select-none">Dolor evidente</div>
+                                        </label>
+                                    </div>
+                                    <textarea id="sintomas-detalles" oninput="actualizarDisclaimerDinamico()" rows="2" class="w-full mt-2 px-3 py-2 border border-gray-200 rounded-xl text-xs outline-none" placeholder="Otros síntomas, detalles de pipí/agua, etc..."></textarea>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div id="seccion-campos-seguimiento" class="hidden bg-amber-50/50 p-4 rounded-xl border border-amber-200 space-y-3">
+                            <span class="text-[11px] font-bold text-amber-700 uppercase"><i data-lucide="activity" class="inline w-3 h-3"></i> Módulo de Seguimiento Clínico</span>
+                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                <div>
+                                    <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Evolución</label>
+                                    <input type="text" id="seg-memoria" placeholder="¿Cómo ha evolucionado?" class="w-full px-3 py-2 border rounded-xl text-sm outline-none">
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Tratamiento Actual</label>
+                                    <input type="text" id="seg-tratamiento-actual" placeholder="Dosis/Días actuales" class="w-full px-3 py-2 border rounded-xl text-sm outline-none">
+                                </div>
+                            </div>
+                            <div class="flex flex-col sm:flex-row gap-4 items-center bg-white p-3 rounded-xl border">
+                                <div class="flex items-center gap-2">
+                                    <input type="checkbox" id="seg-proxima-visita" onchange="document.getElementById('wrapper-agenda-sugerida').classList.toggle('hidden', !this.checked)" class="w-4 h-4 text-blue-600 rounded">
+                                    <label for="seg-proxima-visita" class="text-xs font-bold text-slate-700 uppercase">Se recomienda próxima visita de control</label>
+                                </div>
+                                <div id="wrapper-agenda-sugerida" class="hidden flex items-center gap-2 flex-1 w-full">
+                                    <span class="text-xs text-gray-400 font-medium shrink-0">Sugerir para:</span>
+                                    <input type="date" id="seg-fecha-sugerida" class="px-2 py-1.5 border rounded-lg text-xs outline-none">
+                                    <span class="text-[10px] text-teal-600 font-bold italic">✓ Se agendará al guardar</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div id="seccion-campos-vacunacion" class="hidden bg-blue-50/50 p-4 rounded-xl border border-blue-200 space-y-3">
+                            <span class="text-[11px] font-bold text-blue-800 uppercase"><i data-lucide="syringe" class="inline w-3 h-3"></i> Registro de Profilaxis y Desparasitación</span>
+                            <div class="space-y-3">
+                                <div>
+                                    <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Vacunas Aplicadas</label>
+                                    <div class="flex flex-wrap gap-2">
+                                        <label class="chip-checkbox cursor-pointer">
+                                            <input type="checkbox" value="Múltiple / Polivalente" class="vacuna-chk hidden" onchange="actualizarDisclaimerDinamico()">
+                                            <div class="px-3 py-1.5 border border-gray-300 rounded-xl text-xs bg-white text-gray-600 transition-all select-none">Múltiple</div>
+                                        </label>
+                                        <label class="chip-checkbox cursor-pointer">
+                                            <input type="checkbox" value="Rabia" class="vacuna-chk hidden" onchange="actualizarDisclaimerDinamico()">
+                                            <div class="px-3 py-1.5 border border-gray-300 rounded-xl text-xs bg-white text-gray-600 transition-all select-none">Rabia</div>
+                                        </label>
+                                        <label class="chip-checkbox cursor-pointer">
+                                            <input type="checkbox" value="Bordetella" class="vacuna-chk hidden" onchange="actualizarDisclaimerDinamico()">
+                                            <div class="px-3 py-1.5 border border-gray-300 rounded-xl text-xs bg-white text-gray-600 transition-all select-none">Bordetella</div>
+                                        </label>
+                                        <label class="chip-checkbox cursor-pointer">
+                                            <input type="checkbox" value="Giardia" class="vacuna-chk hidden" onchange="actualizarDisclaimerDinamico()">
+                                            <div class="px-3 py-1.5 border border-gray-300 rounded-xl text-xs bg-white text-gray-600 transition-all select-none">Giardia</div>
+                                        </label>
+                                        <label class="chip-checkbox cursor-pointer">
+                                            <input type="checkbox" value="Leucemia Felina" class="vacuna-chk hidden" onchange="actualizarDisclaimerDinamico()">
+                                            <div class="px-3 py-1.5 border border-gray-300 rounded-xl text-xs bg-white text-gray-600 transition-all select-none">Leucemia Felina</div>
+                                        </label>
+                                        <label class="chip-checkbox cursor-pointer">
+                                            <input type="checkbox" value="Triple Felina" class="vacuna-chk hidden" onchange="actualizarDisclaimerDinamico()">
+                                            <div class="px-3 py-1.5 border border-gray-300 rounded-xl text-xs bg-white text-gray-600 transition-all select-none">Triple Felina</div>
+                                        </label>
+                                    </div>
+                                    <input type="text" id="vacunas-aplicadas-extra" oninput="actualizarDisclaimerDinamico()" placeholder="Otra vacuna / lote / laboratorio..." class="w-full mt-2 px-3 py-2 border rounded-xl text-sm outline-none">
+                                </div>
+                                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                    <div>
+                                        <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">¿Se administró Desparasitante?</label>
+                                        <select id="aplico-desparasitante" onchange="actualizarDisclaimerDinamico(); document.getElementById('desparasitante-detalles').classList.toggle('hidden', this.value === 'No')" class="w-full px-3 py-2 border rounded-xl text-sm bg-white outline-none">
+                                            <option value="No">No</option>
+                                            <option value="Si">Sí</option>
+                                        </select>
+                                    </div>
+                                    <div id="desparasitante-detalles" class="hidden">
+                                        <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Nombre / Dosis del Desparasitante</label>
+                                        <input type="text" id="desparasitante-nombre" oninput="actualizarDisclaimerDinamico()" placeholder="Ej: Drontal Plus (1 tableta)" class="w-full px-3 py-2 border rounded-xl text-sm outline-none">
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="border border-slate-200 rounded-xl p-4 bg-white space-y-3">
+                            <div class="flex justify-between items-center">
+                                <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider">Insumos del Almacén a descontar</label>
+                                <button type="button" onclick="agregarFilaMedicamento()" class="text-xs font-bold bg-slate-100 text-slate-700 border border-slate-300 px-2.5 py-1 rounded-lg flex items-center gap-1 hover:bg-slate-200">
+                                    <i data-lucide="plus" class="w-3.5 h-3.5"></i> Añadir Insumo
+                                </button>
+                            </div>
+                            <div id="contenedor-filas-medicamentos" class="space-y-2"></div>
+                        </div>
+
+                        <div>
+                            <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Indicaciones Médicas y Cuidados en Casa</label>
+                            <textarea id="tratamiento" rows="3" class="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm outline-none" placeholder="Receta y recomendaciones para el propietario..."></textarea>
+                        </div>
+
+                        <div class="bg-emerald-50 border border-emerald-200 p-4 rounded-xl space-y-4">
+                            <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 items-end">
+                                <div>
+                                    <label class="block text-xs font-bold text-emerald-800 uppercase mb-1">Servicio a Cobrar (Finanzas)</label>
+                                    <div class="relative inline-block w-full text-left" id="dropdown-servicios-wrapper">
+                                        <button type="button" onclick="toggleDropdownServicios()" class="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-left text-xs font-medium text-slate-700 flex justify-between items-center focus:bg-white outline-none shadow-3xs transition-all">
+                                            <span id="dropdown-servicios-label">-- Seleccionar Servicios --</span>
+                                            <i data-lucide="chevron-down" class="w-4 h-4 text-gray-400"></i>
+                                        </button>
+                                        <div id="dropdown-servicios-opciones" class="hidden absolute left-0 z-50 mt-1 w-full max-h-60 overflow-y-auto rounded-xl bg-white p-2 shadow-xl border border-gray-200 space-y-0.5">
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="text-right">
+                                    <p class="text-[10px] font-bold text-gray-500 uppercase">Costo Estimado Consulta</p>
+                                    <p class="text-2xl font-black text-emerald-700">$<span id="consulta-costo-total">0.00</span></p>
+                                </div>
+                            </div>
+                            <div id="servicios-seleccionados-resumen" class="bg-white border border-emerald-100 rounded-xl p-3 text-xs text-slate-500">
+                                No hay servicios seleccionados.
+                            </div>
+                            <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                                <div>
+                                    <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Método de Pago</label>
+                                    <select id="consulta-metodo-pago" class="w-full px-3 py-2 border rounded-xl text-sm bg-white outline-none">
+                                        <option value="Efectivo">Efectivo</option>
+                                        <option value="Transferencia">Transferencia</option>
+                                        <option value="Tarjeta">Tarjeta</option>
+                                        <option value="Mixto">Mixto</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Estado de Pago</label>
+                                    <select id="consulta-estado-pago" class="w-full px-3 py-2 border rounded-xl text-sm bg-white outline-none">
+                                        <option value="Pagado">Pagado</option>
+                                        <option value="Pendiente">Pendiente</option>
+                                        <option value="Cortesía">Cortesía</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Nota de Pago</label>
+                                    <input type="text" id="consulta-nota-pago" placeholder="Folio, parcialidad, pendiente..." class="w-full px-3 py-2 border rounded-xl text-sm outline-none">
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="flex gap-2 pt-2">
+                            <button type="button" onclick="cancelarConsultaActiva()" class="px-4 py-3 bg-gray-100 text-gray-700 font-bold rounded-xl text-sm hover:bg-gray-200 transition-all">Cancelar</button>
+                            <button type="submit" class="w-full bg-slate-900 text-white font-bold py-3 rounded-xl text-sm hover:bg-slate-800 shadow-md transition-all">Guardar Expediente y Consulta</button>
+                        </div>
+                    </form>
+                </div>
+            </section>
+
+            <section id="view-inventario" class="hidden space-y-6">
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                    <div class="bg-white p-6 rounded-2xl border border-gray-200 shadow-xs space-y-4 h-fit">
+                        <h3 class="text-md font-bold text-slate-900 flex items-center gap-2">
+                            <i data-lucide="package-plus" class="text-blue-600 w-5 h-5"></i> Registrar Medicamento
+                        </h3>
+                        <form id="form-inventario" class="space-y-3" onsubmit="guardarMedicamento(event)">
+                            <div>
+                                <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Nombre Comercial / Genérico</label>
+                                <input type="text" id="medName" required class="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm outline-none">
+                            </div>
+                            <div class="grid grid-cols-2 gap-2">
+                                <div>
+                                    <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Stock Inicial</label>
+                                    <input type="number" id="medStock" required min="0" class="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm outline-none">
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Presentación</label>
+                                    <select id="medUnit" class="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm bg-white outline-none">
+                                        <option value="Pzas">Piezas (Pzas)</option>
+                                        <option value="Frascos">Frascos</option>
+                                        <option value="Ampolletas">Ampolletas</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <button type="submit" class="w-full bg-blue-600 text-white font-bold py-2.5 rounded-xl text-sm hover:bg-blue-700 shadow-xs">Añadir al Almacén</button>
+                        </form>
+                    </div>
+                    <div class="lg:col-span-2 bg-white p-6 rounded-2xl border border-gray-200 shadow-xs flex flex-col h-[520px]">
+                        <h3 class="text-sm font-bold text-gray-700 mb-3 uppercase tracking-wider">Control de Existencias en Almacén</h3>
+                        <div class="flex-1 overflow-y-auto space-y-2.5 p-1 rounded-xl" id="lista-inventario"></div>
+                    </div>
+                </div>
+            </section>
+
+            <section id="view-finanzas" class="hidden space-y-6">
+                <div class="bg-white p-6 rounded-2xl border border-gray-200 shadow-3xs space-y-4">
+                    <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+                        <div>
+                            <h3 class="text-base font-bold text-slate-900">Tracking de Ingresos</h3>
+                            <p class="text-xs text-gray-500">Consulta ingresos por periodo, ticket promedio y servicios cobrados.</p>
+                        </div>
+                        <div class="flex bg-slate-100 p-1 rounded-xl border border-gray-200">
+                            <button type="button" onclick="filtrarGanancias('dia')" id="btn-filtro-dia" class="px-3 py-1.5 text-xs font-bold rounded-lg transition-all text-slate-700 bg-white shadow-3xs">Día</button>
+                            <button type="button" onclick="filtrarGanancias('semana')" id="btn-filtro-semana" class="px-3 py-1.5 text-xs font-bold rounded-lg transition-all text-slate-600 hover:text-slate-900">Semana</button>
+                            <button type="button" onclick="filtrarGanancias('mes')" id="btn-filtro-mes" class="px-3 py-1.5 text-xs font-bold rounded-lg transition-all text-slate-600 hover:text-slate-900">Mes</button>
+                            <button type="button" onclick="filtrarGanancias('todo')" id="btn-filtro-todo" class="px-3 py-1.5 text-xs font-bold rounded-lg transition-all text-slate-600 hover:text-slate-900">Todo</button>
+                            <button type="button" onclick="filtrarGanancias('personalizado')" id="btn-filtro-personalizado" class="px-3 py-1.5 text-xs font-bold rounded-lg transition-all text-slate-600 hover:text-slate-900">Rango</button>
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                        <input type="date" id="finanzas-fecha-inicio" onchange="filtrarGanancias('personalizado')" class="px-3 py-2 border rounded-xl text-sm outline-none">
+                        <input type="date" id="finanzas-fecha-fin" onchange="filtrarGanancias('personalizado')" class="px-3 py-2 border rounded-xl text-sm outline-none">
+                        <button type="button" onclick="exportarIngresosCSV()" class="bg-slate-900 text-white text-xs font-bold px-3 py-2 rounded-xl flex items-center justify-center gap-2">
+                            <i data-lucide="download" class="w-4 h-4"></i> Exportar CSV
+                        </button>
+                    </div>
+                    <div class="grid grid-cols-1 md:grid-cols-4 gap-4 pt-2">
+                        <div class="bg-emerald-50 border border-emerald-100 p-4 rounded-xl">
+                            <span class="text-[10px] font-bold text-emerald-700 uppercase tracking-wider block">Ingresos Cobrados</span>
+                            <span class="text-2xl font-black text-emerald-600">$<span id="monto-ganancias-filtrado">0.00</span></span>
+                        </div>
+                        <div class="bg-blue-50 border border-blue-100 p-4 rounded-xl">
+                            <span class="text-[10px] font-bold text-blue-700 uppercase tracking-wider block">Consultas Cobradas</span>
+                            <span class="text-2xl font-black text-blue-700" id="total-consultas-filtrado">0</span>
+                        </div>
+                        <div class="bg-amber-50 border border-amber-100 p-4 rounded-xl">
+                            <span class="text-[10px] font-bold text-amber-700 uppercase tracking-wider block">Ticket Promedio</span>
+                            <span class="text-2xl font-black text-amber-700">$<span id="ticket-promedio-filtrado">0.00</span></span>
+                        </div>
+                        <div class="bg-rose-50 border border-rose-100 p-4 rounded-xl">
+                            <span class="text-[10px] font-bold text-rose-700 uppercase tracking-wider block">Pendiente de Cobro</span>
+                            <span class="text-2xl font-black text-rose-700">$<span id="monto-pendiente-filtrado">0.00</span></span>
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-1 lg:grid-cols-3 gap-4 pt-2">
+                        <div class="lg:col-span-2 border rounded-xl p-4 bg-slate-50">
+                            <h4 class="text-xs font-bold text-slate-700 uppercase mb-3">Movimientos de Ingreso</h4>
+                            <div id="lista-ingresos-consultas" class="space-y-2 max-h-72 overflow-y-auto pr-1"></div>
+                        </div>
+                        <div class="border rounded-xl p-4 bg-slate-50">
+                            <h4 class="text-xs font-bold text-slate-700 uppercase mb-3">Servicios Más Cobrados</h4>
+                            <div id="resumen-servicios-finanzas" class="space-y-2"></div>
+                        </div>
+                    </div>
+                </div>
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                    <div class="bg-white p-6 rounded-2xl border border-gray-200 shadow-xs space-y-4 h-fit">
+                        <h3 class="text-md font-bold text-slate-900 flex items-center gap-2">
+                            <i data-lucide="tag" class="text-emerald-600 w-5 h-5"></i> Catálogo de Servicios
+                        </h3>
+                        <p class="text-xs text-gray-500">Agrega consultas, vacunas o procedimientos fijos para cobro.</p>
+                        <form id="form-finanzas" class="space-y-3" onsubmit="guardarServicio(event)">
+                            <div>
+                                <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Nombre del Servicio</label>
+                                <input type="text" id="fin-nombre" placeholder="Ej: Consulta de Seguimiento" required class="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm outline-none">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Precio de Venta ($)</label>
+                                <input type="number" id="fin-precio" placeholder="0.00" required min="0" step="0.01" class="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm outline-none">
+                            </div>
+                            <button type="submit" class="w-full bg-emerald-600 text-white font-bold py-2.5 rounded-xl text-sm hover:bg-emerald-700 shadow-xs">Guardar Servicio</button>
+                        </form>
+                    </div>
+                    <div class="lg:col-span-2 bg-white p-6 rounded-2xl border border-gray-200 shadow-xs flex flex-col h-[520px]">
+                        <h3 class="text-sm font-bold text-gray-700 mb-3 uppercase tracking-wider">Tarifario de Servicios Registrados</h3>
+                        <div class="flex-1 overflow-y-auto space-y-2.5 p-1 rounded-xl" id="lista-finanzas"></div>
+                    </div>
+                </div>
+            </section>
+        </div>
+    </main>
+
+    <div id="modal-responsiva" class="fixed inset-0 bg-slate-950/70 z-50 flex items-center justify-center p-4 hidden backdrop-blur-xs">
+        <div class="bg-white rounded-2xl max-w-3xl w-full h-[90vh] flex flex-col shadow-2xl overflow-hidden border border-slate-200">
+            <div class="bg-slate-950 text-white p-5 flex justify-between items-center shrink-0">
+                <div class="flex items-center gap-3">
+                    <div class="p-2 bg-amber-500 text-slate-950 rounded-xl shadow-xs">
+                        <i data-lucide="signature" class="w-5 h-5"></i>
+                    </div>
+                    <h3 class="text-base font-bold text-white uppercase tracking-wide">Firma de Consentimiento Clínico</h3>
+                </div>
+                <button onclick="cerrarModalResponsivaFlotante()" class="bg-white/10 hover:bg-white/20 text-white p-2 rounded-xl transition-all">
+                    <i data-lucide="x" class="w-5 h-5"></i>
+                </button>
+            </div>
+            
+            <div class="flex-1 overflow-y-auto p-8 space-y-4 bg-white" id="seccion-responsiva-imprimir">
+                <div class="text-center border-b pb-4 mb-4">
+                    <h4 class="font-bold text-md uppercase text-slate-900 tracking-wider">Consentimiento Informado y Responsiva</h4>
+                    <p class="text-xs text-blue-900 font-bold uppercase tracking-wide">Servicio Veterinario a Domicilio — MVZ Daniela Valenzuela</p>
+                </div>
+                
+                <div class="text-[11px] text-slate-800 space-y-4 leading-relaxed">
+                    <p class="text-right"><b>Fecha:</b> <span id="resp-fecha" class="underline"></span></p>
+                    
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 bg-slate-50 p-3 rounded-xl border border-gray-200">
+                        <p><b>Propietario / Responsable:</b> <span id="resp-dueno" class="underline font-semibold"></span></p>
+                        <p><b>Teléfono:</b> <span id="resp-tel" class="underline font-semibold"></span></p>
+                        <p><b>Paciente:</b> <span id="resp-mascota" class="underline font-semibold"></span></p>
+                        <p><b>Especie/Raza:</b> <span id="resp-especie" class="underline font-semibold"></span>     <b>Edad:</b> <span id="resp-edad" class="underline font-semibold"></span></p>
+                    </div>
+
+                    <div id="resp-datos-generales-box" class="bg-blue-50/50 p-3 rounded-xl border border-blue-100">
+                        <p><b>Procedimiento/Motivo:</b> <span id="resp-motivo" class="font-bold text-blue-950"></span> (<span id="resp-tipo-consulta-lbl" class="italic"></span>)</p>
+                        <p class="mt-1"><b>Datos Clínicos:</b> Ánimo <span id="resp-animo-lbl" class="font-semibold"></span> | Dieta: <span id="resp-alimentacion-lbl" class="font-semibold"></span> | Garrapatas: <span id="resp-garrapatas-lbl" class="font-semibold"></span></p>
+                    </div>
+                    
+                    <div>
+                        <h5 class="font-bold text-slate-900 uppercase text-[11px] border-b pb-0.5 mb-1.5">### DECLARACIONES DEL PROPIETARIO</h5>
+                        <p class="text-justify" id="resp-parrafo-declaracion">Declaro que la información proporcionada sobre el estado de salud de mi mascota es veraz, completa y actualizada. Asimismo, informo cualquier antecedente médico, enfermedad previa, tratamiento reciente o síntomas presentes antes de la atención veterinaria.</p>
+                        
+                        <div class="mt-2 p-3 border rounded-xl bg-gray-50/70" id="resp-sintomas-box"></div>
+                    </div>
+
+                    <div>
+                        <h5 class="font-bold text-slate-900 uppercase text-[11px] border-b pb-0.5 mb-1.5">### CONSENTIMIENTO Y RESPONSIVA</h5>
+                        <p class="text-justify" id="resp-parrafo-consentimiento">Entiendo y acepto que la aplicación de vacunas o tratamientos en animales que ya cursan con enfermedades, infecciones o padecimientos no reportados puede incrementar el riesgo de complicaciones graves, reacciones adversas e incluso el fallecimiento de la mascota. Acepto que el médico veterinario no será responsable por complicaciones, deterioro en la salud o fallecimiento derivados de enfermedades, síntomas o antecedentes clínicos omitidos, ocultados o no informados por el propietario antes del procedimiento.</p>
+                    </div>
+
+                    <div>
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2 items-center">
+                            <div class="flex flex-col items-center space-y-1 bg-slate-50 p-3 rounded-xl border border-gray-200">
+                                <span class="text-[10px] text-gray-400 font-bold uppercase">Firma del Propietario / Responsable</span>
+                                <div class="border border-slate-300 rounded-xl bg-white overflow-hidden shadow-inner">
+                                    <canvas id="canvas-firma" width="240" height="110" class="signature-canvas"></canvas>
+                                </div>
+                                <button type="button" onclick="limpiarLienzoFirma('canvas-firma')" class="text-[9px] font-bold text-red-600 bg-red-50 hover:bg-red-100 px-2 py-0.5 rounded-md flex items-center gap-1">
+                                    <i data-lucide="eraser" class="w-3 h-3"></i> Limpiar Firma
+                                </button>
+                                <p id="resp-firma-dueno-lbl" class="text-[10px] text-slate-800 font-bold text-center border-t border-slate-200 w-full pt-1 mt-1">Nombre Propietario</p>
+                            </div>
+                            
+                            <div class="flex flex-col items-center space-y-1 bg-slate-50 p-3 rounded-xl border border-gray-200">
+                                <span class="text-[10px] text-gray-400 font-bold uppercase">Firma Médico Veterinario (Daniela V.)</span>
+                                <div class="border border-slate-300 rounded-xl bg-white overflow-hidden shadow-inner">
+                                    <canvas id="canvas-firma-vet" width="240" height="110" class="signature-canvas"></canvas>
+                                </div>
+                                <button type="button" onclick="limpiarLienzoFirma('canvas-firma-vet')" class="text-[9px] font-bold text-red-600 bg-red-50 hover:bg-red-100 px-2 py-0.5 rounded-md flex items-center gap-1">
+                                    <i data-lucide="eraser" class="w-3 h-3"></i> Limpiar Firma
+                                </button>
+                                <p class="text-[10px] text-slate-800 font-bold text-center border-t border-slate-200 w-full pt-1 mt-1">MVZ Daniela Valenzuela</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div id="area-id-adjunta" class="pt-2 border-t flex items-center gap-4 text-[10px] text-gray-400 font-semibold">
+                        <span>ID Oficial Adjunto al expediente:</span>
+                        <div id="resp-id-preview-container"></div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="p-4 border-t bg-slate-50 flex flex-col sm:flex-row gap-2 justify-between items-center shrink-0">
+                <span class="text-xs text-gray-500 font-medium">Asegúrese de plasmar ambas firmas en pantalla antes de cerrar.</span>
+                <div class="flex gap-2 w-full sm:w-auto">
+                    <button type="button" onclick="exportarResponsivaAPDF()" class="bg-blue-600 hover:bg-blue-700 text-white font-bold px-4 py-2 rounded-xl text-xs flex items-center gap-1.5 shadow-sm transition-all">
+                        <i data-lucide="file-down" class="w-4 h-4"></i> Guardar PDF Solo
+                    </button>
+                    <button type="button" onclick="cerrarModalResponsivaFlotante()" class="px-5 py-2 bg-slate-900 text-white font-bold text-xs rounded-xl hover:bg-slate-800 transition-all">Listo, Volver al Formulario</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="modal-cliente" class="fixed inset-0 bg-slate-950/70 z-50 flex items-center justify-center p-4 hidden backdrop-blur-xs">
+        <div class="bg-white rounded-2xl max-w-lg w-full p-6 space-y-4 shadow-2xl relative border">
+            <button onclick="cerrarModalCliente()" class="absolute right-4 top-4 bg-gray-100 hover:bg-gray-200 text-gray-600 p-2 rounded-xl">
+                <i data-lucide="x" class="w-4 h-4"></i>
+            </button>
+            <h3 class="text-md font-bold text-slate-900 flex items-center gap-2" id="titulo-form-cliente">
+                <i data-lucide="user-plus" class="text-blue-600 w-5 h-5"></i> Registrar Expediente Propietario
+            </h3>
+            <form id="form-cliente" class="space-y-3" onsubmit="validarYPrevenirDuplicado(event)">
+                <input type="hidden" id="edit-cliente-id">
+                <div>
+                    <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Nombre del Dueño</label>
+                    <input type="text" id="owner" required class="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm outline-none">
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Dirección Completa</label>
+                    <input type="text" id="address" required placeholder="Calle, Número, Colonia, Mexicali" class="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm outline-none">
+                </div>
+                <div class="grid grid-cols-2 gap-2">
+                    <div>
+                        <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Teléfono</label>
+                        <input type="tel" id="phone" required class="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm outline-none">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Correo</label>
+                        <input type="email" id="email" placeholder="opcional" class="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm outline-none">
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Identificación Oficial (ID / INE)</label>
+                    <input type="file" id="owner-id-file" accept="image/*" class="w-full text-xs text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100">
+                </div>
+                <button type="submit" id="btn-guardar-cliente" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 rounded-xl text-sm flex items-center justify-center gap-2 transition-all shadow-xs mt-2">
+                    <i data-lucide="plus-circle" class="w-4 h-4"></i> Guardar Propietario
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <div id="modal-historial-clinico" class="fixed inset-0 bg-slate-950/70 z-50 flex items-center justify-center p-4 hidden backdrop-blur-xs">
+        <div class="bg-white rounded-2xl max-w-3xl w-full h-[85vh] flex flex-col shadow-2xl overflow-hidden border border-slate-200">
+            <div class="bg-slate-900 text-white p-5 flex justify-between items-center shrink-0">
+                <div class="flex items-center gap-3">
+                    <div class="p-2 bg-amber-500 text-slate-950 rounded-xl shadow-xs">
+                        <i data-lucide="folder-heart" class="w-6 h-6"></i>
+                    </div>
+                    <div>
+                        <h3 class="text-base font-bold text-white">Expediente Clínico Digital</h3>
+                        <p class="text-xs text-slate-400" id="historial-subtitulo-paciente">Paciente: --</p>
+                    </div>
+                </div>
+                <button onclick="cerrarModalHistorial()" class="bg-white/10 hover:bg-white/20 text-white p-2 rounded-xl">
+                    <i data-lucide="x" class="w-5 h-5"></i>
+                </button>
+            </div>
+            <div class="flex-1 overflow-y-auto p-6 bg-slate-50 space-y-4" id="historial-contenedor-consultas"></div>
+            <div id="comprobante-historial-print-template" class="hidden"></div>
+            <div class="p-4 border-t bg-white flex justify-end shrink-0">
+                <button onclick="cerrarModalHistorial()" class="px-5 py-2 bg-slate-900 text-white font-bold text-sm rounded-xl hover:bg-slate-800 shadow-sm">Cerrar Expediente</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="modal-id-viewer" class="fixed inset-0 bg-slate-950/80 z-50 flex items-center justify-center p-4 hidden backdrop-blur-sm">
+        <div class="bg-white rounded-2xl max-w-lg w-full p-4 flex flex-col shadow-2xl relative border">
+            <button onclick="cerrarVisorID()" class="absolute right-3 top-3 bg-slate-900 text-white p-2 rounded-full shadow hover:bg-slate-800 z-10"><i data-lucide="x" class="w-4 h-4"></i></button>
+            <h4 class="font-bold text-sm text-slate-800 mb-2 uppercase tracking-wide flex items-center gap-1.5"><i data-lucide="image" class="text-blue-600"></i> Verificación de ID Oficial</h4>
+            <div class="bg-slate-100 rounded-xl overflow-hidden border flex justify-center items-center p-1 min-h-[250px]">
+                <img id="img-visor-target" class="max-w-full max-h-[60vh] object-contain rounded-lg">
+            </div>
+        </div>
+    </div>
+
+    <div id="modal-duplicado" class="fixed inset-0 bg-slate-950/70 z-50 flex items-center justify-center p-4 hidden backdrop-blur-xs">
+        <div class="bg-white rounded-2xl max-w-md w-full p-6 space-y-4 shadow-2xl">
+            <div class="flex items-center gap-3 text-amber-600 border-b pb-3">
+                <i data-lucide="alert-octagon" class="w-7 h-7"></i>
+                <h3 class="text-base font-bold text-slate-900">¿Cliente ya Registrado?</h3>
+            </div>
+            <p class="text-sm text-gray-600" id="dup-nombre-box">Ya existe un propietario con datos idénticos...</p>
+            <div class="bg-amber-50/70 border rounded-xl p-3 text-xs space-y-1">
+                <p><b>Propietario:</b> <span id="dup-nombre"></span></p>
+                <p><b>Teléfono:</b> <span id="dup-telefono"></span></p>
+                <p><b>Dirección:</b> <span id="dup-direccion"></span></p>
+            </div>
+            <div class="grid grid-cols-1 gap-2 pt-2">
+                <button id="btn-ir-existente" class="w-full bg-blue-600 text-white font-bold py-2.5 rounded-xl text-sm">Ir al Registro Existente</button>
+                <button id="btn-forzar-registro" class="w-full bg-slate-100 text-slate-700 font-medium py-2.5 rounded-xl text-sm hover:bg-slate-200">Omitir y registrar nuevo</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="modal-agregar-mascota" class="fixed inset-0 bg-slate-950/60 z-50 flex items-center justify-center p-4 hidden backdrop-blur-xs">
+        <div class="bg-white rounded-2xl max-w-md w-full p-6 space-y-4 shadow-xl">
+            <div class="flex justify-between items-center border-b pb-3">
+                <h3 class="text-md font-bold text-gray-900 flex items-center gap-2" id="titulo-modal-mascota">
+                    <i data-lucide="dog" class="text-blue-600 w-5 h-5"></i> Registrar Paciente
+                </h3>
+                <button onclick="cerrarModalMascota()" class="text-gray-400 hover:text-gray-600"><i data-lucide="x" class="w-5 h-5"></i></button>
+            </div>
+            <form id="form-nueva-mascota" class="space-y-3">
+                <input type="hidden" id="mascota-owner-id">
+                <input type="hidden" id="edit-mascota-id">
+                <div>
+                    <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Nombre de la Mascota</label>
+                    <input type="text" id="m-name" required class="w-full px-3 py-2 border rounded-xl text-sm outline-none">
+                </div>
+                <div class="grid grid-cols-2 gap-2">
+                    <div>
+                        <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Especie</label>
+                        <select id="consulta-especie-drop" onchange="actualizarDisclaimerDinamico()" class="w-full px-3 py-2 border rounded-xl text-sm bg-white outline-none">
+                            <option value="Perro">🐶 Perro</option>
+                            <option value="Gato">🐱 Gato</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Raza</label>
+                        <input type="text" id="m-species" placeholder="ej. Canino / Poodle" required class="w-full px-3 py-2 border rounded-xl text-sm outline-none">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Edad</label>
+                        <input type="text" id="m-age" placeholder="ej. 3 años" required class="w-full px-3 py-2 border rounded-xl text-sm outline-none">
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Fotografía del Paciente</label>
+                    <input type="file" id="m-photo-file" accept="image/*" class="w-full text-xs text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-xl">
+                </div>
+                <div class="flex items-center gap-2.5 bg-gray-50 p-3 rounded-xl border border-gray-200">
+                    <input type="checkbox" id="m-spayed" class="w-4 h-4 text-blue-600 rounded">
+                    <label for="m-spayed" class="text-sm font-semibold text-gray-700">¿Está esterilizado?</label>
+                </div>
+                <button type="submit" id="btn-guardar-mascota" class="w-full bg-blue-600 text-white font-bold py-2.5 rounded-xl text-sm mt-2 hover:bg-blue-700 shadow-xs">Vincular Expediente</button>
+            </form>
+        </div>
+    </div>
+
+    <nav class="md:hidden fixed bottom-0 left-0 right-0 bg-slate-900 border-t border-blue-900 text-white h-16 flex items-center justify-around px-2 z-20 shadow-lg">
+        <button onclick="switchTab('clientes')" class="flex flex-col items-center text-blue-200"><i data-lucide="users" class="w-5 h-5"></i><span class="text-[10px] mt-1">Clientes</span></button>
+        <button onclick="switchTab('agenda')" class="flex flex-col items-center text-blue-200"><i data-lucide="calendar" class="w-5 h-5"></i><span class="text-[10px] mt-1">Agenda</span></button>
+        <button onclick="switchTab('inventario')" class="flex flex-col items-center text-blue-200"><i data-lucide="package" class="w-5 h-5"></i><span class="text-[10px] mt-1">Stock</span></button>
+        <button onclick="switchTab('finanzas')" class="flex flex-col items-center text-blue-200"><i data-lucide="dollar-sign" class="w-5 h-5"></i><span class="text-[10px] mt-1">Servicios</span></button>
+    </nav>
+
+    <script src="js/01-core.js"></script>
+    <script src="js/02-firmas.js"></script>
+    <script src="js/03-pdf.js"></script>
+    <script src="js/04-consultas.js"></script>
+    <script src="js/05-clientes.js"></script>
+    <script src="js/06-agenda.js"></script>
+    <script src="js/07-inventario-finanzas.js"></script>
+    <script src="js/08-main.js"></script>
+
+</body>
+</html>
