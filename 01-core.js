@@ -23,13 +23,14 @@ function loadStore(key, fallback) {
     }
 }
 function estadoCompleto() {
-    return { clientes, inventario, agenda, finanzas };
+    return { clientes, inventario, agenda, finanzas, movimientosInventario };
 }
 function aplicarEstado(data = {}) {
     clientes = data.clientes || [];
     inventario = data.inventario || [];
     agenda = data.agenda || [];
     finanzas = data.finanzas || [];
+    movimientosInventario = data.movimientosInventario || [];
 }
 function actualizarEstadoSync(texto, error = false) {
     if (!$('sync-status')) return;
@@ -80,7 +81,8 @@ function datosLocalesAnteriores() {
         clientes: loadStore(STORE_KEYS.clientes, []),
         inventario: loadStore(STORE_KEYS.inventario, []),
         agenda: loadStore(STORE_KEYS.agenda, []),
-        finanzas: loadStore(STORE_KEYS.finanzas, [])
+        finanzas: loadStore(STORE_KEYS.finanzas, []),
+        movimientosInventario: []
     };
 }
 function tieneDatos(data) {
@@ -202,6 +204,7 @@ let finanzas = loadStore(STORE_KEYS.finanzas, [
     { id: 2, nombre: 'Consulta Seguimiento a Domicilio', precio: 350 },
     { id: 3, nombre: 'Aplicación de Vacuna', precio: 450 }
 ]);
+let movimientosInventario = [];
 let consultaSeleccionada = { ownerId: null, petId: null, ownerObj: null, petObj: null };
 let clienteActivoSubpaginaId = null;
 let firmaDuenoEstablecida = false;

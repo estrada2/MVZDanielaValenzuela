@@ -122,6 +122,12 @@ function descontarVacunasDelInventario(insumosAplicados) {
             return;
         }
         item.stock -= 1;
+        registrarMovimientoInventario({
+            item,
+            tipo: 'Uso',
+            cantidad: -1,
+            motivo: `Vacunación: ${vacuna} · ${consultaSeleccionada.petObj?.name || 'Paciente'}`
+        });
         resultado.descontadas.push({ id: item.id, name: item.name, qty: 1, unit: item.unit, origen: 'Vacuna' });
         insumosAplicados.push({ id: item.id, name: item.name, qty: 1, unit: item.unit, origen: 'Vacuna' });
     });
@@ -246,7 +252,15 @@ function guardarConsulta(e) {
     if (!stockValido) return;
     insumosAplicados.forEach(ins => {
         const item = inventario.find(m => m.id === ins.id);
-        if (item) item.stock -= ins.qty;
+        if (item) {
+            item.stock -= ins.qty;
+            registrarMovimientoInventario({
+                item,
+                tipo: 'Uso',
+                cantidad: -ins.qty,
+                motivo: `Consulta: ${consultaSeleccionada.petObj?.name || 'Paciente'}`
+            });
+        }
     });
     const controlVacunas = descontarVacunasDelInventario(insumosAplicados);
     saveStore('inventario');
@@ -274,7 +288,8 @@ function guardarConsulta(e) {
                     clienteNombre: consultaSeleccionada.ownerObj.owner,
                     petName: consultaSeleccionada.petObj.name,
                     direccion: consultaSeleccionada.ownerObj.address,
-                    notas: 'Visita de Seguimiento Programada'
+                    notas: 'Visita de Seguimiento Programada',
+                    estado: 'Programada'
                 });
                 saveStore('agenda');
                 renderAgenda();
@@ -326,6 +341,14 @@ function guardarConsulta(e) {
             }
             clientes[clientIdx].mascotas[petIdx].historial.unshift(nuevaConsultaObj);
             saveStore('clientes');
+            if (typeof citaActivaId !== 'undefined' && citaActivaId) {
+                const cita = agenda.find(item => item.id === citaActivaId);
+                if (cita) {
+                    cita.estado = 'Atendida';
+                    saveStore('agenda');
+                }
+                citaActivaId = null;
+            }
             const avisosStock = [];
             if (controlVacunas.noEncontradas?.length) avisosStock.push(`Sin coincidencia en inventario: ${controlVacunas.noEncontradas.join(', ')}`);
             if (controlVacunas.sinStock?.length) avisosStock.push(`Sin stock para descontar: ${controlVacunas.sinStock.join(', ')}`);

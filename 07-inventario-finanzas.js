@@ -8,6 +8,28 @@ const INVENTARIO_FORM = {
     submitDefault: 'Guardar en Almacén',
     submitEdit: 'Actualizar Insumo'
 };
+let filtroInventarioActivo = 'todos';
+function stockMinimo(item) {
+    return Number.isFinite(Number(item.minStock)) ? Number(item.minStock) : 3;
+}
+function registrarMovimientoInventario({ item, tipo, cantidad, motivo }) {
+    movimientosInventario.unshift({
+        id: uid(),
+        fechaISO: new Date().toISOString(),
+        itemId: item.id,
+        itemName: item.name,
+        tipo,
+        cantidad,
+        stockResultante: item.stock,
+        motivo
+    });
+    movimientosInventario = movimientosInventario.slice(0, 300);
+}
+function filtrarInventario(filtro) {
+    filtroInventarioActivo = filtro;
+    if ($('filtro-inventario')) $('filtro-inventario').value = filtro;
+    renderInventario();
+}
 function ensureHiddenInput(formId, inputId) {
     if ($(inputId)) return;
     const inputHidden = document.createElement('input');
@@ -18,22 +40,35 @@ function ensureHiddenInput(formId, inputId) {
 function renderInventario() {
     const lst = $('lista-inventario'); 
     if(!lst) return;
-    lst.innerHTML = inventario.map(m => {
-        const critico = m.stock <= 3;
+    const items = inventario.filter(m => {
+        if (filtroInventarioActivo === 'criticos') return m.stock <= stockMinimo(m);
+        if (filtroInventarioActivo === 'agotados') return m.stock <= 0;
+        if (['Vacuna', 'Medicamento', 'Desparasitante', 'Material'].includes(filtroInventarioActivo)) return (m.categoria || 'Medicamento') === filtroInventarioActivo;
+        return true;
+    });
+    if (!items.length) {
+        lst.innerHTML = `<p class="text-xs text-gray-400 text-center py-10">No hay insumos en este filtro.</p>`;
+        renderMovimientosInventario();
+        return;
+    }
+    lst.innerHTML = items.map(m => {
+        const critico = m.stock <= stockMinimo(m);
         return `
             <div class="p-3 border rounded-xl flex justify-between items-center shadow-xs transition-all ${critico ? 'bg-rose-50 border-rose-200' : 'bg-white'}">
                 <div>
                     <b class="text-sm text-slate-800">${m.name}</b><br>
-                    <span class="text-[10px] text-gray-500 uppercase tracking-wider">${m.unit}</span>
+                    <span class="text-[10px] text-gray-500 uppercase tracking-wider">${m.categoria || 'Medicamento'} · ${m.unit} · mínimo ${stockMinimo(m)}</span>
                 </div>
                 <div class="flex items-center gap-2">
                     <span class="font-bold border px-2 py-0.5 rounded-lg text-xs ${critico ? 'bg-rose-600 text-white border-rose-600' : 'bg-gray-100 text-gray-700'}">${m.stock} disp</span>
+                    <button onclick="ajustarStockManual(${m.id})" title="Ajustar existencia" class="text-gray-400 hover:text-blue-600 p-1 bg-white border rounded-lg shadow-2xs transition-all"><i data-lucide="plus-minus" class="w-3.5 h-3.5"></i></button>
                     <button onclick="iniciarEdicionMedicamento(${m.id})" class="text-gray-400 hover:text-amber-600 p-1 bg-white border rounded-lg shadow-2xs transition-all"><i data-lucide="edit" class="w-3.5 h-3.5"></i></button>
                     <button onclick="eliminarMedicamento(${m.id})" class="text-gray-300 hover:text-red-500 p-1 bg-white border rounded-lg shadow-2xs transition-all"><i data-lucide="trash-2" class="w-3.5 h-3.5"></i></button>
                 </div>
             </div>`;
     }).join('');
     renderIcons();
+    renderMovimientosInventario();
 }
 function guardarMedicamento(e) {
     e.preventDefault();
@@ -42,11 +77,23 @@ function guardarMedicamento(e) {
         id: editId ? parseInt(editId) : uid(),
         name: $('medName').value,
         stock: parseInt($('medStock').value),
-        unit: $('medUnit').value
+        unit: $('medUnit').value,
+        categoria: $('medCategoria').value,
+        minStock: parseInt($('medMinStock').value)
     };
+    const anterior = inventario.find(m => m.id === item.id);
     inventario = editId
         ? inventario.map(m => m.id === item.id ? item : m)
         : [...inventario, item];
+    const diferencia = editId ? item.stock - anterior.stock : item.stock;
+    if (!editId || diferencia) {
+        registrarMovimientoInventario({
+            item,
+            tipo: diferencia >= 0 ? 'Entrada' : 'Ajuste',
+            cantidad: diferencia,
+            motivo: editId ? 'Actualización de existencia' : 'Alta inicial de inventario'
+        });
+    }
     saveStore('inventario');
     cancelarEdicionMedicamento();
     renderInventario(); 
@@ -60,6 +107,8 @@ function iniciarEdicionMedicamento(id) {
     $('medName').value = target.name;
     $('medStock').value = target.stock;
     $('medUnit').value = target.unit;
+    $('medCategoria').value = target.categoria || 'Medicamento';
+    $('medMinStock').value = stockMinimo(target);
     $(INVENTARIO_FORM.titleId).innerHTML = INVENTARIO_FORM.titleEdit;
     document.querySelector(INVENTARIO_FORM.submitSelector).innerText = INVENTARIO_FORM.submitEdit;
     renderIcons();
@@ -67,9 +116,12 @@ function iniciarEdicionMedicamento(id) {
 function cancelarEdicionMedicamento() {
     ensureHiddenInput(INVENTARIO_FORM.formId, INVENTARIO_FORM.editId);
     resetFormState(INVENTARIO_FORM);
+    if ($('medMinStock')) $('medMinStock').value = 3;
 }
 function eliminarMedicamento(id) { 
     if(confirm("¿Eliminar este insumo del inventario?")){
+        const item = inventario.find(m => m.id === id);
+        if (item) registrarMovimientoInventario({ item, tipo: 'Baja', cantidad: -item.stock, motivo: 'Eliminación de insumo' });
         inventario = inventario.filter(m=>m.id!==id); 
         saveStore('inventario'); 
         renderInventario(); 
@@ -77,7 +129,51 @@ function eliminarMedicamento(id) {
     }
 }
 function revisarAlertasStockGlobal() { 
-    $('alertas-stock')?.classList.toggle('hidden', inventario.filter(m=>m.stock<=3).length===0); 
+    const criticos = inventario.filter(m => m.stock <= stockMinimo(m));
+    $('alertas-stock')?.classList.toggle('hidden', criticos.length === 0);
+    if ($('texto-alerta-stock') && criticos.length) {
+        $('texto-alerta-stock').innerText = `Stock crítico: ${criticos.map(m => `${m.name} (${m.stock})`).join(', ')}`;
+    }
+}
+function ajustarStockManual(id) {
+    const item = inventario.find(m => m.id === id);
+    if (!item) return;
+    const valor = prompt(`Existencia actual de ${item.name}: ${item.stock}\nIngresa la nueva existencia:`, item.stock);
+    if (valor === null) return;
+    const nuevaExistencia = parseInt(valor);
+    if (!Number.isInteger(nuevaExistencia) || nuevaExistencia < 0) {
+        alert("Ingresa una existencia válida.");
+        return;
+    }
+    const diferencia = nuevaExistencia - item.stock;
+    if (!diferencia) return;
+    item.stock = nuevaExistencia;
+    registrarMovimientoInventario({ item, tipo: diferencia > 0 ? 'Entrada' : 'Ajuste', cantidad: diferencia, motivo: 'Ajuste manual' });
+    saveStore('inventario');
+    renderInventario();
+    revisarAlertasStockGlobal();
+}
+function renderMovimientosInventario() {
+    const lista = $('lista-movimientos-inventario');
+    if (!lista) return;
+    if (!movimientosInventario.length) {
+        lista.innerHTML = `<p class="text-xs text-gray-400 text-center py-8">Todavía no hay movimientos registrados.</p>`;
+        return;
+    }
+    lista.innerHTML = movimientosInventario.slice(0, 80).map(mov => {
+        const positivo = mov.cantidad > 0;
+        return `
+            <div class="border rounded-xl p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2 bg-slate-50">
+                <div>
+                    <p class="text-xs font-bold text-slate-800">${mov.itemName}</p>
+                    <p class="text-[11px] text-slate-500">${new Date(mov.fechaISO).toLocaleString('es-MX')} · ${mov.tipo} · ${mov.motivo}</p>
+                </div>
+                <div class="text-right">
+                    <p class="text-sm font-black ${positivo ? 'text-emerald-700' : 'text-rose-700'}">${positivo ? '+' : ''}${mov.cantidad}</p>
+                    <p class="text-[10px] text-slate-500">Stock: ${mov.stockResultante}</p>
+                </div>
+            </div>`;
+    }).join('');
 }
 const FINANZAS_FORM = {
     formId: 'form-finanzas',
