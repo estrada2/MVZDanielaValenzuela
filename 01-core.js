@@ -218,16 +218,20 @@ probarConexion();
 
 async function guardarClientesSupabase() {
 
- const clientesSupabase =
- clientes.map(c => ({
+
+    const clientesSupabase =
+clientes.map(c => ({
 
     nombre: c.owner,
 
     telefono: c.phone || null,
 
-    email: c.email || null
+    email: c.email || null,
 
- }));
+    id_photo:
+        c.ownerIdFile || null
+
+}));
 
 
  const { error } =
@@ -285,3 +289,46 @@ setTimeout(() => {
     cargarClientesSupabase();
 
 }, 1000);
+
+async function subirOwnerID(){
+
+    const input =
+    document.getElementById(
+        "owner-id-file"
+    );
+
+    const file =
+    input.files[0];
+
+    if(!file){
+
+        return null;
+
+    }
+
+    const fileName =
+    `${Date.now()}-${file.name}`;
+
+    const { data,error } =
+    await supabaseClient
+    .storage
+    .from("client-ids")
+    .upload(
+        fileName,
+        file
+    );
+
+    if(error){
+
+        console.error(
+            "Error upload:",
+            error
+        );
+
+        return null;
+
+    }
+
+    return data.path;
+
+}
