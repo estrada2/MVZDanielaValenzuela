@@ -1,3 +1,12 @@
+const SUPABASE_URL = "https://otydjeobxzcpobzengsv.supabase.co";
+
+const SUPABASE_KEY = "PEGA_TU_ANON_KEY_AQUI";
+
+const supabaseClient = window.supabase.createClient(
+    SUPABASE_URL,
+    SUPABASE_KEY
+);
+
 const STORE_KEYS = {
     clientes: 'vet_pro_clientes',
     inventario: 'vet_pro_stock',
