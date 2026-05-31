@@ -181,3 +181,17 @@ function actualizarIndicadorFirmaStatus() {
         indicator.className = "text-xs bg-red-100 text-red-700 px-2.5 py-1 rounded-md font-bold uppercase tracking-wider";
     }
 }
+
+async function probarConexion() {
+
+ const { data, error } = await supabaseClient
+   .from('clientes')
+   .select('*');
+
+ console.log(data);
+
+ console.log(error);
+
+}
+
+probarConexion();
