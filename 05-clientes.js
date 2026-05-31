@@ -24,6 +24,12 @@ function abrirModalHistorial(ownerId, petId) {
                     <p class="text-xs text-slate-800"><b>Signos Reportados:</b> <span class="italic text-gray-600">"${h.sintomas || 'Asintomático'}"</span></p>
                 `;
             }
+            const estadoPago = h.estadoPago || 'Pagado';
+            const badgePago = estadoPago === 'Pagado'
+                ? 'bg-emerald-100 text-emerald-800 border-emerald-200'
+                : estadoPago === 'Pendiente'
+                    ? 'bg-rose-100 text-rose-800 border-rose-200'
+                    : 'bg-slate-100 text-slate-700 border-slate-200';
             const card = document.createElement('div');
             card.className = "bg-white p-4 rounded-xl border border-gray-200 shadow-xs space-y-2";
             card.innerHTML = `
@@ -40,6 +46,15 @@ function abrirModalHistorial(ownerId, petId) {
                 </div>
                 ${detalleHTML}
                 <p class="text-xs text-slate-900 bg-amber-50 p-2.5 rounded-lg border border-amber-200 text-justify"><b>Receta/Cuidados:</b> ${h.tratamiento}</p>
+                <div class="bg-emerald-50 p-3 rounded-lg border border-emerald-200 space-y-1">
+                    <div class="flex flex-wrap justify-between items-center gap-2">
+                        <p class="text-xs font-bold text-emerald-900">Cobro registrado</p>
+                        <span class="text-[10px] font-bold px-2 py-0.5 rounded-full border ${badgePago}">${estadoPago}</span>
+                    </div>
+                    <p class="text-xs text-slate-700">${h.servicioCobrado || 'Sin servicio registrado'}</p>
+                    <p class="text-xs text-slate-700"><b>Total:</b> $${Number(h.costoTotal || 0).toFixed(2)} · <b>Método:</b> ${h.metodoPago || 'Efectivo'}</p>
+                    ${h.notaPago ? `<p class="text-[11px] text-slate-500 italic">${h.notaPago}</p>` : ''}
+                </div>
                 ${h.insumos?.length ? `<div class="bg-blue-50 p-2 rounded-lg text-[10px] border border-blue-100 text-blue-900"><b>Insumos Extra:</b> ${h.insumos.map(i=>`${i.name} [x${i.qty}]`).join(', ')}</div>` : ''}
                 <div class="bg-gray-900 text-gray-300 text-[10px] p-3 rounded-lg font-mono leading-relaxed mt-2">
                     <p class="text-amber-400 font-bold uppercase mb-1 border-b border-gray-700 pb-0.5">[✓] CLAÚSULA GUARDADA (${h.tipo})</p>
