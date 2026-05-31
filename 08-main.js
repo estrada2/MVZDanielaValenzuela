@@ -1,5 +1,7 @@
 document.addEventListener('DOMContentLoaded', async () => {
-    await initPersistentStorage();
+    $('form-login')?.addEventListener('submit', iniciarSesion);
+    const listo = await initRemoteStorage();
+    if (!listo) return;
     document.addEventListener('click', (e) => {
         const wrapper = $('dropdown-servicios-wrapper');
         const panel = $('dropdown-servicios-opciones');
@@ -7,6 +9,12 @@ document.addEventListener('DOMContentLoaded', async () => {
             panel?.classList.add('hidden');
         }
     });
+    refrescarInterfaz();
+    setupSignatureCanvas('canvas-firma'); 
+    setupSignatureCanvas('canvas-firma-vet');
+    renderIcons();
+});
+function refrescarInterfaz() {
     renderClientes(); 
     renderAgenda(); 
     renderInventario(); 
@@ -14,10 +22,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     renderGananciasConsultas();
     actualizarSelectAgenda(); 
     revisarAlertasStockGlobal(); 
-    setupSignatureCanvas('canvas-firma'); 
-    setupSignatureCanvas('canvas-firma-vet');
     renderIcons();
-});
+}
 function regresarAlDirectorioDesdeConsulta() {
     switchTab('clientes');
     $('subpagina-mascotas-area')?.classList.add('hidden');
