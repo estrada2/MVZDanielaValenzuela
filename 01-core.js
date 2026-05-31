@@ -63,10 +63,30 @@ async function idbGet(key) {
         request.onerror = () => reject(request.error);
     }).catch(() => null);
 }
+
 function saveStore(nombre) {
-    const data = { clientes, inventario, agenda, finanzas };
-    localStorage.setItem(STORE_KEYS[nombre], JSON.stringify(data[nombre]));
-    idbSet(STORE_KEYS[nombre], data[nombre]);
+
+ const data = {
+   clientes,
+   inventario,
+   agenda,
+   finanzas
+ };
+
+ localStorage.setItem(
+   STORE_KEYS[nombre],
+   JSON.stringify(data[nombre])
+ );
+
+ idbSet(
+   STORE_KEYS[nombre],
+   data[nombre]
+ );
+
+ if(nombre==="clientes"){
+    guardarClientesSupabase();
+ }
+
 }
 function saveAllStores() {
     Object.keys(STORE_KEYS).forEach(saveStore);
@@ -195,3 +215,24 @@ async function probarConexion() {
 }
 
 probarConexion();
+
+async function guardarClientesSupabase() {
+
+ const { error } = await supabaseClient
+   .from('clientes')
+   .upsert(
+      clientes.map(c => ({
+         id: c.id,
+         nombre: c.nombre,
+         telefono: c.telefono || null,
+         email: c.email || null
+      }))
+   );
+
+ if(error){
+    console.error(error);
+ }else{
+    console.log("Clientes sincronizados");
+ }
+
+}
