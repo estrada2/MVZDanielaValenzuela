@@ -249,36 +249,36 @@ async function guardarClientesSupabase() {
 
 async function cargarClientesSupabase(){
 
- const { data, error } = await supabaseClient
-   .from('clientes')
-   .select('*');
+    const { data, error } =
+    await supabaseClient
+      .from('clientes')
+      .select('*');
 
- if(error){
+    if(error){
 
-   console.error(error);
+        console.error(error);
 
-   return;
+        return;
 
- }
+    }
 
- clientes = data || [];
+    clientes = data || [];
 
- console.log("Clientes cargados:",clientes);
+    console.log(
+      "Clientes cargados:",
+      clientes
+    );
 
- if(typeof renderClientes === "function"){
+    if(typeof renderClientes === "function"){
 
-    renderClientes();
+        renderClientes();
 
- }
+    }
 
 }
 
+setTimeout(() => {
 
-window.addEventListener(
- "load",
- async ()=>{
+    cargarClientesSupabase();
 
-   await cargarClientesSupabase();
-
- }
-);
+}, 1000);
