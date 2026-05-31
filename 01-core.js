@@ -236,27 +236,32 @@ async function guardarClientesSupabase() {
  }
 
 }
-async function cargarClientesSupabase(){
+async function guardarClientesSupabase() {
 
- const { data, error } = await supabaseClient
+ const clientesSinId =
+   clientes.map(c => ({
+
+      nombre: c.nombre,
+
+      telefono: c.telefono || null,
+
+      email: c.email || null
+
+   }));
+
+
+ const { error } = await supabaseClient
    .from('clientes')
-   .select('*');
+   .insert(clientesSinId);
+
 
  if(error){
 
    console.error(error);
 
-   return;
+ }else{
 
- }
-
- clientes = data || [];
-
- console.log("Clientes cargados:",clientes);
-
- if(typeof renderClientes === "function"){
-
-    renderClientes();
+   console.log("Clientes sincronizados");
 
  }
 
