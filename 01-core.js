@@ -150,17 +150,35 @@ function ocultarLogin() {
 async function iniciarSesion(event) {
     event.preventDefault();
     const boton = $('btn-login');
-    if (boton) boton.disabled = true;
-    const { error } = await supabaseClient.auth.signInWithPassword({
-        email: $('login-email').value.trim(),
-        password: $('login-password').value
-    });
-    if (boton) boton.disabled = false;
-    if (error) {
-        mostrarLogin('Correo o contraseña incorrectos.');
-        return;
+    if (boton) {
+        boton.disabled = true;
+        boton.innerText = 'Ingresando...';
     }
-    location.reload();
+    try {
+        const { error } = await supabaseClient.auth.signInWithPassword({
+            email: $('login-email').value.trim(),
+            password: $('login-password').value
+        });
+        if (error) {
+            const mensajes = {
+                'Invalid login credentials': 'Correo o contraseña incorrectos.',
+                'Email not confirmed': 'Tu correo todavía no está confirmado en Supabase Auth.',
+                'User not found': 'No existe un usuario de Auth con ese correo.'
+            };
+            mostrarLogin(mensajes[error.message] || `No se pudo iniciar sesión: ${error.message}`);
+            console.error('Error de inicio de sesión.', error);
+            return;
+        }
+        location.reload();
+    } catch (error) {
+        mostrarLogin('No se pudo conectar con Supabase. Revisa tu conexión y vuelve a intentar.');
+        console.error('No se pudo conectar con Supabase Auth.', error);
+    } finally {
+        if (boton) {
+            boton.disabled = false;
+            boton.innerText = 'Ingresar';
+        }
+    }
 }
 async function cerrarSesion() {
     await supabaseClient.auth.signOut();
