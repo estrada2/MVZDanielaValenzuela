@@ -256,6 +256,7 @@ function renderFinanzas() {
                 <button onclick="eliminarServicio(${f.id})" class="text-emerald-400 hover:text-red-500 p-1 bg-white border rounded-lg shadow-2xs transition-all"><i data-lucide="trash-2" class="w-3.5 h-3.5"></i></button>
             </div>
         </div>`).join('');
+    renderServiciosExternos();
     renderIcons();
 }
 function guardarServicio(e) {
@@ -307,6 +308,10 @@ let filtroGananciasActivo = 'dia';
 function formatoMoneda(valor) {
     return (parseFloat(valor) || 0).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
+function fechaLocalInputFinanzas(fecha = new Date()) {
+    const offset = fecha.getTimezoneOffset() * 60000;
+    return new Date(fecha.getTime() - offset).toISOString().split('T')[0];
+}
 function parseFechaConsulta(consulta) {
     if (consulta.fechaISO) return new Date(consulta.fechaISO);
     const directa = new Date(consulta.fecha);
@@ -337,8 +342,9 @@ function estaEnFiltro(fechaConsulta, ahora = new Date()) {
     return true;
 }
 function obtenerConsultasFinanzas() {
-    return clientes.flatMap(c => (c.mascotas || []).flatMap(m => (m.historial || []).map(con => ({
+    const consultas = clientes.flatMap(c => (c.mascotas || []).flatMap(m => (m.historial || []).map(con => ({
         ...con,
+        origenFinanciero: 'Consulta',
         ownerId: c.id,
         petId: m.id,
         clienteNombre: c.owner,
@@ -348,7 +354,20 @@ function obtenerConsultasFinanzas() {
         estadoPago: con.estadoPago || 'Pagado',
         metodoPago: con.metodoPago || 'Efectivo',
         notaPago: con.notaPago || ''
-    })))).sort((a, b) => (b.fechaObj?.getTime() || 0) - (a.fechaObj?.getTime() || 0));
+    }))));
+    const externos = (serviciosExternos || []).map(servicio => ({
+        ...servicio,
+        origenFinanciero: 'Externo',
+        clienteNombre: servicio.clienteNombre || 'Servicio externo',
+        mascotaNombre: 'Sin expediente',
+        fechaObj: parseFechaConsulta(servicio),
+        total: parseFloat(servicio.total) || 0,
+        estadoPago: servicio.estadoPago || 'Pagado',
+        metodoPago: servicio.metodoPago || 'Efectivo',
+        notaPago: servicio.notaPago || '',
+        tipo: servicio.tipo || 'Servicio externo'
+    }));
+    return [...consultas, ...externos].sort((a, b) => (b.fechaObj?.getTime() || 0) - (a.fechaObj?.getTime() || 0));
 }
 function renderGananciasConsultas() {
     const txtMonto = $('monto-ganancias-filtrado');
@@ -386,17 +405,118 @@ function renderListaIngresos(consultas) {
             <div class="bg-white border rounded-xl p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                 <div>
                     <p class="text-xs font-bold text-slate-900">${con.clienteNombre} · ${con.mascotaNombre}</p>
-                    <p class="text-[11px] text-slate-500">${fecha} · ${con.tipo || 'Consulta'} · ${con.metodoPago}</p>
+                    <p class="text-[11px] text-slate-500">${fecha} · ${con.origenFinanciero || 'Consulta'} · ${con.metodoPago}</p>
                     <p class="text-[11px] text-slate-500">${servicio}</p>
                     ${con.notaPago ? `<p class="text-[10px] text-slate-400 italic">${con.notaPago}</p>` : ''}
                 </div>
                 <div class="text-right space-y-1">
                     <span class="inline-block text-[10px] font-bold px-2 py-0.5 rounded-full ${badgePago}">${con.estadoPago}</span>
                     <p class="text-sm font-black ${con.estadoPago === 'Pagado' ? 'text-emerald-700' : 'text-slate-600'}">$${formatoMoneda(con.total)}</p>
-                    ${con.estadoPago === 'Pendiente' ? `<button type="button" onclick="marcarConsultaPagada(${con.ownerId}, ${con.petId}, ${con.id})" class="text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-100 px-2 py-1 rounded-lg">Marcar pagado</button>` : ''}
+                    ${con.estadoPago === 'Pendiente' ? (con.origenFinanciero === 'Externo'
+                        ? `<button type="button" onclick="marcarServicioExternoPagado(${con.id})" class="text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-100 px-2 py-1 rounded-lg">Marcar pagado</button>`
+                        : `<button type="button" onclick="marcarConsultaPagada(${con.ownerId}, ${con.petId}, ${con.id})" class="text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-100 px-2 py-1 rounded-lg">Marcar pagado</button>`
+                    ) : ''}
                 </div>
             </div>`;
     }).join('');
+}
+function renderServiciosExternos() {
+    const lista = $('lista-servicios-externos');
+    if (!lista) return;
+    if ($('externo-fecha') && !$('externo-fecha').value) $('externo-fecha').value = fechaLocalInputFinanzas();
+    const ordenados = [...(serviciosExternos || [])].sort((a, b) => (parseFechaConsulta(b)?.getTime() || 0) - (parseFechaConsulta(a)?.getTime() || 0));
+    if (!ordenados.length) {
+        lista.innerHTML = `<p class="text-xs text-gray-400 text-center py-10">Aún no hay servicios externos registrados.</p>`;
+        return;
+    }
+    lista.innerHTML = ordenados.map(item => {
+        const pendiente = (item.estadoPago || 'Pagado') === 'Pendiente';
+        return `
+            <div class="p-3 border rounded-xl bg-white flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs">
+                <div>
+                    <div class="flex flex-wrap items-center gap-2">
+                        <b class="text-sm text-slate-800">${item.servicioCobrado || 'Servicio externo'}</b>
+                        <span class="text-[10px] font-bold px-2 py-0.5 rounded-full ${pendiente ? 'bg-rose-100 text-rose-700' : 'bg-emerald-100 text-emerald-700'}">${item.estadoPago || 'Pagado'}</span>
+                    </div>
+                    <p class="text-[11px] text-slate-500">${item.clienteNombre || 'Sin contacto'} · ${item.fecha || formatoFechaCorta(parseFechaConsulta(item))}</p>
+                    ${item.notaPago ? `<p class="text-[10px] text-slate-400 italic">${item.notaPago}</p>` : ''}
+                </div>
+                <div class="flex items-center gap-2 justify-end">
+                    <span class="font-black text-sm ${pendiente ? 'text-rose-700' : 'text-emerald-700'}">$${formatoMoneda(item.total)}</span>
+                    ${pendiente ? `<button onclick="marcarServicioExternoPagado(${item.id})" class="text-emerald-600 hover:bg-emerald-50 p-1 bg-white border rounded-lg shadow-2xs transition-all" title="Marcar pagado"><i data-lucide="check-circle" class="w-3.5 h-3.5"></i></button>` : ''}
+                    <button onclick="iniciarEdicionServicioExterno(${item.id})" class="text-gray-400 hover:text-amber-600 p-1 bg-white border rounded-lg shadow-2xs transition-all" title="Editar"><i data-lucide="edit" class="w-3.5 h-3.5"></i></button>
+                    <button onclick="eliminarServicioExterno(${item.id})" class="text-gray-300 hover:text-red-500 p-1 bg-white border rounded-lg shadow-2xs transition-all" title="Eliminar"><i data-lucide="trash-2" class="w-3.5 h-3.5"></i></button>
+                </div>
+            </div>`;
+    }).join('');
+    renderIcons();
+}
+function guardarServicioExterno(e) {
+    e.preventDefault();
+    const editId = $('edit-servicio-externo-id')?.value;
+    const fecha = $('externo-fecha')?.value || fechaLocalInputFinanzas();
+    const item = {
+        id: editId ? parseInt(editId) : uid(),
+        fecha,
+        fechaISO: editId ? (serviciosExternos.find(s => s.id === parseInt(editId))?.fechaISO || new Date(`${fecha}T12:00:00`).toISOString()) : new Date(`${fecha}T12:00:00`).toISOString(),
+        clienteNombre: $('externo-cliente')?.value.trim() || '',
+        servicioCobrado: $('externo-servicio')?.value.trim() || '',
+        total: parseFloat($('externo-total')?.value || 0),
+        metodoPago: $('externo-metodo')?.value || 'Efectivo',
+        estadoPago: $('externo-estado')?.value || 'Pagado',
+        notaPago: $('externo-nota')?.value.trim() || '',
+        tipo: 'Servicio externo'
+    };
+    serviciosExternos = editId
+        ? serviciosExternos.map(s => s.id === item.id ? item : s)
+        : [item, ...serviciosExternos];
+    saveStore('serviciosExternos');
+    cancelarEdicionServicioExterno();
+    renderServiciosExternos();
+    renderGananciasConsultas();
+    if (typeof renderDashboard === 'function') renderDashboard();
+}
+function iniciarEdicionServicioExterno(id) {
+    const item = serviciosExternos.find(s => s.id === id);
+    if (!item) return;
+    $('edit-servicio-externo-id').value = item.id;
+    $('externo-fecha').value = item.fecha || fechaLocalInputFinanzas(parseFechaConsulta(item) || new Date());
+    $('externo-cliente').value = item.clienteNombre || '';
+    $('externo-servicio').value = item.servicioCobrado || '';
+    $('externo-total').value = item.total || 0;
+    $('externo-metodo').value = item.metodoPago || 'Efectivo';
+    $('externo-estado').value = item.estadoPago || 'Pagado';
+    $('externo-nota').value = item.notaPago || '';
+    $('btn-servicio-externo').innerText = 'Actualizar Servicio Externo';
+    $('btn-cancelar-servicio-externo')?.classList.remove('hidden');
+}
+function cancelarEdicionServicioExterno() {
+    $('form-servicio-externo')?.reset();
+    if ($('edit-servicio-externo-id')) $('edit-servicio-externo-id').value = '';
+    if ($('externo-fecha')) $('externo-fecha').value = fechaLocalInputFinanzas();
+    if ($('btn-servicio-externo')) $('btn-servicio-externo').innerText = 'Guardar Servicio Externo';
+    $('btn-cancelar-servicio-externo')?.classList.add('hidden');
+}
+function eliminarServicioExterno(id) {
+    if (!confirm('¿Eliminar este servicio externo?')) return;
+    serviciosExternos = serviciosExternos.filter(s => s.id !== id);
+    saveStore('serviciosExternos');
+    renderServiciosExternos();
+    renderGananciasConsultas();
+    if (typeof renderDashboard === 'function') renderDashboard();
+}
+function marcarServicioExternoPagado(id) {
+    const item = serviciosExternos.find(s => s.id === id);
+    if (!item) return;
+    const metodo = prompt('Método de pago:', item.metodoPago || 'Efectivo');
+    if (metodo === null) return;
+    item.estadoPago = 'Pagado';
+    item.metodoPago = metodo || item.metodoPago || 'Efectivo';
+    item.notaPago = item.notaPago ? `${item.notaPago} | Pagado ${new Date().toLocaleString('es-MX')}` : `Pagado ${new Date().toLocaleString('es-MX')}`;
+    saveStore('serviciosExternos');
+    renderServiciosExternos();
+    renderGananciasConsultas();
+    if (typeof renderDashboard === 'function') renderDashboard();
 }
 function marcarConsultaPagada(ownerId, petId, consultaId) {
     const owner = clientes.find(c => c.id === ownerId);

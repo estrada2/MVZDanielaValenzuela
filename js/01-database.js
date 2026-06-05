@@ -9,6 +9,7 @@ const TABLAS_NORMALIZADAS = [
     'agenda',
     'consultas',
     'pagos',
+    'servicios_externos',
     'movimientos_inventario'
 ];
 
@@ -178,6 +179,18 @@ function mapearEstadoNormalizado(rows) {
             nombre: row.nombre || '',
             precio: parseFloat(row.precio || 0)
         })),
+        serviciosExternos: (rows.servicios_externos || []).map(row => ({
+            id: row.legacy_id || row.id,
+            fechaISO: row.fecha_iso,
+            fecha: row.fecha_texto || '',
+            clienteNombre: row.cliente_nombre || '',
+            servicioCobrado: row.servicio || '',
+            total: parseFloat(row.total || 0),
+            metodoPago: row.metodo_pago || 'Efectivo',
+            estadoPago: row.estado_pago || 'Pagado',
+            notaPago: row.nota || '',
+            tipo: row.tipo || 'Servicio externo'
+        })),
         movimientosInventario: (rows.movimientos_inventario || []).map(row => ({
             id: row.legacy_id || row.id,
             fechaISO: row.fecha_iso,
@@ -334,6 +347,22 @@ async function guardarEstadoBaseNormalizada() {
     });
     await upsertTabla('pagos', pagosRows.filter(row => row.consulta_id), 'id, legacy_id');
 
+    const serviciosExternosRows = serviciosExternos.map(servicio => ({
+        user_id: userId,
+        legacy_id: servicio.id,
+        fecha_iso: servicio.fechaISO || new Date().toISOString(),
+        fecha_texto: servicio.fecha || '',
+        cliente_nombre: servicio.clienteNombre || '',
+        servicio: servicio.servicioCobrado || '',
+        total: parseFloat(servicio.total || 0),
+        metodo_pago: servicio.metodoPago || 'Efectivo',
+        estado_pago: servicio.estadoPago || 'Pagado',
+        nota: servicio.notaPago || '',
+        tipo: servicio.tipo || 'Servicio externo',
+        updated_at: new Date().toISOString()
+    }));
+    await upsertTabla('servicios_externos', serviciosExternosRows, 'id, legacy_id');
+
     const movimientosRows = movimientosInventario.map(mov => ({
         user_id: userId,
         legacy_id: mov.id,
@@ -349,6 +378,7 @@ async function guardarEstadoBaseNormalizada() {
 
     await borrarFaltantes('pagos', idsLegacy(pagosRows));
     await borrarFaltantes('consultas', idsLegacy(consultasRows));
+    await borrarFaltantes('servicios_externos', idsLegacy(serviciosExternosRows));
     await borrarFaltantes('movimientos_inventario', idsLegacy(movimientosInventario));
     await borrarFaltantes('agenda', idsLegacy(agenda));
     await borrarFaltantes('mascotas', idsLegacy(mascotasRows));

@@ -32,8 +32,9 @@ function dashboardFechaConsulta(consulta) {
     return Number.isNaN(fecha.getTime()) ? null : fecha;
 }
 function dashboardConsultas() {
-    return clientes.flatMap(cliente => (cliente.mascotas || []).flatMap(mascota => (mascota.historial || []).map(consulta => ({
+    const consultas = clientes.flatMap(cliente => (cliente.mascotas || []).flatMap(mascota => (mascota.historial || []).map(consulta => ({
         ...consulta,
+        origenFinanciero: 'Consulta',
         clienteNombre: cliente.owner,
         mascotaNombre: mascota.name,
         ownerId: cliente.id,
@@ -42,6 +43,16 @@ function dashboardConsultas() {
         total: parseFloat(consulta.costoTotal) || 0,
         estadoPago: consulta.estadoPago || 'Pagado'
     }))));
+    const externos = (serviciosExternos || []).map(servicio => ({
+        ...servicio,
+        origenFinanciero: 'Externo',
+        clienteNombre: servicio.clienteNombre || 'Servicio externo',
+        mascotaNombre: 'Sin expediente',
+        fechaObj: dashboardFechaConsulta(servicio),
+        total: parseFloat(servicio.total) || 0,
+        estadoPago: servicio.estadoPago || 'Pagado'
+    }));
+    return [...consultas, ...externos];
 }
 function dashboardFormatoMoneda(valor) {
     return (parseFloat(valor) || 0).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -85,13 +96,13 @@ function renderDashboard() {
     `).join(''), 'No hay citas activas para hoy.');
 
     const recientes = consultas
-        .filter(con => con.fechaObj)
+        .filter(con => con.fechaObj && con.origenFinanciero !== 'Externo')
         .sort((a, b) => b.fechaObj - a.fechaObj)
         .slice(0, 4);
     dashboardSetLista('dash-pacientes-recientes', recientes.map(con => `
         <button type="button" onclick="abrirModalHistorial(${con.ownerId}, ${con.petId})" class="w-full text-left border rounded-xl p-3 bg-slate-50 hover:bg-slate-100">
             <p class="text-xs font-bold text-slate-900">${con.mascotaNombre}</p>
-            <p class="text-[11px] text-slate-500">${con.clienteNombre} · ${con.tipo || 'Consulta'} · ${con.fechaObj.toLocaleDateString('es-MX')}</p>
+            <p class="text-[11px] text-slate-500">${con.clienteNombre} · ${con.origenFinanciero || 'Consulta'} · ${con.fechaObj.toLocaleDateString('es-MX')}</p>
         </button>
     `).join(''), 'Aún no hay consultas registradas.');
 

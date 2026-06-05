@@ -271,6 +271,12 @@ function renderCardConsultaHistorial(owner, pet, consulta) {
                 </details>
                 <div class="flex flex-wrap gap-2 justify-end">
                     ${estadoPago === 'Pendiente' ? `<button type="button" onclick="marcarConsultaPagada(${owner.id}, ${pet.id}, ${consulta.id})" class="bg-emerald-50 hover:bg-emerald-100 text-emerald-700 text-[10px] font-bold px-3 py-2 rounded-lg border border-emerald-200 flex items-center gap-1 transition-all"><i data-lucide="check-circle" class="w-3.5 h-3.5"></i> Marcar pagado</button>` : ''}
+                    <button type="button" onclick="abrirModalEditarConsulta(${owner.id}, ${pet.id}, ${consulta.id})" class="bg-amber-50 hover:bg-amber-100 text-amber-700 text-[10px] font-bold px-3 py-2 rounded-lg border border-amber-200 flex items-center gap-1 transition-all">
+                        <i data-lucide="file-pen-line" class="w-3.5 h-3.5"></i> Editar
+                    </button>
+                    <button type="button" onclick="eliminarConsultaHistorial(${owner.id}, ${pet.id}, ${consulta.id})" class="bg-rose-50 hover:bg-rose-100 text-rose-700 text-[10px] font-bold px-3 py-2 rounded-lg border border-rose-200 flex items-center gap-1 transition-all">
+                        <i data-lucide="trash-2" class="w-3.5 h-3.5"></i> Borrar
+                    </button>
                     <button onclick="descargarResponsivaHistorialPDF(${owner.id}, ${pet.id}, ${consulta.id})" class="bg-blue-50 hover:bg-blue-100 text-blue-700 text-[10px] font-bold px-3 py-2 rounded-lg border border-blue-200 flex items-center gap-1 transition-all">
                         <i data-lucide="download" class="w-3.5 h-3.5"></i> Descargar PDF
                     </button>
@@ -375,6 +381,75 @@ function abrirModalHistorial(ownerId, petId) {
     renderIcons();
 }
 function cerrarModalHistorial() { $('modal-historial-clinico')?.classList.add('hidden'); }
+function buscarConsultaHistorial(ownerId, petId, consultaId) {
+    const owner = clientes.find(c => c.id === ownerId);
+    const pet = owner?.mascotas.find(m => m.id === petId);
+    const consulta = pet?.historial?.find(h => h.id === consultaId);
+    return { owner, pet, consulta };
+}
+function abrirModalEditarConsulta(ownerId, petId, consultaId) {
+    const { owner, pet, consulta } = buscarConsultaHistorial(ownerId, petId, consultaId);
+    if (!owner || !pet || !consulta) return;
+    $('editar-consulta-owner-id').value = ownerId;
+    $('editar-consulta-pet-id').value = petId;
+    $('editar-consulta-id').value = consultaId;
+    $('editar-consulta-label').innerText = `${pet.name} | ${owner.owner}`;
+    $('editar-consulta-tipo').value = consulta.tipo || 'Inicial';
+    $('editar-consulta-peso').value = consulta.peso || '';
+    $('editar-consulta-temp').value = consulta.temp || '';
+    $('editar-consulta-motivo').value = consulta.motivo || '';
+    $('editar-consulta-vacunas').value = consulta.vacunas || '';
+    $('editar-consulta-desparasitante').value = consulta.desparasitante || '';
+    $('editar-consulta-sintomas').value = consulta.sintomas || '';
+    $('editar-consulta-tratamiento').value = consulta.tratamiento || '';
+    $('editar-consulta-servicio').value = consulta.servicioCobrado || '';
+    $('editar-consulta-total').value = consulta.costoTotal || 0;
+    $('editar-consulta-metodo').value = consulta.metodoPago || 'Efectivo';
+    $('editar-consulta-estado').value = consulta.estadoPago || 'Pagado';
+    $('editar-consulta-nota-pago').value = consulta.notaPago || '';
+    setHidden('modal-editar-consulta', false);
+    renderIcons();
+}
+function cerrarModalEditarConsulta() {
+    setHidden('modal-editar-consulta', true);
+}
+function guardarEdicionConsulta(event) {
+    event.preventDefault();
+    const ownerId = parseInt($('editar-consulta-owner-id')?.value || 0);
+    const petId = parseInt($('editar-consulta-pet-id')?.value || 0);
+    const consultaId = parseInt($('editar-consulta-id')?.value || 0);
+    const { consulta } = buscarConsultaHistorial(ownerId, petId, consultaId);
+    if (!consulta) return;
+    consulta.tipo = $('editar-consulta-tipo')?.value || consulta.tipo;
+    consulta.peso = $('editar-consulta-peso')?.value || '--';
+    consulta.temp = $('editar-consulta-temp')?.value || '--';
+    consulta.motivo = $('editar-consulta-motivo')?.value || '';
+    consulta.vacunas = $('editar-consulta-vacunas')?.value || null;
+    consulta.desparasitante = $('editar-consulta-desparasitante')?.value || null;
+    consulta.sintomas = $('editar-consulta-sintomas')?.value || '';
+    consulta.tratamiento = $('editar-consulta-tratamiento')?.value || '';
+    consulta.servicioCobrado = $('editar-consulta-servicio')?.value || 'Sin servicio registrado';
+    consulta.costoTotal = parseFloat($('editar-consulta-total')?.value || 0);
+    consulta.metodoPago = $('editar-consulta-metodo')?.value || 'Efectivo';
+    consulta.estadoPago = $('editar-consulta-estado')?.value || 'Pagado';
+    consulta.notaPago = $('editar-consulta-nota-pago')?.value || '';
+    consulta.editadoEn = new Date().toISOString();
+    saveStore('clientes');
+    cerrarModalEditarConsulta();
+    renderHistorialClinicoActivo();
+    if (typeof renderGananciasConsultas === 'function') renderGananciasConsultas();
+    if (typeof renderDashboard === 'function') renderDashboard();
+}
+function eliminarConsultaHistorial(ownerId, petId, consultaId) {
+    if (!confirm('¿Borrar esta consulta del expediente? Esta acción también la quitará de finanzas.')) return;
+    const { pet } = buscarConsultaHistorial(ownerId, petId, consultaId);
+    if (!pet) return;
+    pet.historial = (pet.historial || []).filter(consulta => consulta.id !== consultaId);
+    saveStore('clientes');
+    renderHistorialClinicoActivo();
+    if (typeof renderGananciasConsultas === 'function') renderGananciasConsultas();
+    if (typeof renderDashboard === 'function') renderDashboard();
+}
 function prepararAgendaDesdeExpediente(ownerId, petId) {
     const owner = clientes.find(c => c.id === ownerId);
     const pet = owner?.mascotas.find(m => m.id === petId);
