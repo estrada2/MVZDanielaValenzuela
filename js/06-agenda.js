@@ -250,8 +250,13 @@ function datosRecordatorioCita(cita) {
     const notas = cita.notas || cita.notes || 'Sin notas';
     const fecha = normalizarFechaCita(cita);
     const hora = horaCita(cita);
+    const fechaObj = fechaHoraCita(cita);
+    const fechaRecordatorio = Number.isNaN(fechaObj.getTime())
+        ? `${fecha} ${hora}`
+        : fechaObj.toLocaleString('es-MX', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false });
     const titulo = `VetHome: ${mascota} - ${cliente}`;
     const detalle = [
+        `Recordar: ${fechaRecordatorio}`,
         `Paciente: ${mascota}`,
         `Propietario: ${cliente}`,
         `Fecha: ${fecha}`,
@@ -259,7 +264,7 @@ function datosRecordatorioCita(cita) {
         `Dirección: ${direccion}`,
         `Notas: ${notas}`
     ].join('\n');
-    return { titulo, detalle, fecha, hora, direccion, notas, cliente, mascota };
+    return { titulo, detalle, fecha, hora, fechaRecordatorio, direccion, notas, cliente, mascota };
 }
 async function copiarTextoSeguro(texto) {
     try {
