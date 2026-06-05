@@ -19,6 +19,8 @@ function actualizarVistaPorTipoConsulta() {
     }
     actualizarDisclaimerDinamico();
 }
+const TEXTO_DECLARACION_RESPONSIVA = "Declaro que la información proporcionada sobre el estado de salud de mi mascota es veraz, completa y actualizada. Asimismo, informo cualquier antecedente médico, enfermedad previa, tratamiento reciente o síntomas presentes antes de la atención veterinaria.";
+const TEXTO_CONSENTIMIENTO_RESPONSIVA = "Entiendo y acepto que la aplicación de vacunas o tratamientos en animales que ya cursan con enfermedades, infecciones o padecimientos no reportados puede incrementar el riesgo de complicaciones graves, reacciones adversas e incluso el fallecimiento de la mascota. Asimismo, acepto que el médico veterinario no será responsable por complicaciones, deterioro en la salud o fallecimiento derivados de enfermedades, síntomas o antecedentes clínicos omitidos, ocultados o no informados por el propietario antes del procedimiento, siempre que la atención haya sido brindada conforme a la práctica veterinaria adecuada. El médico veterinario podrá negarse a realizar procedimientos, aplicar vacunas o administrar tratamientos si considera que la mascota requiere valoración clínica adicional, estudios diagnósticos o atención hospitalaria para salvaguardar su bienestar.";
 function toggleCamposSeguimiento() {
     actualizarVistaPorTipoConsulta();
 }
@@ -40,19 +42,19 @@ function actualizarDisclaimerDinamico() {
     if($('resp-especie')) $('resp-especie').innerText = spc;
     if($('resp-edad')) $('resp-edad').innerText = consultaSeleccionada.petObj.age;
     if($('resp-firma-dueno-lbl')) $('resp-firma-dueno-lbl').innerText = consultaSeleccionada.ownerObj.owner;
-    const motivoTexto = $('motivo')?.value || '--';
-    if($('resp-motivo')) $('resp-motivo').innerText = motivoTexto;
     const tipo = $('consulta-tipo-drop').value;
+    const motivoTexto = $('motivo')?.value || (tipo === 'Vacunacion' ? 'Vacunación / profilaxis' : '--');
+    if($('resp-motivo')) $('resp-motivo').innerText = motivoTexto;
     const contenedorSintomas = $('resp-sintomas-box');
     if($('resp-tipo-consulta-lbl')) $('resp-tipo-consulta-lbl').innerText = tipo;
-    $('resp-datos-generales-box')?.classList.toggle('hidden', tipo === 'Vacunacion');
+    if($('resp-parrafo-declaracion')) $('resp-parrafo-declaracion').innerText = TEXTO_DECLARACION_RESPONSIVA;
+    if($('resp-parrafo-consentimiento')) $('resp-parrafo-consentimiento').innerText = TEXTO_CONSENTIMIENTO_RESPONSIVA;
+    $('resp-datos-generales-box')?.classList.remove('hidden');
     if (!contenedorSintomas) return;
     if (tipo === 'Vacunacion') {
         const vacunas = recolectarVacunasAplicadas();
         const aplicoDesp = $('aplico-desparasitante')?.value || 'No';
         const desparasitante = aplicoDesp === 'Si' ? $('desparasitante-nombre')?.value || 'Sin especificar' : 'No';
-        if($('resp-parrafo-declaracion')) $('resp-parrafo-declaracion').innerText = "Declaro que mi mascota se encuentra clínicamente estable para recibir profilaxis según la información que proporcioné, y autorizo la aplicación de los biológicos y/o desparasitantes indicados por la MVZ.";
-        if($('resp-parrafo-consentimiento')) $('resp-parrafo-consentimiento').innerText = "Comprendo que las vacunas y desparasitantes pueden ocasionar reacciones locales, fiebre transitoria, malestar, alergias o reacciones anafilácticas poco frecuentes. Me comprometo a observar a mi mascota después del servicio y solicitar atención inmediata si presenta signos de alarma.";
         contenedorSintomas.innerHTML = `
             <p class="text-blue-900 font-bold">Biológicos Aplicados:</p>
             <ul class="list-disc pl-4 text-slate-700 italic">
@@ -64,13 +66,6 @@ function actualizarDisclaimerDinamico() {
         if($('resp-animo-lbl')) $('resp-animo-lbl').innerText = $('consulta-animo-drop')?.value || '--';
         if($('resp-alimentacion-lbl')) $('resp-alimentacion-lbl').innerText = $('consulta-alimentacion')?.value || '--';
         if($('resp-garrapatas-lbl')) $('resp-garrapatas-lbl').innerText = $('consulta-garrapatas')?.value || '--';
-        const esSeguimiento = tipo === 'Seguimiento';
-        if($('resp-parrafo-declaracion')) $('resp-parrafo-declaracion').innerText = esSeguimiento
-            ? "Declaro que la información sobre la evolución de mi mascota, tratamientos actuales y cambios observados desde la visita previa es veraz y completa."
-            : "Declaro que la información proporcionada sobre el estado de salud de mi mascota es veraz, completa y actualizada. Informo antecedentes médicos, tratamientos recientes y signos clínicos presentes antes de la atención.";
-        if($('resp-parrafo-consentimiento')) $('resp-parrafo-consentimiento').innerText = esSeguimiento
-            ? "Entiendo que el seguimiento clínico no sustituye estudios complementarios si la evolución no es favorable, y autorizo las indicaciones o ajustes terapéuticos derivados de esta valoración."
-            : "Entiendo que los tratamientos o procedimientos pueden tener riesgos inherentes, especialmente si existen enfermedades o antecedentes no informados. Acepto seguir las indicaciones médicas y vigilar la evolución posterior al servicio.";
         const asintomaticoBox = $('check-asintomatico')?.checked;
         if (asintomaticoBox) {
             contenedorSintomas.innerHTML = `<p class="text-teal-800 font-semibold">✓ SE DECLARA ASINTOMÁTICO: No presenta signos aparentes de enfermedad.</p>`;
@@ -273,7 +268,7 @@ function guardarConsulta(e) {
     if (tipoConsulta === 'Vacunacion') {
         vacunasTxt = recolectarVacunasAplicadas();
         desparasitanteTxt = $('aplico-desparasitante')?.value === 'Si' ? $('desparasitante-nombre')?.value : 'No';
-        textoDisclaimerIndividual = `Consentimiento para profilaxis/vacunación. El propietario certifica que la mascota se encuentra sana. Vacunas: ${vacunasTxt} | Desparasitante: ${desparasitanteTxt}. Exime a MVZ Daniela Valenzuela por reacciones anafilácticas al biológico.`;
+        textoDisclaimerIndividual = `${TEXTO_DECLARACION_RESPONSIVA} ${TEXTO_CONSENTIMIENTO_RESPONSIVA} Servicio: ${tipoConsulta}. Vacunas: ${vacunasTxt} | Desparasitante: ${desparasitanteTxt}.`;
     } else {
         sintomasTxt = recolectarSintomas();
         if (tipoConsulta === 'Seguimiento') {
@@ -296,7 +291,7 @@ function guardarConsulta(e) {
                 actualizarSelectAgenda();
             }
         }
-        textoDisclaimerIndividual = `Consentimiento firmado en atención médica (${tipoConsulta}). Sintomatología: "${sintomasTxt}". Anamnesis: Especie: ${$('consulta-especie-drop')?.value || 'Otro'}, Ánimo: ${$('consulta-animo-drop')?.value || 'Normal'}, Garrapatas: ${$('consulta-garrapatas')?.value || 'No'}, Dieta: ${$('consulta-alimentacion')?.value || 'Croquetas'} ${moduloSeguimiento}. El propietario deslinda de responsabilidad a MVZ Daniela Valenzuela derivado de omisiones clínicas.`;
+        textoDisclaimerIndividual = `${TEXTO_DECLARACION_RESPONSIVA} ${TEXTO_CONSENTIMIENTO_RESPONSIVA} Servicio: ${tipoConsulta}. Sintomatología: "${sintomasTxt}". Anamnesis: Especie: ${$('consulta-especie-drop')?.value || 'Otro'}, Ánimo: ${$('consulta-animo-drop')?.value || 'Normal'}, Garrapatas: ${$('consulta-garrapatas')?.value || 'No'}, Dieta: ${$('consulta-alimentacion')?.value || 'Croquetas'} ${moduloSeguimiento}.`;
     }
     const checkboxesServicios = document.querySelectorAll('.servicio-chk-multi:checked');
     let costoSrv = 0;
@@ -316,7 +311,7 @@ function guardarConsulta(e) {
         tipo: tipoConsulta,
         peso: $('weight')?.value || '--', 
         temp: $('temp')?.value || '--', 
-        motivo: $('motivo')?.value || '', 
+        motivo: $('motivo')?.value || (tipoConsulta === 'Vacunacion' ? 'Vacunación / profilaxis' : ''), 
         tratamiento: $('tratamiento')?.value || '',
         insumos: insumosAplicados,
         sintomas: sintomasTxt,

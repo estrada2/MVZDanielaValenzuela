@@ -1,82 +1,233 @@
+let historialActivo = { ownerId: null, petId: null, filtro: 'todas' };
+
+function fechaConsultaObj(consulta) {
+    if (consulta.fechaISO) return new Date(consulta.fechaISO);
+    const fecha = new Date(consulta.fecha);
+    return Number.isNaN(fecha.getTime()) ? null : fecha;
+}
+
+function formatoFechaCorta(fecha) {
+    return fecha ? fecha.toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' }) : 'Sin fecha';
+}
+
+function claseBadgePago(estadoPago) {
+    if (estadoPago === 'Pagado') return 'bg-emerald-100 text-emerald-800 border-emerald-200';
+    if (estadoPago === 'Pendiente') return 'bg-rose-100 text-rose-800 border-rose-200';
+    return 'bg-slate-100 text-slate-700 border-slate-200';
+}
+
+function consultasFiltradasHistorial(historial) {
+    const filtro = historialActivo.filtro;
+    return historial.filter(consulta => {
+        if (filtro === 'consultas') return consulta.tipo !== 'Vacunacion';
+        if (filtro === 'vacunas') return consulta.tipo === 'Vacunacion';
+        if (filtro === 'seguimiento') return consulta.tipo === 'Seguimiento';
+        if (filtro === 'pendientes') return (consulta.estadoPago || 'Pagado') === 'Pendiente';
+        return true;
+    });
+}
+
+function cambiarFiltroHistorial(filtro) {
+    historialActivo.filtro = filtro;
+    renderHistorialClinicoActivo();
+}
+
+function proximaCitaMascota(petId) {
+    const hoy = new Date();
+    hoy.setHours(0, 0, 0, 0);
+    return agenda
+        .filter(cita => cita.petId === petId && !['Atendida', 'Cancelada'].includes(cita.estado || 'Programada'))
+        .map(cita => ({ ...cita, fechaObj: new Date(`${cita.fecha}T${cita.hora || '00:00'}`) }))
+        .filter(cita => !Number.isNaN(cita.fechaObj.getTime()) && cita.fechaObj >= hoy)
+        .sort((a, b) => a.fechaObj - b.fechaObj)[0];
+}
+
+function renderBotonesFiltroHistorial(historial) {
+    const totalPendientes = historial.filter(h => (h.estadoPago || 'Pagado') === 'Pendiente').length;
+    const filtros = [
+        { id: 'todas', label: `Todas (${historial.length})` },
+        { id: 'consultas', label: 'Consultas' },
+        { id: 'vacunas', label: 'Vacunas' },
+        { id: 'seguimiento', label: 'Seguimiento' },
+        { id: 'pendientes', label: `Pendientes (${totalPendientes})` }
+    ];
+    return filtros.map(filtro => {
+        const activo = historialActivo.filtro === filtro.id;
+        return `<button type="button" onclick="cambiarFiltroHistorial('${filtro.id}')" class="px-3 py-1.5 text-[11px] font-bold rounded-lg border transition-all ${activo ? 'bg-slate-900 text-white border-slate-900' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'}">${filtro.label}</button>`;
+    }).join('');
+}
+
+function renderCardConsultaHistorial(owner, pet, consulta) {
+    const fechaObj = fechaConsultaObj(consulta);
+    const estadoPago = consulta.estadoPago || 'Pagado';
+    const badgePago = claseBadgePago(estadoPago);
+    const esVacuna = consulta.tipo === 'Vacunacion';
+    const tituloClinico = esVacuna
+        ? `Vacunas: ${consulta.vacunas || 'Ninguna especificada'}`
+        : (consulta.motivo || consulta.sintomas || 'Consulta sin motivo registrado');
+    const detalleHTML = esVacuna
+        ? `
+            <p class="text-xs text-slate-800"><b>Vacunas aplicadas:</b> ${consulta.vacunas || 'Ninguna'}</p>
+            <p class="text-xs text-slate-800"><b>Desparasitante:</b> ${consulta.desparasitante || 'No'}</p>
+        `
+        : `
+            <p class="text-xs text-slate-800"><b>Motivo:</b> ${consulta.motivo || 'Sin motivo registrado'}</p>
+            <p class="text-xs text-slate-800"><b>Signos reportados:</b> <span class="italic text-gray-600">"${consulta.sintomas || 'Asintomático'}"</span></p>
+        `;
+    return `
+        <details class="group bg-white rounded-xl border border-gray-200 shadow-xs overflow-hidden">
+            <summary class="list-none cursor-pointer p-4 flex flex-col lg:flex-row lg:items-center justify-between gap-3 hover:bg-slate-50">
+                <div class="flex items-start gap-3">
+                    <div class="w-10 h-10 rounded-xl ${esVacuna ? 'bg-blue-50 text-blue-700' : 'bg-amber-50 text-amber-700'} flex items-center justify-center shrink-0 border">
+                        <i data-lucide="${esVacuna ? 'syringe' : 'stethoscope'}" class="w-5 h-5"></i>
+                    </div>
+                    <div>
+                        <div class="flex flex-wrap items-center gap-2">
+                            <p class="text-sm font-black text-slate-900">${consulta.tipo || 'Consulta'}</p>
+                            <span class="text-[10px] font-bold px-2 py-0.5 rounded-full border ${badgePago}">${estadoPago}</span>
+                        </div>
+                        <p class="text-xs text-slate-500 mt-0.5">${formatoFechaCorta(fechaObj)} · ${tituloClinico}</p>
+                    </div>
+                </div>
+                <div class="flex items-center justify-between lg:justify-end gap-4">
+                    <div class="text-right">
+                        <p class="text-[10px] uppercase font-bold text-slate-400">Cobro</p>
+                        <p class="text-sm font-black ${estadoPago === 'Pagado' ? 'text-emerald-700' : 'text-rose-700'}">$${Number(consulta.costoTotal || 0).toFixed(2)}</p>
+                    </div>
+                    <i data-lucide="chevron-down" class="w-4 h-4 text-slate-400 group-open:rotate-180 transition-transform"></i>
+                </div>
+            </summary>
+            <div class="px-4 pb-4 space-y-3 border-t border-gray-100">
+                <div class="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs text-gray-600 bg-gray-50 p-3 rounded-lg mt-3">
+                    <p><b>Peso:</b> ${consulta.peso || '--'} kg</p>
+                    <p><b>Temp:</b> ${consulta.temp || '--'} °C</p>
+                    <p><b>Método:</b> ${consulta.metodoPago || 'Efectivo'}</p>
+                    <p><b>Servicio:</b> ${consulta.servicioCobrado || 'Sin servicio'}</p>
+                </div>
+                ${detalleHTML}
+                <p class="text-xs text-slate-900 bg-amber-50 p-2.5 rounded-lg border border-amber-200 text-justify"><b>Receta/Cuidados:</b> ${consulta.tratamiento || 'Sin indicaciones registradas'}</p>
+                ${consulta.notasRapidas ? `
+                    <div class="bg-indigo-50 p-3 rounded-lg border border-indigo-200 space-y-2">
+                        <p class="text-xs font-bold text-indigo-900">Notas rápidas de consulta</p>
+                        <img src="${consulta.notasRapidas}" class="w-full max-h-64 object-contain bg-white rounded-lg border border-indigo-100">
+                    </div>
+                ` : ''}
+                ${consulta.insumos?.length ? `<div class="bg-blue-50 p-2 rounded-lg text-[10px] border border-blue-100 text-blue-900"><b>Insumos:</b> ${consulta.insumos.map(i=>`${i.name} [x${i.qty}]`).join(', ')}</div>` : ''}
+                <details class="bg-slate-950 text-slate-300 text-[10px] p-3 rounded-lg font-mono leading-relaxed">
+                    <summary class="cursor-pointer text-amber-400 font-bold uppercase">Ver responsiva firmada y firmas</summary>
+                    <p class="mt-2">${consulta.disclaimer || 'Sin cláusula registrada.'}</p>
+                    <div class="flex justify-between items-center pt-2 mt-2 border-t border-slate-800">
+                        <img src="${consulta.firmaDueno}" class="h-9 object-contain mx-auto bg-white rounded px-1">
+                        <img src="${consulta.firmaVet}" class="h-9 object-contain mx-auto bg-white rounded px-1">
+                    </div>
+                </details>
+                <div class="flex flex-wrap gap-2 justify-end">
+                    <button onclick="descargarResponsivaHistorialPDF(${owner.id}, ${pet.id}, ${consulta.id})" class="bg-blue-50 hover:bg-blue-100 text-blue-700 text-[10px] font-bold px-3 py-2 rounded-lg border border-blue-200 flex items-center gap-1 transition-all">
+                        <i data-lucide="download" class="w-3.5 h-3.5"></i> Descargar PDF
+                    </button>
+                </div>
+            </div>
+        </details>
+    `;
+}
+
+function renderHistorialClinicoActivo() {
+    const owner = clientes.find(c => c.id === historialActivo.ownerId);
+    const pet = owner?.mascotas.find(m => m.id === historialActivo.petId);
+    if (!owner || !pet) return;
+    if($('historial-subtitulo-paciente')) {
+        $('historial-subtitulo-paciente').innerText = `${pet.name} | ${owner.owner}`;
+    }
+    const contenedor = $('historial-contenedor-consultas');
+    if(!contenedor) return;
+    const historial = [...(pet.historial || [])].sort((a, b) => (fechaConsultaObj(b)?.getTime() || 0) - (fechaConsultaObj(a)?.getTime() || 0));
+    const filtradas = consultasFiltradasHistorial(historial);
+    const ultimaConsulta = historial[0];
+    const ultimaVacuna = historial.find(h => h.tipo === 'Vacunacion' && h.vacunas);
+    const pendientes = historial.filter(h => (h.estadoPago || 'Pagado') === 'Pendiente');
+    const montoPendiente = pendientes.reduce((acc, h) => acc + (parseFloat(h.costoTotal) || 0), 0);
+    const proxima = proximaCitaMascota(pet.id);
+    const avatar = pet.photo
+        ? `<img src="${pet.photo}" class="w-16 h-16 rounded-xl object-cover border border-slate-200">`
+        : `<div class="w-16 h-16 rounded-xl bg-blue-50 text-blue-500 flex items-center justify-center border border-blue-100"><i data-lucide="paw-print" class="w-7 h-7"></i></div>`;
+    contenedor.innerHTML = `
+        <section class="bg-white border border-gray-200 rounded-2xl p-4 shadow-xs">
+            <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+                <div class="flex items-center gap-4">
+                    ${avatar}
+                    <div>
+                        <h4 class="text-xl font-black text-slate-900">${pet.name}</h4>
+                        <p class="text-xs text-slate-500">${pet.species || 'Especie sin registrar'} · ${pet.age || 'Edad sin registrar'} · Dueño: ${owner.owner}</p>
+                        <p class="text-[11px] text-slate-400">${owner.phone || 'Sin teléfono'} · ${owner.address || 'Sin dirección'}</p>
+                    </div>
+                </div>
+                <div class="flex flex-wrap gap-2 justify-end">
+                    <button onclick="cerrarModalHistorial(); cargarPacienteAConsulta(${owner.id}, ${pet.id})" class="bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold px-3 py-2 rounded-xl flex items-center gap-1">
+                        <i data-lucide="stethoscope" class="w-4 h-4"></i> Nueva consulta
+                    </button>
+                    <button onclick="prepararAgendaDesdeExpediente(${owner.id}, ${pet.id})" class="bg-blue-50 hover:bg-blue-100 text-blue-700 text-xs font-bold px-3 py-2 rounded-xl border border-blue-100 flex items-center gap-1">
+                        <i data-lucide="calendar-plus" class="w-4 h-4"></i> Agendar
+                    </button>
+                </div>
+            </div>
+        </section>
+        <section class="grid grid-cols-2 lg:grid-cols-5 gap-3">
+            <div class="bg-white border rounded-xl p-3">
+                <p class="text-[10px] font-bold uppercase text-slate-400">Consultas</p>
+                <p class="text-xl font-black text-slate-900">${historial.length}</p>
+            </div>
+            <div class="bg-white border rounded-xl p-3">
+                <p class="text-[10px] font-bold uppercase text-slate-400">Último peso</p>
+                <p class="text-xl font-black text-slate-900">${ultimaConsulta?.peso || '--'} <span class="text-xs font-bold text-slate-400">kg</span></p>
+            </div>
+            <div class="bg-white border rounded-xl p-3">
+                <p class="text-[10px] font-bold uppercase text-slate-400">Última visita</p>
+                <p class="text-sm font-black text-slate-900">${formatoFechaCorta(fechaConsultaObj(ultimaConsulta || {}))}</p>
+            </div>
+            <div class="bg-white border rounded-xl p-3">
+                <p class="text-[10px] font-bold uppercase text-slate-400">Próxima cita</p>
+                <p class="text-sm font-black text-slate-900">${proxima ? `${proxima.fecha} · ${proxima.hora}` : 'Sin cita'}</p>
+            </div>
+            <div class="bg-white border rounded-xl p-3 ${montoPendiente ? 'border-rose-200 bg-rose-50' : ''}">
+                <p class="text-[10px] font-bold uppercase ${montoPendiente ? 'text-rose-600' : 'text-slate-400'}">Pendiente</p>
+                <p class="text-xl font-black ${montoPendiente ? 'text-rose-700' : 'text-slate-900'}">$${montoPendiente.toFixed(2)}</p>
+            </div>
+        </section>
+        ${ultimaVacuna ? `<section class="bg-blue-50 border border-blue-100 rounded-xl p-3 text-xs text-blue-900"><b>Últimas vacunas:</b> ${ultimaVacuna.vacunas} · ${formatoFechaCorta(fechaConsultaObj(ultimaVacuna))}</section>` : ''}
+        <section class="flex flex-wrap gap-2">
+            ${renderBotonesFiltroHistorial(historial)}
+        </section>
+        <section class="space-y-3">
+            ${filtradas.length
+                ? filtradas.map(consulta => renderCardConsultaHistorial(owner, pet, consulta)).join('')
+                : `<div class="bg-white border rounded-xl p-8 text-center text-xs text-gray-400">No hay registros para este filtro.</div>`
+            }
+        </section>
+    `;
+    renderIcons();
+}
+
 function abrirModalHistorial(ownerId, petId) {
     const owner = clientes.find(c => c.id === ownerId);
     const pet = owner?.mascotas.find(m => m.id === petId);
     if (!pet) return;
-    if($('historial-subtitulo-paciente')) {
-        $('historial-subtitulo-paciente').innerText = `Paciente: ${pet.name} | Dueño: ${owner.owner}`;
-    }
-    const contenedor = $('historial-contenedor-consultas');
-    if(!contenedor) return;
-    contenedor.innerHTML = "";
-    if (!pet.historial || pet.historial.length === 0) {
-        contenedor.innerHTML = `<p class="text-xs text-gray-400 text-center py-8">No hay registros clínicos previos.</p>`;
-    } else {
-        pet.historial.forEach(h => {
-            let detalleHTML = '';
-            if (h.tipo === 'Vacunacion') {
-                detalleHTML = `
-                    <p class="text-xs text-slate-800"><b>Vacunas Aplicadas:</b> ${h.vacunas || 'Ninguna'}</p>
-                    <p class="text-xs text-slate-800"><b>Desparasitante:</b> ${h.desparasitante || 'No'}</p>
-                `;
-            } else {
-                detalleHTML = `
-                    <p class="text-xs text-slate-800"><b>Motivo:</b> ${h.motivo}</p>
-                    <p class="text-xs text-slate-800"><b>Signos Reportados:</b> <span class="italic text-gray-600">"${h.sintomas || 'Asintomático'}"</span></p>
-                `;
-            }
-            const estadoPago = h.estadoPago || 'Pagado';
-            const badgePago = estadoPago === 'Pagado'
-                ? 'bg-emerald-100 text-emerald-800 border-emerald-200'
-                : estadoPago === 'Pendiente'
-                    ? 'bg-rose-100 text-rose-800 border-rose-200'
-                    : 'bg-slate-100 text-slate-700 border-slate-200';
-            const card = document.createElement('div');
-            card.className = "bg-white p-4 rounded-xl border border-gray-200 shadow-xs space-y-2";
-            card.innerHTML = `
-                <div class="flex justify-between items-center border-b pb-1.5">
-                    <span class="text-xs font-bold text-slate-700"><i data-lucide="calendar" class="inline w-3.5 h-3.5 mr-1"></i> ${new Date(h.fecha).toLocaleDateString('es-MX')}</span>
-                    <div class="flex items-center gap-2">
-                        <button onclick="descargarResponsivaHistorialPDF(${owner.id}, ${pet.id}, ${h.id})" class="bg-blue-50 hover:bg-blue-100 text-blue-700 text-[10px] font-bold px-2 py-1 rounded-md border border-blue-200 flex items-center gap-1 transition-all">
-                            <i data-lucide="download" class="w-3 h-3"></i> PDF
-                        </button>
-                    </div>
-                </div>
-                <div class="grid grid-cols-3 gap-2 text-xs text-gray-500 bg-gray-50 p-2 rounded-lg">
-                    <p><b>Peso:</b> ${h.peso} kg</p><p><b>Temp:</b> ${h.temp} °C</p>
-                </div>
-                ${detalleHTML}
-                <p class="text-xs text-slate-900 bg-amber-50 p-2.5 rounded-lg border border-amber-200 text-justify"><b>Receta/Cuidados:</b> ${h.tratamiento}</p>
-                ${h.notasRapidas ? `
-                    <div class="bg-indigo-50 p-3 rounded-lg border border-indigo-200 space-y-2">
-                        <p class="text-xs font-bold text-indigo-900">Notas rápidas de consulta</p>
-                        <img src="${h.notasRapidas}" class="w-full max-h-64 object-contain bg-white rounded-lg border border-indigo-100">
-                    </div>
-                ` : ''}
-                <div class="bg-emerald-50 p-3 rounded-lg border border-emerald-200 space-y-1">
-                    <div class="flex flex-wrap justify-between items-center gap-2">
-                        <p class="text-xs font-bold text-emerald-900">Cobro registrado</p>
-                        <span class="text-[10px] font-bold px-2 py-0.5 rounded-full border ${badgePago}">${estadoPago}</span>
-                    </div>
-                    <p class="text-xs text-slate-700">${h.servicioCobrado || 'Sin servicio registrado'}</p>
-                    <p class="text-xs text-slate-700"><b>Total:</b> $${Number(h.costoTotal || 0).toFixed(2)} · <b>Método:</b> ${h.metodoPago || 'Efectivo'}</p>
-                    ${h.notaPago ? `<p class="text-[11px] text-slate-500 italic">${h.notaPago}</p>` : ''}
-                </div>
-                ${h.insumos?.length ? `<div class="bg-blue-50 p-2 rounded-lg text-[10px] border border-blue-100 text-blue-900"><b>Insumos Extra:</b> ${h.insumos.map(i=>`${i.name} [x${i.qty}]`).join(', ')}</div>` : ''}
-                <div class="bg-gray-900 text-gray-300 text-[10px] p-3 rounded-lg font-mono leading-relaxed mt-2">
-                    <p class="text-amber-400 font-bold uppercase mb-1 border-b border-gray-700 pb-0.5">[✓] CLAÚSULA GUARDADA (${h.tipo})</p>
-                    <p>${h.disclaimer}</p>
-                    <div class="flex justify-between items-center pt-2 mt-2 border-t border-gray-800">
-                        <img src="${h.firmaDueno}" class="h-8 object-contain mx-auto bg-white rounded px-1"><img src="${h.firmaVet}" class="h-8 object-contain mx-auto bg-white rounded px-1">
-                    </div>
-                </div>
-            `;
-            contenedor.appendChild(card);
-        });
-    }
+    historialActivo = { ownerId, petId, filtro: 'todas' };
+    renderHistorialClinicoActivo();
     $('modal-historial-clinico')?.classList.remove('hidden');
     renderIcons();
 }
 function cerrarModalHistorial() { $('modal-historial-clinico')?.classList.add('hidden'); }
+function prepararAgendaDesdeExpediente(ownerId, petId) {
+    const owner = clientes.find(c => c.id === ownerId);
+    const pet = owner?.mascotas.find(m => m.id === petId);
+    if (!owner || !pet) return;
+    cerrarModalHistorial();
+    switchTab('agenda');
+    actualizarSelectAgenda();
+    if ($('agenda-cliente-select')) $('agenda-cliente-select').value = `${ownerId}|${petId}`;
+    if ($('agenda-direccion')) $('agenda-direccion').value = owner.address || '';
+    if ($('agenda-notes')) $('agenda-notes').value = `Seguimiento de ${pet.name}`;
+}
 function renderClientes() {
     const buscadorElem = $('buscador');
     const buscador = buscadorElem ? buscadorElem.value.toLowerCase() : "";
@@ -93,13 +244,22 @@ function renderClientes() {
     if($('contador-registros')) {
         $('contador-registros').innerText = `${filtrados.length} expedientes`;
     }
-    if(filtrados.length === 0) { lista.innerHTML = `<div class="text-center text-gray-400 text-xs py-12">Sin resultados.</div>`; return; }
+    if(filtrados.length === 0) {
+        lista.innerHTML = `
+            <div class="text-center text-gray-400 text-xs py-12 border border-dashed rounded-2xl bg-slate-50">
+                <i data-lucide="search-x" class="w-10 h-10 mx-auto text-gray-300 mb-2"></i>
+                <p class="font-bold text-slate-500">Sin expedientes encontrados</p>
+                <p class="text-[11px] mt-1">Prueba buscar por dueño, mascota, teléfono o dirección.</p>
+            </div>`;
+        renderIcons();
+        return;
+    }
     filtrados.forEach(c => {
         const mascotasCoincidentes = buscador
             ? (c.mascotas || []).filter(m => coincide(m.name)).map(m => m.name)
             : [];
         const div = document.createElement('div');
-        div.className = "p-4 bg-gray-50 rounded-xl border border-gray-200 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 hover:bg-gray-100/70 transition-all";
+        div.className = "p-4 bg-white rounded-xl border border-gray-200 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 hover:border-blue-200 hover:shadow-xs transition-all";
         div.innerHTML = `
             <div class="space-y-1">
                 <h4 class="text-sm font-bold text-slate-900">${c.owner}</h4>
