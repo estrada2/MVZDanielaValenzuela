@@ -681,11 +681,14 @@
                             <button type="button" onclick="filtrarGanancias('personalizado')" id="btn-filtro-personalizado" class="px-3 py-1.5 text-xs font-bold rounded-lg transition-all text-slate-600 hover:text-slate-900">Rango</button>
                         </div>
                     </div>
-                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <div class="grid grid-cols-1 sm:grid-cols-4 gap-3">
                         <input type="date" id="finanzas-fecha-inicio" onchange="filtrarGanancias('personalizado')" class="px-3 py-2 border rounded-xl text-sm outline-none">
                         <input type="date" id="finanzas-fecha-fin" onchange="filtrarGanancias('personalizado')" class="px-3 py-2 border rounded-xl text-sm outline-none">
                         <button type="button" onclick="exportarIngresosCSV()" class="bg-slate-900 text-white text-xs font-bold px-3 py-2 rounded-xl flex items-center justify-center gap-2">
                             <i data-lucide="download" class="w-4 h-4"></i> Exportar CSV
+                        </button>
+                        <button type="button" onclick="exportarCorteDelDia()" class="bg-emerald-600 text-white text-xs font-bold px-3 py-2 rounded-xl flex items-center justify-center gap-2">
+                            <i data-lucide="clipboard-list" class="w-4 h-4"></i> Corte del día
                         </button>
                     </div>
                     <div class="grid grid-cols-1 md:grid-cols-4 gap-4 pt-2">
@@ -715,6 +718,10 @@
                             <h4 class="text-xs font-bold text-slate-700 uppercase mb-3">Servicios Más Cobrados</h4>
                             <div id="resumen-servicios-finanzas" class="space-y-2"></div>
                         </div>
+                    </div>
+                    <div class="border rounded-xl p-4 bg-slate-50">
+                        <h4 class="text-xs font-bold text-slate-700 uppercase mb-3">Resumen por Método de Pago</h4>
+                        <div id="resumen-metodos-pago" class="grid grid-cols-1 sm:grid-cols-4 gap-2"></div>
                     </div>
                 </div>
                 <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
