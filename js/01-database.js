@@ -166,7 +166,10 @@ function mapearEstadoNormalizado(rows) {
             stock: row.stock || 0,
             unit: row.unidad || '',
             categoria: row.categoria || 'Medicamento',
-            minStock: row.stock_minimo ?? 3
+            minStock: row.stock_minimo ?? 3,
+            lote: row.lote || '',
+            caducidad: row.caducidad || '',
+            proveedor: row.proveedor || ''
         })),
         agenda: agendaMapeada,
         finanzas: (rows.servicios || []).map(row => ({
@@ -251,6 +254,9 @@ async function guardarEstadoBaseNormalizada() {
         unidad: item.unit || '',
         categoria: item.categoria || 'Medicamento',
         stock_minimo: parseInt(item.minStock || 3),
+        lote: item.lote || '',
+        caducidad: item.caducidad || null,
+        proveedor: item.proveedor || '',
         updated_at: new Date().toISOString()
     }));
     const inventarioGuardado = await upsertTabla('inventario', inventarioRows, 'id, legacy_id');

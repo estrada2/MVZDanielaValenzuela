@@ -51,20 +51,35 @@ function renderAgenda() {
     list.innerHTML = "";
     const citas = citasAgendaFiltradas();
     if(citas.length === 0) { list.innerHTML = `<div class="text-center py-12 text-gray-400 text-xs italic">No hay visitas en este filtro.</div>`; return; }
-    citas.sort((a,b) => new Date(`${a.fecha}T${a.hora}`) - new Date(`${b.fecha}T${b.hora}`)).forEach(a => {
+    const ordenadas = citas.sort((a,b) => new Date(`${a.fecha}T${a.hora}`) - new Date(`${b.fecha}T${b.hora}`));
+    const hoy = fechaLocalISO();
+    const grupos = [
+        { titulo: 'Hoy', items: ordenadas.filter(cita => cita.fecha === hoy) },
+        { titulo: 'Próximas', items: ordenadas.filter(cita => cita.fecha > hoy) },
+        { titulo: 'Pasadas', items: ordenadas.filter(cita => cita.fecha < hoy) }
+    ].filter(grupo => grupo.items.length);
+    list.innerHTML = grupos.map(grupo => `
+        <div class="space-y-2">
+            <div class="sticky top-0 z-10 bg-slate-50/95 backdrop-blur-sm py-1 flex items-center justify-between">
+                <h4 class="text-[11px] font-black text-slate-500 uppercase tracking-wider">${grupo.titulo}</h4>
+                <span class="text-[10px] font-bold text-slate-400">${grupo.items.length} visita${grupo.items.length === 1 ? '' : 's'}</span>
+            </div>
+            ${grupo.items.map(a => {
         const nombre = a.clienteNombre || a.ownerName || 'Desconocido';
         const mascota = (a.petName && a.petName !== 'N/A') ? ` (${a.petName})` : '';
         const direccion = a.direccion || a.address || '';
         const notas = a.notas || a.notes || 'Sin notas';
         const estado = a.estado || 'Programada';
-        const esHoy = a.fecha === fechaLocalISO();
+        const esHoy = a.fecha === hoy;
+        const owner = clientes.find(c => c.id === (a.clienteId || a.ownerId));
+        const tel = typeof telefonoLimpio === 'function' ? telefonoLimpio(owner?.phone) : String(owner?.phone || '').replace(/\D/g, '');
         const badgeEstado = {
             Programada: 'bg-blue-100 text-blue-800',
             Confirmada: 'bg-emerald-100 text-emerald-800',
             Atendida: 'bg-slate-200 text-slate-700',
             Cancelada: 'bg-rose-100 text-rose-700'
         }[estado] || 'bg-gray-100 text-gray-700';
-        list.innerHTML += `
+        return `
             <div class="border rounded-xl p-4 flex flex-col xl:flex-row justify-between items-start xl:items-center gap-3 shadow-3xs hover:shadow-md transition-all ${esHoy ? 'bg-amber-50 border-amber-300' : 'bg-white'}">
                 <div class="space-y-1 text-xs">
                     <div class="flex flex-wrap items-center gap-2">
@@ -78,16 +93,20 @@ function renderAgenda() {
                 </div>
                 <div class="flex flex-wrap gap-1.5 w-full xl:w-auto shrink-0 justify-end">
                     ${a.petId && estado !== 'Cancelada' ? `<button onclick="atenderCita(${a.id})" class="bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold px-3 py-1.5 rounded-lg flex items-center gap-1"><i data-lucide="stethoscope" class="w-3.5 h-3.5"></i> Atender</button>` : ''}
+                    ${estado === 'Programada' ? `<button onclick="cambiarEstadoCita(${a.id}, 'Confirmada')" class="bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 text-xs font-bold px-2.5 py-1.5 rounded-lg flex items-center gap-1"><i data-lucide="check" class="w-3.5 h-3.5"></i> Confirmar</button>` : ''}
                     <select onchange="cambiarEstadoCita(${a.id}, this.value)" class="px-2 py-1.5 border rounded-lg text-xs bg-white">
                         ${['Programada', 'Confirmada', 'Atendida', 'Cancelada'].map(opcion => `<option value="${opcion}" ${estado === opcion ? 'selected' : ''}>${opcion}</option>`).join('')}
                     </select>
+                    ${tel ? `<a href="https://wa.me/52${tel}" target="_blank" rel="noopener" class="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold px-3 py-1.5 rounded-lg flex items-center gap-1 shadow-xs transition-all"><i data-lucide="message-circle" class="w-3.5 h-3.5"></i> WhatsApp</a>` : ''}
                     <button onclick="exportarCitaAApple(${a.id})" class="bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 text-xs font-bold px-2.5 py-1.5 rounded-lg flex items-center gap-1 shadow-xs transition-all"><i data-lucide="bell" class="w-3.5 h-3.5"></i> Sincronizar iPad</button>
                     <button onclick="abrirNavegacionMaps('${direccion.replace(/'/g, "\\'")}')" class="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold px-3 py-1.5 rounded-lg flex items-center gap-1 shadow-xs transition-all"><i data-lucide="map" class="w-3.5 h-3.5"></i> Maps</button>
                     <button onclick="iniciarEdicionAgenda(${a.id})" class="text-gray-400 hover:text-amber-600 p-1.5 bg-white border rounded-lg shadow-xs transition-all"><i data-lucide="edit" class="w-4 h-4"></i></button>
                     <button onclick="eliminarCita(${a.id})" class="text-gray-300 hover:text-red-500 p-1.5 border rounded-lg shadow-xs transition-all"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
                 </div>
             </div>`;
-    });
+            }).join('')}
+        </div>
+    `).join('');
     renderIcons();
 }
 function guardarCita(e) {

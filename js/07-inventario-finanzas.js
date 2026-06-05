@@ -12,6 +12,20 @@ let filtroInventarioActivo = 'todos';
 function stockMinimo(item) {
     return Number.isFinite(Number(item.minStock)) ? Number(item.minStock) : 3;
 }
+function caducidadProxima(item) {
+    if (!item.caducidad) return false;
+    const hoy = new Date();
+    hoy.setHours(0, 0, 0, 0);
+    const fecha = new Date(`${item.caducidad}T00:00:00`);
+    const dias = (fecha - hoy) / (1000 * 60 * 60 * 24);
+    return dias >= 0 && dias <= 45;
+}
+function caducidadVencida(item) {
+    if (!item.caducidad) return false;
+    const hoy = new Date();
+    hoy.setHours(0, 0, 0, 0);
+    return new Date(`${item.caducidad}T00:00:00`) < hoy;
+}
 function registrarMovimientoInventario({ item, tipo, cantidad, motivo }) {
     movimientosInventario.unshift({
         id: uid(),
@@ -40,11 +54,16 @@ function ensureHiddenInput(formId, inputId) {
 function renderInventario() {
     const lst = $('lista-inventario'); 
     if(!lst) return;
+    const busqueda = String($('buscador-inventario')?.value || '').toLowerCase();
     const items = inventario.filter(m => {
         if (filtroInventarioActivo === 'criticos') return m.stock <= stockMinimo(m);
         if (filtroInventarioActivo === 'agotados') return m.stock <= 0;
+        if (filtroInventarioActivo === 'caducidad') return caducidadProxima(m) || caducidadVencida(m);
         if (['Vacuna', 'Medicamento', 'Desparasitante', 'Material'].includes(filtroInventarioActivo)) return (m.categoria || 'Medicamento') === filtroInventarioActivo;
         return true;
+    }).filter(m => {
+        if (!busqueda) return true;
+        return [m.name, m.categoria, m.lote, m.proveedor].some(valor => String(valor || '').toLowerCase().includes(busqueda));
     });
     if (!items.length) {
         lst.innerHTML = `<p class="text-xs text-gray-400 text-center py-10">No hay insumos en este filtro.</p>`;
@@ -53,14 +72,23 @@ function renderInventario() {
     }
     lst.innerHTML = items.map(m => {
         const critico = m.stock <= stockMinimo(m);
+        const vencido = caducidadVencida(m);
+        const porVencer = caducidadProxima(m);
         return `
-            <div class="p-3 border rounded-xl flex justify-between items-center shadow-xs transition-all ${critico ? 'bg-rose-50 border-rose-200' : 'bg-white'}">
+            <div class="p-3 border rounded-xl flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 shadow-xs transition-all ${critico || vencido ? 'bg-rose-50 border-rose-200' : porVencer ? 'bg-amber-50 border-amber-200' : 'bg-white'}">
                 <div>
                     <b class="text-sm text-slate-800">${m.name}</b><br>
                     <span class="text-[10px] text-gray-500 uppercase tracking-wider">${m.categoria || 'Medicamento'} · ${m.unit} · mínimo ${stockMinimo(m)}</span>
+                    <div class="flex flex-wrap gap-1.5 mt-1">
+                        ${m.lote ? `<span class="text-[10px] bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full">Lote ${m.lote}</span>` : ''}
+                        ${m.proveedor ? `<span class="text-[10px] bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full">${m.proveedor}</span>` : ''}
+                        ${m.caducidad ? `<span class="text-[10px] ${vencido ? 'bg-rose-600 text-white' : porVencer ? 'bg-amber-500 text-slate-950' : 'bg-slate-100 text-slate-600'} px-2 py-0.5 rounded-full">Caduca ${m.caducidad}</span>` : ''}
+                    </div>
                 </div>
-                <div class="flex items-center gap-2">
+                <div class="flex flex-wrap items-center gap-2 w-full sm:w-auto justify-end">
                     <span class="font-bold border px-2 py-0.5 rounded-lg text-xs ${critico ? 'bg-rose-600 text-white border-rose-600' : 'bg-gray-100 text-gray-700'}">${m.stock} disp</span>
+                    <button onclick="registrarEntradaSalidaStock(${m.id}, 'Entrada')" title="Entrada rápida" class="text-emerald-600 hover:bg-emerald-50 p-1 bg-white border rounded-lg shadow-2xs transition-all"><i data-lucide="plus" class="w-3.5 h-3.5"></i></button>
+                    <button onclick="registrarEntradaSalidaStock(${m.id}, 'Salida')" title="Salida rápida" class="text-rose-600 hover:bg-rose-50 p-1 bg-white border rounded-lg shadow-2xs transition-all"><i data-lucide="minus" class="w-3.5 h-3.5"></i></button>
                     <button onclick="ajustarStockManual(${m.id})" title="Ajustar existencia" class="text-gray-400 hover:text-blue-600 p-1 bg-white border rounded-lg shadow-2xs transition-all"><i data-lucide="plus-minus" class="w-3.5 h-3.5"></i></button>
                     <button onclick="iniciarEdicionMedicamento(${m.id})" class="text-gray-400 hover:text-amber-600 p-1 bg-white border rounded-lg shadow-2xs transition-all"><i data-lucide="edit" class="w-3.5 h-3.5"></i></button>
                     <button onclick="eliminarMedicamento(${m.id})" class="text-gray-300 hover:text-red-500 p-1 bg-white border rounded-lg shadow-2xs transition-all"><i data-lucide="trash-2" class="w-3.5 h-3.5"></i></button>
@@ -79,7 +107,10 @@ function guardarMedicamento(e) {
         stock: parseInt($('medStock').value),
         unit: $('medUnit').value,
         categoria: $('medCategoria').value,
-        minStock: parseInt($('medMinStock').value)
+        minStock: parseInt($('medMinStock').value),
+        lote: $('medLote')?.value || '',
+        caducidad: $('medCaducidad')?.value || '',
+        proveedor: $('medProveedor')?.value || ''
     };
     const anterior = inventario.find(m => m.id === item.id);
     inventario = editId
@@ -109,6 +140,9 @@ function iniciarEdicionMedicamento(id) {
     $('medUnit').value = target.unit;
     $('medCategoria').value = target.categoria || 'Medicamento';
     $('medMinStock').value = stockMinimo(target);
+    if ($('medLote')) $('medLote').value = target.lote || '';
+    if ($('medCaducidad')) $('medCaducidad').value = target.caducidad || '';
+    if ($('medProveedor')) $('medProveedor').value = target.proveedor || '';
     $(INVENTARIO_FORM.titleId).innerHTML = INVENTARIO_FORM.titleEdit;
     document.querySelector(INVENTARIO_FORM.submitSelector).innerText = INVENTARIO_FORM.submitEdit;
     renderIcons();
@@ -130,9 +164,13 @@ function eliminarMedicamento(id) {
 }
 function revisarAlertasStockGlobal() { 
     const criticos = inventario.filter(m => m.stock <= stockMinimo(m));
-    $('alertas-stock')?.classList.toggle('hidden', criticos.length === 0);
-    if ($('texto-alerta-stock') && criticos.length) {
-        $('texto-alerta-stock').innerText = `Stock crítico: ${criticos.map(m => `${m.name} (${m.stock})`).join(', ')}`;
+    const caducidades = inventario.filter(m => caducidadProxima(m) || caducidadVencida(m));
+    $('alertas-stock')?.classList.toggle('hidden', criticos.length === 0 && caducidades.length === 0);
+    if ($('texto-alerta-stock') && (criticos.length || caducidades.length)) {
+        const mensajes = [];
+        if (criticos.length) mensajes.push(`Stock crítico: ${criticos.map(m => `${m.name} (${m.stock})`).join(', ')}`);
+        if (caducidades.length) mensajes.push(`Caducidad por revisar: ${caducidades.map(m => `${m.name}${m.caducidad ? ` (${m.caducidad})` : ''}`).join(', ')}`);
+        $('texto-alerta-stock').innerText = mensajes.join(' · ');
     }
 }
 function ajustarStockManual(id) {
@@ -149,6 +187,27 @@ function ajustarStockManual(id) {
     if (!diferencia) return;
     item.stock = nuevaExistencia;
     registrarMovimientoInventario({ item, tipo: diferencia > 0 ? 'Entrada' : 'Ajuste', cantidad: diferencia, motivo: 'Ajuste manual' });
+    saveStore('inventario');
+    renderInventario();
+    revisarAlertasStockGlobal();
+}
+function registrarEntradaSalidaStock(id, tipo) {
+    const item = inventario.find(m => m.id === id);
+    if (!item) return;
+    const valor = prompt(`${tipo} de ${item.name}\nCantidad:`, '1');
+    if (valor === null) return;
+    const cantidad = parseInt(valor);
+    if (!Number.isInteger(cantidad) || cantidad <= 0) {
+        alert("Ingresa una cantidad válida.");
+        return;
+    }
+    const delta = tipo === 'Entrada' ? cantidad : -cantidad;
+    if (item.stock + delta < 0) {
+        alert("No puedes dejar el stock en negativo.");
+        return;
+    }
+    item.stock += delta;
+    registrarMovimientoInventario({ item, tipo, cantidad: delta, motivo: `${tipo} rápida` });
     saveStore('inventario');
     renderInventario();
     revisarAlertasStockGlobal();

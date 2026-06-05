@@ -1,6 +1,7 @@
 let historialActivo = { ownerId: null, petId: null, filtro: 'todas' };
 let fotoIdentificacionCapturada = '';
 let streamIdentificacion = null;
+let filtroClientesActivo = 'todos';
 
 function fechaConsultaObj(consulta) {
     if (consulta.fechaISO) return new Date(consulta.fechaISO);
@@ -231,6 +232,25 @@ function prepararAgendaDesdeExpediente(ownerId, petId) {
     if ($('agenda-direccion')) $('agenda-direccion').value = owner.address || '';
     if ($('agenda-notes')) $('agenda-notes').value = `Seguimiento de ${pet.name}`;
 }
+function telefonoLimpio(telefono) {
+    return String(telefono || '').replace(/\D/g, '');
+}
+function tienePagoPendienteCliente(cliente) {
+    return (cliente.mascotas || []).some(mascota => (mascota.historial || []).some(con => (con.estadoPago || 'Pagado') === 'Pendiente'));
+}
+function tieneProximaCitaCliente(cliente) {
+    const hoy = typeof fechaLocalISO === 'function' ? fechaLocalISO() : new Date().toISOString().slice(0, 10);
+    return agenda.some(cita => (cita.clienteId || cita.ownerId) === cliente.id && cita.fecha >= hoy && !['Atendida', 'Cancelada'].includes(cita.estado || 'Programada'));
+}
+function ultimaVisitaCliente(cliente) {
+    const visitas = (cliente.mascotas || []).flatMap(mascota => (mascota.historial || []).map(con => fechaConsultaObj(con)).filter(Boolean));
+    if (!visitas.length) return null;
+    return visitas.sort((a, b) => b - a)[0];
+}
+function filtrarClientes(filtro) {
+    filtroClientesActivo = filtro;
+    renderClientes();
+}
 function renderClientes() {
     const buscadorElem = $('buscador');
     const buscador = buscadorElem ? buscadorElem.value.toLowerCase() : "";
@@ -238,12 +258,20 @@ function renderClientes() {
     if(!lista) return;
     lista.innerHTML = "";
     const coincide = valor => String(valor || '').toLowerCase().includes(buscador);
-    let filtrados = clientes.filter(c =>
-        coincide(c.owner) ||
-        coincide(c.phone) ||
-        coincide(c.address) ||
-        (c.mascotas || []).some(m => coincide(m.name))
-    );
+    let filtrados = clientes
+        .filter(c =>
+            coincide(c.owner) ||
+            coincide(c.phone) ||
+            coincide(c.address) ||
+            (c.mascotas || []).some(m => coincide(m.name))
+        )
+        .filter(c => {
+            if (filtroClientesActivo === 'con-id') return !!c.ownerIdFile;
+            if (filtroClientesActivo === 'sin-id') return !c.ownerIdFile;
+            if (filtroClientesActivo === 'pendientes') return tienePagoPendienteCliente(c);
+            if (filtroClientesActivo === 'proxima-cita') return tieneProximaCitaCliente(c);
+            return true;
+        });
     if($('contador-registros')) {
         $('contador-registros').innerText = `${filtrados.length} expedientes`;
     }
@@ -261,6 +289,10 @@ function renderClientes() {
         const mascotasCoincidentes = buscador
             ? (c.mascotas || []).filter(m => coincide(m.name)).map(m => m.name)
             : [];
+        const ultimaVisita = ultimaVisitaCliente(c);
+        const pagosPendientes = tienePagoPendienteCliente(c);
+        const proximaCita = tieneProximaCitaCliente(c);
+        const tel = telefonoLimpio(c.phone);
         const div = document.createElement('div');
         div.className = "p-4 bg-white rounded-xl border border-gray-200 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 hover:border-blue-200 hover:shadow-xs transition-all";
         div.innerHTML = `
@@ -270,11 +302,18 @@ function renderClientes() {
                     ${c.ownerIdFile ? `<button type="button" onclick="abrirVisorID('${c.ownerIdFile}')" class="text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-100 px-2 py-0.5 rounded-full flex items-center gap-1"><i data-lucide="badge-check" class="w-3 h-3"></i> ID verificado</button>` : `<span class="text-[10px] font-bold text-amber-700 bg-amber-50 border border-amber-100 px-2 py-0.5 rounded-full">ID pendiente</span>`}
                 </div>
                 <p class="text-xs text-gray-500">📍 ${c.address} • 📱 ${c.phone}</p>
-                <p class="text-[11px] font-bold text-blue-700">${c.mascotas ? c.mascotas.length : 0} mascotas en archivo</p>
+                <div class="flex flex-wrap gap-1.5">
+                    <span class="text-[11px] font-bold text-blue-700 bg-blue-50 border border-blue-100 px-2 py-0.5 rounded-full">${c.mascotas ? c.mascotas.length : 0} mascotas</span>
+                    <span class="text-[11px] font-bold text-slate-600 bg-slate-50 border px-2 py-0.5 rounded-full">Última visita: ${ultimaVisita ? formatoFechaCorta(ultimaVisita) : 'Sin visitas'}</span>
+                    ${pagosPendientes ? `<span class="text-[11px] font-bold text-rose-700 bg-rose-50 border border-rose-100 px-2 py-0.5 rounded-full">Pago pendiente</span>` : ''}
+                    ${proximaCita ? `<span class="text-[11px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-100 px-2 py-0.5 rounded-full">Próxima cita</span>` : ''}
+                </div>
                 ${c.ownerNotes ? `<p class="text-[11px] text-slate-500 italic">Nota: ${c.ownerNotes}</p>` : ''}
                 ${mascotasCoincidentes.length ? `<p class="text-[11px] font-semibold text-emerald-700">Mascota encontrada: ${mascotasCoincidentes.join(', ')}</p>` : ''}
             </div>
             <div class="flex items-center gap-2 w-full sm:w-auto justify-end">
+                ${tel ? `<a href="tel:${tel}" class="p-2 border bg-white hover:bg-blue-50 rounded-xl text-blue-600 transition-all shadow-xs" title="Llamar"><i data-lucide="phone" class="w-4 h-4"></i></a>` : ''}
+                ${tel ? `<a href="https://wa.me/52${tel}" target="_blank" rel="noopener" class="p-2 border bg-white hover:bg-emerald-50 rounded-xl text-emerald-600 transition-all shadow-xs" title="WhatsApp"><i data-lucide="message-circle" class="w-4 h-4"></i></a>` : ''}
                 <button onclick="verMascotasCliente(${c.id})" class="bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold px-3 py-2 rounded-lg shadow-2xs">Mascotas</button>
                 <button onclick="abrirModalCliente(${c.id})" class="p-2 border bg-white hover:bg-gray-50 rounded-xl text-gray-600 transition-all shadow-xs" title="Modificar">
                     <i data-lucide="edit-3" class="w-4 h-4"></i>
