@@ -38,6 +38,11 @@ function actualizarEstadoSync(texto, error = false) {
     $('sync-status').innerText = texto;
     $('sync-status').className = error ? 'text-red-300' : '';
 }
+function mostrarBannerActualizacion() {
+    $('update-banner')?.classList.remove('hidden');
+    renderIcons();
+}
+window.addEventListener('vethome-update-ready', mostrarBannerActualizacion);
 function limpiarDatosLocalesAnteriores() {
     Object.values(STORE_KEYS).forEach(key => localStorage.removeItem(key));
 }

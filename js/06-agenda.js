@@ -274,6 +274,7 @@ async function crearRecordatorioApple(idCita) {
     const cita = agenda.find(item => item.id === idCita);
     if (!cita) return;
     const datos = datosRecordatorioCita(cita);
+    const shortcutName = 'VetHome Recordatorio';
     const payload = JSON.stringify({
         title: datos.titulo,
         notes: datos.detalle,
@@ -281,17 +282,18 @@ async function crearRecordatorioApple(idCita) {
         dueTime: datos.hora,
         list: 'VetHome'
     });
-    const shortcutName = 'VetHome Recordatorio';
-    const shortcutUrl = `shortcuts://run-shortcut?name=${encodeURIComponent(shortcutName)}&input=text&text=${encodeURIComponent(payload)}`;
+    const textoPlano = `${datos.titulo}\n\n${datos.detalle}`;
+    const shortcutUrl = `shortcuts://x-callback-url/run-shortcut?name=${encodeURIComponent(shortcutName)}&input=text&text=${encodeURIComponent(payload)}`;
     if (!esDispositivoAppleMovil()) {
-        const copiado = await copiarTextoSeguro(`${datos.titulo}\n\n${datos.detalle}`);
+        const copiado = await copiarTextoSeguro(textoPlano);
         alert(copiado
             ? 'Datos copiados. En iPhone/iPad este botón abre Apple Shortcuts para crear el recordatorio.'
             : 'En iPhone/iPad este botón abre Apple Shortcuts para crear el recordatorio.');
         return;
     }
+    await copiarTextoSeguro(textoPlano);
     if (!localStorage.getItem('vethome_reminders_shortcut_hint')) {
-        alert('Beta Apple Reminders: necesitas tener un atajo llamado "VetHome Recordatorio" que reciba texto y cree un recordatorio. Esta alerta solo aparece la primera vez.');
+        alert('Beta Apple Reminders: primero crea un atajo en Shortcuts llamado exactamente "VetHome Recordatorio". No es una app; es un atajo que recibe texto y crea un recordatorio. También copié los datos por si necesitas pegarlos manualmente.');
         localStorage.setItem('vethome_reminders_shortcut_hint', '1');
     }
     window.location.href = shortcutUrl;
