@@ -353,7 +353,7 @@ function importarDesdeICloud(event) {
     lector.readAsText(file);
 }
 function switchTab(tabId) {
-    ['dashboard', 'clientes', 'agenda', 'nueva-consulta', 'inventario', 'finanzas'].forEach(id => {
+    ['dashboard', 'clientes', 'agenda', 'servicios-externos', 'nueva-consulta', 'inventario', 'finanzas'].forEach(id => {
         $(`view-${id}`)?.classList.add('hidden');
         $(`nav-${id}`)?.classList.remove('bg-amber-500', 'text-slate-950', 'font-bold');
         $(`nav-${id}`)?.classList.add('text-blue-100', 'font-medium');
@@ -364,12 +364,13 @@ function switchTab(tabId) {
     $(`nav-${tabId}`)?.classList.add('bg-amber-500', 'text-slate-950', 'font-bold');
     $(`nav-mobile-${tabId}`)?.classList.add('text-amber-300');
     $(`nav-mobile-${tabId}`)?.classList.remove('text-blue-200');
-    const titles = { 'dashboard': 'Inicio', 'clientes': 'Clientes y Mascotas', 'agenda': 'Agenda de Visitas', 'nueva-consulta': 'Nueva Consulta y Responsiva', 'inventario': 'Control de Stock', 'finanzas': 'Finanzas y Servicios' };
+    const titles = { 'dashboard': 'Inicio', 'clientes': 'Clientes y Mascotas', 'agenda': 'Agenda de Visitas', 'servicios-externos': 'Servicios Externos', 'nueva-consulta': 'Nueva Consulta y Responsiva', 'inventario': 'Control de Stock', 'finanzas': 'Finanzas y Servicios' };
     if ($('page-title')) {
         $('page-title').innerText = titles[tabId];
     }
     if (tabId === 'dashboard' && typeof renderDashboard === 'function') renderDashboard();
     if (tabId === 'finanzas') renderFinanzas();
+    if (tabId === 'servicios-externos' && typeof renderServiciosExternos === 'function') renderServiciosExternos();
     if (tabId === 'inventario') renderInventario();
 }
 function abrirModalResponsivaFlotante() {
