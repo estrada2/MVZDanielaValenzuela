@@ -280,6 +280,8 @@ function estaEnFiltro(fechaConsulta, ahora = new Date()) {
 function obtenerConsultasFinanzas() {
     return clientes.flatMap(c => (c.mascotas || []).flatMap(m => (m.historial || []).map(con => ({
         ...con,
+        ownerId: c.id,
+        petId: m.id,
         clienteNombre: c.owner,
         mascotaNombre: m.name,
         fechaObj: parseFechaConsulta(con),
@@ -304,6 +306,7 @@ function renderGananciasConsultas() {
     if ($('monto-pendiente-filtrado')) $('monto-pendiente-filtrado').innerText = formatoMoneda(totalPendiente);
     renderListaIngresos(consultasFiltradas);
     renderResumenServicios(cobradas);
+    renderResumenMetodosPago(cobradas);
 }
 function renderListaIngresos(consultas) {
     const lista = $('lista-ingresos-consultas');
@@ -331,9 +334,25 @@ function renderListaIngresos(consultas) {
                 <div class="text-right space-y-1">
                     <span class="inline-block text-[10px] font-bold px-2 py-0.5 rounded-full ${badgePago}">${con.estadoPago}</span>
                     <p class="text-sm font-black ${con.estadoPago === 'Pagado' ? 'text-emerald-700' : 'text-slate-600'}">$${formatoMoneda(con.total)}</p>
+                    ${con.estadoPago === 'Pendiente' ? `<button type="button" onclick="marcarConsultaPagada(${con.ownerId}, ${con.petId}, ${con.id})" class="text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-100 px-2 py-1 rounded-lg">Marcar pagado</button>` : ''}
                 </div>
             </div>`;
     }).join('');
+}
+function marcarConsultaPagada(ownerId, petId, consultaId) {
+    const owner = clientes.find(c => c.id === ownerId);
+    const pet = owner?.mascotas.find(m => m.id === petId);
+    const consulta = pet?.historial?.find(h => h.id === consultaId);
+    if (!consulta) return;
+    const metodo = prompt("Método de pago:", consulta.metodoPago || "Efectivo");
+    if (metodo === null) return;
+    consulta.estadoPago = 'Pagado';
+    consulta.metodoPago = metodo || consulta.metodoPago || 'Efectivo';
+    consulta.notaPago = consulta.notaPago ? `${consulta.notaPago} | Pagado ${new Date().toLocaleString('es-MX')}` : `Pagado ${new Date().toLocaleString('es-MX')}`;
+    saveStore('clientes');
+    renderGananciasConsultas();
+    if (typeof renderDashboard === 'function') renderDashboard();
+    if (typeof renderHistorialClinicoActivo === 'function') renderHistorialClinicoActivo();
 }
 function renderResumenServicios(consultas) {
     const contenedor = $('resumen-servicios-finanzas');
@@ -362,6 +381,26 @@ function renderResumenServicios(consultas) {
                 <span class="text-xs font-black text-emerald-700">$${formatoMoneda(data.total)}</span>
             </div>
             <p class="text-[10px] text-gray-500 mt-1">${data.cantidad} cobro${data.cantidad === 1 ? '' : 's'}</p>
+        </div>
+    `).join('');
+}
+function renderResumenMetodosPago(consultas) {
+    const contenedor = $('resumen-metodos-pago');
+    if (!contenedor) return;
+    const resumen = {};
+    consultas.forEach(con => {
+        const metodo = con.metodoPago || 'Efectivo';
+        resumen[metodo] = (resumen[metodo] || 0) + con.total;
+    });
+    const items = Object.entries(resumen);
+    if (!items.length) {
+        contenedor.innerHTML = `<p class="text-xs text-gray-400 sm:col-span-4 text-center py-3">Sin pagos cobrados.</p>`;
+        return;
+    }
+    contenedor.innerHTML = items.map(([metodo, total]) => `
+        <div class="bg-white border rounded-xl p-3">
+            <p class="text-[10px] font-bold uppercase text-slate-400">${metodo}</p>
+            <p class="text-sm font-black text-slate-900">$${formatoMoneda(total)}</p>
         </div>
     `).join('');
 }
@@ -403,6 +442,45 @@ function exportarIngresosCSV() {
     const link = document.createElement('a');
     link.href = URL.createObjectURL(blob);
     link.download = `ingresos-vethome-${new Date().toISOString().split('T')[0]}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+}
+function exportarCorteDelDia() {
+    const filtroOriginal = filtroGananciasActivo;
+    filtroGananciasActivo = 'dia';
+    const consultas = obtenerConsultasFinanzas().filter(con => estaEnFiltro(con.fechaObj));
+    filtroGananciasActivo = filtroOriginal;
+    if (!consultas.length) {
+        alert("No hay movimientos para el corte del día.");
+        return;
+    }
+    const cobradas = consultas.filter(con => con.estadoPago === 'Pagado');
+    const pendientes = consultas.filter(con => con.estadoPago === 'Pendiente');
+    const totalCobrado = cobradas.reduce((acc, con) => acc + con.total, 0);
+    const totalPendiente = pendientes.reduce((acc, con) => acc + con.total, 0);
+    const porMetodo = {};
+    cobradas.forEach(con => {
+        porMetodo[con.metodoPago || 'Efectivo'] = (porMetodo[con.metodoPago || 'Efectivo'] || 0) + con.total;
+    });
+    const lineas = [
+        'Corte del día - VetHome Pro',
+        new Date().toLocaleString('es-MX'),
+        '',
+        `Total cobrado: $${formatoMoneda(totalCobrado)}`,
+        `Pendiente: $${formatoMoneda(totalPendiente)}`,
+        `Consultas cobradas: ${cobradas.length}`,
+        '',
+        'Por método de pago:',
+        ...Object.entries(porMetodo).map(([metodo, total]) => `${metodo}: $${formatoMoneda(total)}`),
+        '',
+        'Movimientos:',
+        ...consultas.map(con => `${con.fechaObj ? con.fechaObj.toLocaleTimeString('es-MX') : ''} | ${con.clienteNombre} | ${con.mascotaNombre} | ${con.estadoPago} | $${formatoMoneda(con.total)} | ${con.servicioCobrado || ''}`)
+    ];
+    const blob = new Blob([lineas.join('\n')], { type: 'text/plain;charset=utf-8' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = `corte-dia-vethome-${new Date().toISOString().split('T')[0]}.txt`;
     document.body.appendChild(link);
     link.click();
     link.remove();

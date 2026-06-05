@@ -216,7 +216,7 @@ function validarStockFila(selectElem) {
     const med = inventario.find(m => m.id === medId);
     if (med && med.stock <= 0) { alert(`Insumo agotado.`); selectElem.value = ""; }
 }
-function guardarConsulta(e) {
+async function guardarConsulta(e) {
     e.preventDefault();
     if (!consultaSeleccionada.petId) { alert("Elija un paciente activo primero."); return; }
     if (!firmaDuenoEstablecida || !firmaVetEstablecida) {
@@ -304,8 +304,17 @@ function guardarConsulta(e) {
         ? serviciosCobradosArray.join(' + ') 
         : 'Solo Insumos / General';
     if (costoSrv === 0 && $('consulta-estado-pago')?.value === 'Pagado' && !confirm("No seleccionaste ningún servicio a cobrar. ¿Guardar la consulta con total $0.00?")) return;
+    const consultaId = Date.now();
+    let notasRapidas = typeof obtenerWhiteboardDataUrl === 'function' ? obtenerWhiteboardDataUrl() : '';
+    let firmaDueno = $('canvas-firma').toDataURL();
+    let firmaVet = $('canvas-firma-vet').toDataURL();
+    if (typeof subirImagenDataUrl === 'function') {
+        notasRapidas = await subirImagenDataUrl(notasRapidas, 'consultas', `notas-${consultaId}`);
+        firmaDueno = await subirImagenDataUrl(firmaDueno, 'firmas', `dueno-${consultaId}`);
+        firmaVet = await subirImagenDataUrl(firmaVet, 'firmas', `vet-${consultaId}`);
+    }
     const nuevaConsultaObj = {
-        id: Date.now(), 
+        id: consultaId, 
         fecha: new Date().toLocaleString('es-MX'),
         fechaISO: new Date().toISOString(),
         tipo: tipoConsulta,
@@ -323,10 +332,10 @@ function guardarConsulta(e) {
         metodoPago: $('consulta-metodo-pago')?.value || 'Efectivo',
         estadoPago: $('consulta-estado-pago')?.value || 'Pagado',
         notaPago: $('consulta-nota-pago')?.value || '',
-        notasRapidas: typeof obtenerWhiteboardDataUrl === 'function' ? obtenerWhiteboardDataUrl() : '',
+        notasRapidas,
         vacunasControlStock: tipoConsulta === 'Vacunacion' ? controlVacunas : null,
-        firmaDueno: $('canvas-firma').toDataURL(), 
-        firmaVet: $('canvas-firma-vet').toDataURL()
+        firmaDueno,
+        firmaVet
     };
     const clientIdx = clientes.findIndex(c => c.id === consultaSeleccionada.ownerId);
     if(clientIdx !== -1) {

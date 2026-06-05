@@ -124,6 +124,7 @@ function renderCardConsultaHistorial(owner, pet, consulta) {
                     </div>
                 </details>
                 <div class="flex flex-wrap gap-2 justify-end">
+                    ${estadoPago === 'Pendiente' ? `<button type="button" onclick="marcarConsultaPagada(${owner.id}, ${pet.id}, ${consulta.id})" class="bg-emerald-50 hover:bg-emerald-100 text-emerald-700 text-[10px] font-bold px-3 py-2 rounded-lg border border-emerald-200 flex items-center gap-1 transition-all"><i data-lucide="check-circle" class="w-3.5 h-3.5"></i> Marcar pagado</button>` : ''}
                     <button onclick="descargarResponsivaHistorialPDF(${owner.id}, ${pet.id}, ${consulta.id})" class="bg-blue-50 hover:bg-blue-100 text-blue-700 text-[10px] font-bold px-3 py-2 rounded-lg border border-blue-200 flex items-center gap-1 transition-all">
                         <i data-lucide="download" class="w-3.5 h-3.5"></i> Descargar PDF
                     </button>
@@ -496,7 +497,10 @@ function validarYPrevenirDuplicado(e) {
         finalizarGuardadoCliente(ow, ph, ad, em, exist?.ownerIdFile, notes, id);
     }
 }
-function finalizarGuardadoCliente(ow, ph, ad, em, b64, notes, id) {
+async function finalizarGuardadoCliente(ow, ph, ad, em, b64, notes, id) {
+    if (b64?.startsWith('data:image/') && typeof subirImagenDataUrl === 'function') {
+        b64 = await subirImagenDataUrl(b64, 'identificaciones', `propietario-${id || Date.now()}`);
+    }
     if(id) {
         clientes = clientes.map(c => c.id===parseInt(id) ? {...c, owner:ow, phone:ph, address:ad, email:em, ownerNotes: notes, ownerIdFile:b64||c.ownerIdFile} : c);
     } else {
