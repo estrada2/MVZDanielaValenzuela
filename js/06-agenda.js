@@ -121,15 +121,16 @@ function renderAgenda() {
                         <p class="text-[11px] text-gray-600 font-medium flex items-start gap-1"><i data-lucide="map-pin" class="w-3 h-3 mt-0.5 shrink-0 text-rose-500"></i><span class="truncate">${direccion || 'Sin dirección'}</span></p>
                         <p class="text-[11px] text-slate-500 italic flex items-start gap-1"><i data-lucide="notebook-pen" class="w-3 h-3 mt-0.5 shrink-0 text-slate-400"></i><span class="line-clamp-1">${notas}</span></p>
                     </div>
-                    <div class="grid grid-cols-4 sm:grid-cols-[repeat(7,2.25rem)] gap-1.5 w-full xl:w-auto justify-end">
+                    <div class="grid grid-cols-4 sm:grid-cols-[repeat(8,2.25rem)] gap-1.5 w-full xl:w-auto justify-end">
                         ${a.petId && estado !== 'Cancelada' ? `<button onclick="atenderCita(${a.id})" class="h-9 w-9 bg-slate-900 hover:bg-slate-800 text-white rounded-lg flex items-center justify-center" title="Atender"><i data-lucide="stethoscope" class="w-4 h-4"></i></button>` : ''}
                         ${estado === 'Programada' ? `<button onclick="cambiarEstadoCita(${a.id}, 'Confirmada')" class="h-9 w-9 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 rounded-lg flex items-center justify-center" title="Confirmar"><i data-lucide="check" class="w-4 h-4"></i></button>` : ''}
                         ${tel ? `<a href="https://wa.me/52${tel}" target="_blank" rel="noopener" class="h-9 w-9 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg flex items-center justify-center shadow-xs transition-all" title="WhatsApp"><i data-lucide="message-circle" class="w-4 h-4"></i></a>` : ''}
                         <button onclick="abrirNavegacionMaps('${direccion.replace(/'/g, "\\'")}')" class="h-9 w-9 bg-blue-600 hover:bg-blue-700 text-white rounded-lg flex items-center justify-center shadow-xs transition-all" title="Maps"><i data-lucide="map" class="w-4 h-4"></i></button>
-                        <button onclick="exportarCitaAApple(${a.id})" class="h-9 w-9 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-lg flex items-center justify-center shadow-xs transition-all" title="iPad"><i data-lucide="bell" class="w-4 h-4"></i></button>
+                        <button onclick="crearRecordatorioApple(${a.id})" class="h-9 w-9 bg-amber-50 hover:bg-amber-100 text-amber-700 border border-amber-200 rounded-lg flex items-center justify-center shadow-xs transition-all" title="Apple Reminders"><i data-lucide="list-todo" class="w-4 h-4"></i></button>
+                        <button onclick="exportarCitaAApple(${a.id})" class="h-9 w-9 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-lg flex items-center justify-center shadow-xs transition-all" title="Calendario"><i data-lucide="calendar-plus" class="w-4 h-4"></i></button>
                         <button onclick="iniciarEdicionAgenda(${a.id})" class="h-9 w-9 text-gray-500 hover:text-amber-600 bg-white border rounded-lg shadow-xs transition-all flex items-center justify-center" title="Editar"><i data-lucide="edit" class="w-4 h-4"></i></button>
                         <button onclick="eliminarCita(${a.id})" class="h-9 w-9 text-gray-400 hover:text-red-500 border rounded-lg shadow-xs transition-all flex items-center justify-center" title="Eliminar"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
-                        <select onchange="cambiarEstadoCita(${a.id}, this.value)" class="col-span-4 sm:col-span-7 px-2 py-1.5 border rounded-lg text-[11px] bg-white font-semibold">
+                        <select onchange="cambiarEstadoCita(${a.id}, this.value)" class="col-span-4 sm:col-span-8 px-2 py-1.5 border rounded-lg text-[11px] bg-white font-semibold">
                             ${['Programada', 'Confirmada', 'Atendida', 'Cancelada'].map(opcion => `<option value="${opcion}" ${estado === opcion ? 'selected' : ''}>${opcion}</option>`).join('')}
                         </select>
                     </div>
@@ -238,6 +239,62 @@ function abrirNavegacionMaps(direccion) {
     } else { 
         window.open(`https://maps.google.com/maps?q=${encoded}`, '_blank'); 
     }
+}
+function esDispositivoAppleMovil() {
+    return /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+}
+function datosRecordatorioCita(cita) {
+    const cliente = cita.clienteNombre || cita.ownerName || 'Cliente';
+    const mascota = cita.petName && cita.petName !== 'N/A' ? cita.petName : 'Paciente';
+    const direccion = cita.direccion || cita.address || 'Sin dirección';
+    const notas = cita.notas || cita.notes || 'Sin notas';
+    const fecha = normalizarFechaCita(cita);
+    const hora = horaCita(cita);
+    const titulo = `VetHome: ${mascota} - ${cliente}`;
+    const detalle = [
+        `Paciente: ${mascota}`,
+        `Propietario: ${cliente}`,
+        `Fecha: ${fecha}`,
+        `Hora: ${hora}`,
+        `Dirección: ${direccion}`,
+        `Notas: ${notas}`
+    ].join('\n');
+    return { titulo, detalle, fecha, hora, direccion, notas, cliente, mascota };
+}
+async function copiarTextoSeguro(texto) {
+    try {
+        await navigator.clipboard.writeText(texto);
+        return true;
+    } catch (error) {
+        console.warn('No se pudo copiar al portapapeles.', error);
+        return false;
+    }
+}
+async function crearRecordatorioApple(idCita) {
+    const cita = agenda.find(item => item.id === idCita);
+    if (!cita) return;
+    const datos = datosRecordatorioCita(cita);
+    const payload = JSON.stringify({
+        title: datos.titulo,
+        notes: datos.detalle,
+        dueDate: datos.fecha,
+        dueTime: datos.hora,
+        list: 'VetHome'
+    });
+    const shortcutName = 'VetHome Recordatorio';
+    const shortcutUrl = `shortcuts://run-shortcut?name=${encodeURIComponent(shortcutName)}&input=text&text=${encodeURIComponent(payload)}`;
+    if (!esDispositivoAppleMovil()) {
+        const copiado = await copiarTextoSeguro(`${datos.titulo}\n\n${datos.detalle}`);
+        alert(copiado
+            ? 'Datos copiados. En iPhone/iPad este botón abre Apple Shortcuts para crear el recordatorio.'
+            : 'En iPhone/iPad este botón abre Apple Shortcuts para crear el recordatorio.');
+        return;
+    }
+    if (!localStorage.getItem('vethome_reminders_shortcut_hint')) {
+        alert('Beta Apple Reminders: necesitas tener un atajo llamado "VetHome Recordatorio" que reciba texto y cree un recordatorio. Esta alerta solo aparece la primera vez.');
+        localStorage.setItem('vethome_reminders_shortcut_hint', '1');
+    }
+    window.location.href = shortcutUrl;
 }
 function exportarCitaAApple(idCita) {
     const cita = agenda.find(item => item.id === idCita);
