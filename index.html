@@ -18,15 +18,27 @@
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
                 navigator.serviceWorker.register('sw.js').then(registration => {
-                    registration.update();
+                    let updateNotificada = false;
+                    const notificarActualizacion = () => {
+                        if (updateNotificada) return;
+                        updateNotificada = true;
+                        window.dispatchEvent(new CustomEvent('vethome-update-ready'));
+                    };
+                    const revisarActualizacion = () => registration.update().catch(error => console.warn('No se pudo revisar actualización.', error));
                     registration.addEventListener('updatefound', () => {
                         const worker = registration.installing;
                         if (!worker) return;
                         worker.addEventListener('statechange', () => {
                             if (worker.state === 'installed' && navigator.serviceWorker.controller) {
-                                window.dispatchEvent(new CustomEvent('vethome-update-ready'));
+                                notificarActualizacion();
                             }
                         });
+                    });
+                    navigator.serviceWorker.addEventListener('controllerchange', notificarActualizacion);
+                    revisarActualizacion();
+                    setInterval(revisarActualizacion, 5 * 60 * 1000);
+                    document.addEventListener('visibilitychange', () => {
+                        if (document.visibilityState === 'visible') revisarActualizacion();
                     });
                 }).catch(error => console.warn('Service worker no disponible.', error));
             });
