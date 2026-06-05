@@ -14,6 +14,7 @@ let realtimeChannel = null;
 let syncTimer = null;
 let guardandoRemoto = false;
 let guardadoPendiente = false;
+const STORAGE_BUCKET = 'vet-files';
 function loadStore(key, fallback) {
     try {
         return JSON.parse(localStorage.getItem(key)) || fallback;
@@ -39,6 +40,36 @@ function actualizarEstadoSync(texto, error = false) {
 }
 function limpiarDatosLocalesAnteriores() {
     Object.values(STORE_KEYS).forEach(key => localStorage.removeItem(key));
+}
+function dataUrlToBlob(dataUrl) {
+    const [metadata, base64] = String(dataUrl || '').split(',');
+    const mime = metadata?.match(/data:(.*?);base64/)?.[1] || 'image/jpeg';
+    const binary = atob(base64 || '');
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+    return new Blob([bytes], { type: mime });
+}
+function extensionDesdeMime(mime) {
+    if (mime?.includes('png')) return 'png';
+    if (mime?.includes('webp')) return 'webp';
+    return 'jpg';
+}
+async function subirImagenDataUrl(dataUrl, carpeta, nombreBase) {
+    if (!usuarioActivo || !dataUrl || !String(dataUrl).startsWith('data:image/')) return dataUrl || '';
+    try {
+        const blob = dataUrlToBlob(dataUrl);
+        const extension = extensionDesdeMime(blob.type);
+        const path = `${usuarioActivo.id}/${carpeta}/${nombreBase}-${Date.now()}.${extension}`;
+        const { error } = await supabaseClient.storage
+            .from(STORAGE_BUCKET)
+            .upload(path, blob, { contentType: blob.type, upsert: true });
+        if (error) throw error;
+        const { data } = supabaseClient.storage.from(STORAGE_BUCKET).getPublicUrl(path);
+        return data?.publicUrl || dataUrl;
+    } catch (error) {
+        console.warn('No se pudo subir imagen a Storage. Se conservará en base64.', error);
+        return dataUrl;
+    }
 }
 async function guardarEstadoRemoto() {
     if (!usuarioActivo) return;
