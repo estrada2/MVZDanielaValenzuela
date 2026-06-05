@@ -121,16 +121,15 @@ function renderAgenda() {
                         <p class="text-[11px] text-gray-600 font-medium flex items-start gap-1"><i data-lucide="map-pin" class="w-3 h-3 mt-0.5 shrink-0 text-rose-500"></i><span class="truncate">${direccion || 'Sin dirección'}</span></p>
                         <p class="text-[11px] text-slate-500 italic flex items-start gap-1"><i data-lucide="notebook-pen" class="w-3 h-3 mt-0.5 shrink-0 text-slate-400"></i><span class="line-clamp-1">${notas}</span></p>
                     </div>
-                    <div class="grid grid-cols-4 sm:grid-cols-[repeat(8,2.25rem)] gap-1.5 w-full xl:w-auto justify-end">
+                    <div class="grid grid-cols-4 sm:grid-cols-[repeat(7,2.25rem)] gap-1.5 w-full xl:w-auto justify-end">
                         ${a.petId && estado !== 'Cancelada' ? `<button onclick="atenderCita(${a.id})" class="h-9 w-9 bg-slate-900 hover:bg-slate-800 text-white rounded-lg flex items-center justify-center" title="Atender"><i data-lucide="stethoscope" class="w-4 h-4"></i></button>` : ''}
                         ${estado === 'Programada' ? `<button onclick="cambiarEstadoCita(${a.id}, 'Confirmada')" class="h-9 w-9 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 rounded-lg flex items-center justify-center" title="Confirmar"><i data-lucide="check" class="w-4 h-4"></i></button>` : ''}
                         ${tel ? `<a href="https://wa.me/52${tel}" target="_blank" rel="noopener" class="h-9 w-9 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg flex items-center justify-center shadow-xs transition-all" title="WhatsApp"><i data-lucide="message-circle" class="w-4 h-4"></i></a>` : ''}
                         <button onclick="abrirNavegacionMaps('${direccion.replace(/'/g, "\\'")}')" class="h-9 w-9 bg-blue-600 hover:bg-blue-700 text-white rounded-lg flex items-center justify-center shadow-xs transition-all" title="Maps"><i data-lucide="map" class="w-4 h-4"></i></button>
                         <button onclick="crearRecordatorioApple(${a.id})" class="h-9 w-9 bg-amber-50 hover:bg-amber-100 text-amber-700 border border-amber-200 rounded-lg flex items-center justify-center shadow-xs transition-all" title="Apple Reminders"><i data-lucide="list-todo" class="w-4 h-4"></i></button>
-                        <button onclick="exportarCitaAApple(${a.id})" class="h-9 w-9 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-lg flex items-center justify-center shadow-xs transition-all" title="Calendario"><i data-lucide="calendar-plus" class="w-4 h-4"></i></button>
                         <button onclick="iniciarEdicionAgenda(${a.id})" class="h-9 w-9 text-gray-500 hover:text-amber-600 bg-white border rounded-lg shadow-xs transition-all flex items-center justify-center" title="Editar"><i data-lucide="edit" class="w-4 h-4"></i></button>
                         <button onclick="eliminarCita(${a.id})" class="h-9 w-9 text-gray-400 hover:text-red-500 border rounded-lg shadow-xs transition-all flex items-center justify-center" title="Eliminar"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
-                        <select onchange="cambiarEstadoCita(${a.id}, this.value)" class="col-span-4 sm:col-span-8 px-2 py-1.5 border rounded-lg text-[11px] bg-white font-semibold">
+                        <select onchange="cambiarEstadoCita(${a.id}, this.value)" class="col-span-4 sm:col-span-7 px-2 py-1.5 border rounded-lg text-[11px] bg-white font-semibold">
                             ${['Programada', 'Confirmada', 'Atendida', 'Cancelada'].map(opcion => `<option value="${opcion}" ${estado === opcion ? 'selected' : ''}>${opcion}</option>`).join('')}
                         </select>
                     </div>
@@ -257,12 +256,8 @@ function datosRecordatorioCita(cita) {
     const titulo = `VetHome: ${mascota} - ${cliente}`;
     const detalle = [
         `Recordar: ${fechaRecordatorio}`,
-        `Paciente: ${mascota}`,
-        `Propietario: ${cliente}`,
-        `Fecha: ${fecha}`,
-        `Hora: ${hora}`,
-        `Dirección: ${direccion}`,
-        `Notas: ${notas}`
+        `Actividad: ${notas}`,
+        `Lugar: ${direccion}`
     ].join('\n');
     return { titulo, detalle, fecha, hora, fechaRecordatorio, direccion, notas, cliente, mascota };
 }
@@ -295,32 +290,6 @@ async function crearRecordatorioApple(idCita) {
         localStorage.setItem('vethome_reminders_shortcut_hint', '1');
     }
     window.location.href = shortcutUrl;
-}
-function exportarCitaAApple(idCita) {
-    const cita = agenda.find(item => item.id === idCita);
-    if (!cita) return;
-    const fechaLimpia = cita.fecha.replace(/-/g, '');
-    const horaLimpia = cita.hora.replace(/:/g, '');
-    const startDateTime = `${fechaLimpia}T${horaLimpia}00`;
-    let horaS = parseInt(cita.hora.split(':')[0]);
-    let minS = cita.hora.split(':')[1];
-    horaS = horaS + 1; 
-    const endDateTime = `${fechaLimpia}T${String(horaS).padStart(2, '0')}${minS}00`;
-    const petNameStr = cita.petName && cita.petName !== 'N/A' ? `(${cita.petName})` : '';
-    const nombreCliente = cita.clienteNombre || cita.ownerName || 'Cliente';
-    const direccion = cita.direccion || cita.address || '';
-    const notas = cita.notas || cita.notes || '';
-    const icsData = [
-        'BEGIN:VCALENDAR', 'VERSION:2.0', 'PROID:-//VetHomePro//NONSGML v7.5//MX', 'BEGIN:VEVENT',
-        `UID:${cita.id}@vethomepro.local`, `DTSTAMP:${startDateTime}Z`, `DTSTART:${startDateTime}`, `DTEND:${endDateTime}`,
-        `SUMMARY:🐾 Consulta Vet: ${nombreCliente} ${petNameStr}`, `LOCATION:${direccion}`, `DESCRIPTION:Motivo/Notas: ${notas}`,
-        'BEGIN:VALARM', 'TRIGGER:-PT30M', 'ACTION:DISPLAY', 'DESCRIPTION:Recordatorio de consulta', 'END:VALARM', 'END:VEVENT', 'END:VCALENDAR'
-    ].join('\r\n');
-    const blob = new Blob([icsData], { type: 'text/calendar;charset=utf-8' });
-    const link = document.createElement('a');
-    link.href = URL.createObjectURL(blob);
-    link.download = `cita-${nombreCliente.replace(/\s+/g, '_')}.ics`;
-    document.body.appendChild(link); link.click(); document.body.removeChild(link);
 }
 function eliminarCita(id) { 
     if(confirm("¿Remover esta visita de la agenda?")) { 
