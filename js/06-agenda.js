@@ -21,6 +21,30 @@ function fechaLocalISO(fecha = new Date()) {
     const offset = fecha.getTimezoneOffset() * 60000;
     return new Date(fecha.getTime() - offset).toISOString().split('T')[0];
 }
+function normalizarFechaCita(cita) {
+    const valor = cita?.fecha || cita?.date || '';
+    if (!valor) return '';
+    const fechaTexto = String(valor).match(/^(\d{4}-\d{2}-\d{2})/);
+    if (fechaTexto) return fechaTexto[1];
+    const fecha = new Date(valor);
+    if (!Number.isNaN(fecha.getTime())) return fechaLocalISO(fecha);
+    return String(valor).slice(0, 10);
+}
+function horaCita(cita) {
+    const valor = cita?.hora || cita?.time || '';
+    if (!valor) return '--:--';
+    return String(valor).slice(0, 5);
+}
+function fechaHoraCita(cita) {
+    const fecha = normalizarFechaCita(cita);
+    const hora = horaCita(cita);
+    return new Date(`${fecha}T${hora === '--:--' ? '00:00' : hora}`);
+}
+function fechaCitaBonita(cita) {
+    const fecha = fechaHoraCita(cita);
+    if (Number.isNaN(fecha.getTime())) return normalizarFechaCita(cita) || 'Sin fecha';
+    return fecha.toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' });
+}
 function citasAgendaFiltradas() {
     const hoy = fechaLocalISO();
     const finSemana = new Date();
@@ -28,8 +52,9 @@ function citasAgendaFiltradas() {
     const limiteSemana = fechaLocalISO(finSemana);
     return agenda.filter(cita => {
         const estado = cita.estado || 'Programada';
-        if (filtroAgendaActivo === 'hoy') return cita.fecha === hoy;
-        if (filtroAgendaActivo === 'semana') return cita.fecha >= hoy && cita.fecha <= limiteSemana;
+        const fecha = normalizarFechaCita(cita);
+        if (filtroAgendaActivo === 'hoy') return fecha === hoy;
+        if (filtroAgendaActivo === 'semana') return fecha >= hoy && fecha <= limiteSemana;
         if (filtroAgendaActivo === 'pendientes') return ['Programada', 'Confirmada'].includes(estado);
         return true;
     });
@@ -51,12 +76,12 @@ function renderAgenda() {
     list.innerHTML = "";
     const citas = citasAgendaFiltradas();
     if(citas.length === 0) { list.innerHTML = `<div class="text-center py-12 text-gray-400 text-xs italic">No hay visitas en este filtro.</div>`; return; }
-    const ordenadas = citas.sort((a,b) => new Date(`${a.fecha}T${a.hora}`) - new Date(`${b.fecha}T${b.hora}`));
+    const ordenadas = citas.sort((a,b) => fechaHoraCita(a) - fechaHoraCita(b));
     const hoy = fechaLocalISO();
     const grupos = [
-        { titulo: 'Hoy', items: ordenadas.filter(cita => cita.fecha === hoy) },
-        { titulo: 'Próximas', items: ordenadas.filter(cita => cita.fecha > hoy) },
-        { titulo: 'Pasadas', items: ordenadas.filter(cita => cita.fecha < hoy) }
+        { titulo: 'Hoy', items: ordenadas.filter(cita => normalizarFechaCita(cita) === hoy) },
+        { titulo: 'Próximas', items: ordenadas.filter(cita => normalizarFechaCita(cita) > hoy) },
+        { titulo: 'Pasadas', items: ordenadas.filter(cita => normalizarFechaCita(cita) < hoy) }
     ].filter(grupo => grupo.items.length);
     list.innerHTML = grupos.map(grupo => `
         <div class="space-y-2">
@@ -70,7 +95,8 @@ function renderAgenda() {
         const direccion = a.direccion || a.address || '';
         const notas = a.notas || a.notes || 'Sin notas';
         const estado = a.estado || 'Programada';
-        const esHoy = a.fecha === hoy;
+        const fechaNormalizada = normalizarFechaCita(a);
+        const esHoy = fechaNormalizada === hoy;
         const owner = clientes.find(c => c.id === (a.clienteId || a.ownerId));
         const tel = typeof telefonoLimpio === 'function' ? telefonoLimpio(owner?.phone) : String(owner?.phone || '').replace(/\D/g, '');
         const badgeEstado = {
@@ -80,28 +106,34 @@ function renderAgenda() {
             Cancelada: 'bg-rose-100 text-rose-700'
         }[estado] || 'bg-gray-100 text-gray-700';
         return `
-            <div class="border rounded-xl p-4 flex flex-col xl:flex-row justify-between items-start xl:items-center gap-3 shadow-3xs hover:shadow-md transition-all ${esHoy ? 'bg-amber-50 border-amber-300' : 'bg-white'}">
-                <div class="space-y-1 text-xs">
-                    <div class="flex flex-wrap items-center gap-2">
-                        <span class="bg-blue-600 text-white font-bold px-2 py-0.5 rounded text-[10px]">📅 ${a.fecha} • ${a.hora} hrs</span>
-                        <span class="font-bold text-slate-800">${nombre}${mascota}</span>
-                        ${esHoy ? '<span class="bg-amber-500 text-slate-950 font-bold px-2 py-0.5 rounded text-[10px]">HOY</span>' : ''}
-                        <span class="${badgeEstado} font-bold px-2 py-0.5 rounded text-[10px]">${estado}</span>
+            <div class="border rounded-xl p-4 shadow-3xs hover:shadow-md transition-all ${esHoy ? 'bg-amber-50 border-amber-300' : 'bg-white'}">
+                <div class="grid grid-cols-1 2xl:grid-cols-[9rem_1fr_21rem] gap-4 items-start">
+                    <div class="rounded-xl bg-blue-600 text-white p-3 min-h-24 flex flex-col justify-center">
+                        <span class="text-[10px] font-bold uppercase opacity-80">Visita</span>
+                        <span class="text-sm font-black leading-tight">${fechaCitaBonita(a)}</span>
+                        <span class="text-xs font-bold mt-1">${horaCita(a)} hrs</span>
                     </div>
-                    <p class="text-gray-600 font-medium">📍 ${direccion}</p>
-                    <p class="text-slate-400 italic">📝 Nota: ${notas}</p>
-                </div>
-                <div class="flex flex-wrap gap-1.5 w-full xl:w-auto shrink-0 justify-end">
-                    ${a.petId && estado !== 'Cancelada' ? `<button onclick="atenderCita(${a.id})" class="bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold px-3 py-1.5 rounded-lg flex items-center gap-1"><i data-lucide="stethoscope" class="w-3.5 h-3.5"></i> Atender</button>` : ''}
-                    ${estado === 'Programada' ? `<button onclick="cambiarEstadoCita(${a.id}, 'Confirmada')" class="bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 text-xs font-bold px-2.5 py-1.5 rounded-lg flex items-center gap-1"><i data-lucide="check" class="w-3.5 h-3.5"></i> Confirmar</button>` : ''}
-                    <select onchange="cambiarEstadoCita(${a.id}, this.value)" class="px-2 py-1.5 border rounded-lg text-xs bg-white">
-                        ${['Programada', 'Confirmada', 'Atendida', 'Cancelada'].map(opcion => `<option value="${opcion}" ${estado === opcion ? 'selected' : ''}>${opcion}</option>`).join('')}
-                    </select>
-                    ${tel ? `<a href="https://wa.me/52${tel}" target="_blank" rel="noopener" class="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold px-3 py-1.5 rounded-lg flex items-center gap-1 shadow-xs transition-all"><i data-lucide="message-circle" class="w-3.5 h-3.5"></i> WhatsApp</a>` : ''}
-                    <button onclick="exportarCitaAApple(${a.id})" class="bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 text-xs font-bold px-2.5 py-1.5 rounded-lg flex items-center gap-1 shadow-xs transition-all"><i data-lucide="bell" class="w-3.5 h-3.5"></i> Sincronizar iPad</button>
-                    <button onclick="abrirNavegacionMaps('${direccion.replace(/'/g, "\\'")}')" class="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold px-3 py-1.5 rounded-lg flex items-center gap-1 shadow-xs transition-all"><i data-lucide="map" class="w-3.5 h-3.5"></i> Maps</button>
-                    <button onclick="iniciarEdicionAgenda(${a.id})" class="text-gray-400 hover:text-amber-600 p-1.5 bg-white border rounded-lg shadow-xs transition-all"><i data-lucide="edit" class="w-4 h-4"></i></button>
-                    <button onclick="eliminarCita(${a.id})" class="text-gray-300 hover:text-red-500 p-1.5 border rounded-lg shadow-xs transition-all"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
+                    <div class="min-w-0 space-y-2">
+                        <div class="flex flex-wrap items-center gap-2">
+                            <span class="font-black text-slate-900">${nombre}${mascota}</span>
+                            ${esHoy ? '<span class="bg-amber-500 text-slate-950 font-bold px-2 py-0.5 rounded text-[10px]">HOY</span>' : ''}
+                            <span class="${badgeEstado} font-bold px-2 py-0.5 rounded text-[10px]">${estado}</span>
+                        </div>
+                        <p class="text-xs text-gray-600 font-medium flex items-start gap-1"><i data-lucide="map-pin" class="w-3.5 h-3.5 mt-0.5 shrink-0 text-rose-500"></i><span>${direccion || 'Sin dirección'}</span></p>
+                        <p class="text-xs text-slate-500 italic flex items-start gap-1"><i data-lucide="notebook-pen" class="w-3.5 h-3.5 mt-0.5 shrink-0 text-slate-400"></i><span>${notas}</span></p>
+                    </div>
+                    <div class="grid grid-cols-2 sm:grid-cols-3 2xl:grid-cols-2 gap-2 w-full">
+                        ${a.petId && estado !== 'Cancelada' ? `<button onclick="atenderCita(${a.id})" class="bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold px-3 py-2 rounded-lg flex items-center justify-center gap-1"><i data-lucide="stethoscope" class="w-3.5 h-3.5"></i> Atender</button>` : ''}
+                        ${estado === 'Programada' ? `<button onclick="cambiarEstadoCita(${a.id}, 'Confirmada')" class="bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 text-xs font-bold px-3 py-2 rounded-lg flex items-center justify-center gap-1"><i data-lucide="check" class="w-3.5 h-3.5"></i> Confirmar</button>` : ''}
+                        ${tel ? `<a href="https://wa.me/52${tel}" target="_blank" rel="noopener" class="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold px-3 py-2 rounded-lg flex items-center justify-center gap-1 shadow-xs transition-all"><i data-lucide="message-circle" class="w-3.5 h-3.5"></i> WhatsApp</a>` : ''}
+                        <button onclick="abrirNavegacionMaps('${direccion.replace(/'/g, "\\'")}')" class="bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold px-3 py-2 rounded-lg flex items-center justify-center gap-1 shadow-xs transition-all"><i data-lucide="map" class="w-3.5 h-3.5"></i> Maps</button>
+                        <button onclick="exportarCitaAApple(${a.id})" class="bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 text-xs font-bold px-3 py-2 rounded-lg flex items-center justify-center gap-1 shadow-xs transition-all"><i data-lucide="bell" class="w-3.5 h-3.5"></i> iPad</button>
+                        <select onchange="cambiarEstadoCita(${a.id}, this.value)" class="px-2 py-2 border rounded-lg text-xs bg-white font-semibold">
+                            ${['Programada', 'Confirmada', 'Atendida', 'Cancelada'].map(opcion => `<option value="${opcion}" ${estado === opcion ? 'selected' : ''}>${opcion}</option>`).join('')}
+                        </select>
+                        <button onclick="iniciarEdicionAgenda(${a.id})" class="text-gray-500 hover:text-amber-600 p-2 bg-white border rounded-lg shadow-xs transition-all flex items-center justify-center"><i data-lucide="edit" class="w-4 h-4"></i></button>
+                        <button onclick="eliminarCita(${a.id})" class="text-gray-400 hover:text-red-500 p-2 border rounded-lg shadow-xs transition-all flex items-center justify-center"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
+                    </div>
                 </div>
             </div>`;
             }).join('')}
