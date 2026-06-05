@@ -46,6 +46,12 @@ function abrirModalHistorial(ownerId, petId) {
                 </div>
                 ${detalleHTML}
                 <p class="text-xs text-slate-900 bg-amber-50 p-2.5 rounded-lg border border-amber-200 text-justify"><b>Receta/Cuidados:</b> ${h.tratamiento}</p>
+                ${h.notasRapidas ? `
+                    <div class="bg-indigo-50 p-3 rounded-lg border border-indigo-200 space-y-2">
+                        <p class="text-xs font-bold text-indigo-900">Notas rápidas de consulta</p>
+                        <img src="${h.notasRapidas}" class="w-full max-h-64 object-contain bg-white rounded-lg border border-indigo-100">
+                    </div>
+                ` : ''}
                 <div class="bg-emerald-50 p-3 rounded-lg border border-emerald-200 space-y-1">
                     <div class="flex flex-wrap justify-between items-center gap-2">
                         <p class="text-xs font-bold text-emerald-900">Cobro registrado</p>

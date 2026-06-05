@@ -328,6 +328,7 @@ function guardarConsulta(e) {
         metodoPago: $('consulta-metodo-pago')?.value || 'Efectivo',
         estadoPago: $('consulta-estado-pago')?.value || 'Pagado',
         notaPago: $('consulta-nota-pago')?.value || '',
+        notasRapidas: typeof obtenerWhiteboardDataUrl === 'function' ? obtenerWhiteboardDataUrl() : '',
         vacunasControlStock: tipoConsulta === 'Vacunacion' ? controlVacunas : null,
         firmaDueno: $('canvas-firma').toDataURL(), 
         firmaVet: $('canvas-firma-vet').toDataURL()
@@ -359,6 +360,7 @@ function guardarConsulta(e) {
     if(contenedorFilas) contenedorFilas.innerHTML = "";
     limpiarLienzoFirma('canvas-firma'); 
     limpiarLienzoFirma('canvas-firma-vet');
+    limpiarWhiteboard();
     renderSubpaginaMascotas(); // Refresca la vista de mascotas
     renderGananciasConsultas();
     switchTab('clientes');
@@ -371,6 +373,7 @@ function cancelarConsultaActiva() {
     if(contenedorFilas) contenedorFilas.innerHTML = "";
     limpiarLienzoFirma('canvas-firma'); 
     limpiarLienzoFirma('canvas-firma-vet');
+    limpiarWhiteboard();
     regresarAlDirectorioDesdeConsulta();
 }
 function cargarPacienteAConsulta(ownerId, petId) {
@@ -392,5 +395,6 @@ function cargarPacienteAConsulta(ownerId, petId) {
     actualizarDisclaimerDinamico();
     rellenarDropdownServicios();
     calcularTotalCobro();
+    limpiarWhiteboard();
     switchTab('nueva-consulta');
 }

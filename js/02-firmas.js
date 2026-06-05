@@ -71,3 +71,79 @@ function recolectarVacunasAplicadas() {
 function vacunasSeleccionadasLista() {
     return Array.from($$('.vacuna-chk:checked')).map(chk => chk.value);
 }
+
+let whiteboardHerramienta = 'lapiz';
+let whiteboardGrosor = 4;
+let whiteboardTieneContenido = false;
+
+function setupWhiteboardCanvas() {
+    const canvas = $('consulta-whiteboard');
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    let dibujando = false;
+    function coordenadas(e) {
+        const rect = canvas.getBoundingClientRect();
+        return {
+            x: (e.clientX - rect.left) * (canvas.width / rect.width),
+            y: (e.clientY - rect.top) * (canvas.height / rect.height)
+        };
+    }
+    function prepararTrazo() {
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+        ctx.strokeStyle = '#0f172a';
+        ctx.lineWidth = whiteboardHerramienta === 'borrador' ? whiteboardGrosor * 4 : whiteboardGrosor;
+        ctx.globalCompositeOperation = whiteboardHerramienta === 'borrador' ? 'destination-out' : 'source-over';
+    }
+    canvas.addEventListener('pointerdown', e => {
+        dibujando = true;
+        canvas.setPointerCapture?.(e.pointerId);
+        prepararTrazo();
+        const punto = coordenadas(e);
+        ctx.beginPath();
+        ctx.moveTo(punto.x, punto.y);
+        e.preventDefault();
+    });
+    canvas.addEventListener('pointermove', e => {
+        if (!dibujando) return;
+        prepararTrazo();
+        const punto = coordenadas(e);
+        ctx.lineTo(punto.x, punto.y);
+        ctx.stroke();
+        whiteboardTieneContenido = true;
+        e.preventDefault();
+    });
+    ['pointerup', 'pointercancel', 'pointerleave'].forEach(evento => {
+        canvas.addEventListener(evento, e => {
+            if (!dibujando) return;
+            dibujando = false;
+            ctx.closePath();
+            canvas.releasePointerCapture?.(e.pointerId);
+        });
+    });
+}
+
+function cambiarHerramientaWhiteboard(herramienta) {
+    whiteboardHerramienta = herramienta;
+    const activo = 'p-2 bg-slate-900 text-white rounded-lg border border-slate-900';
+    const inactivo = 'p-2 bg-white text-slate-600 rounded-lg border border-slate-200';
+    if ($('btn-whiteboard-lapiz')) $('btn-whiteboard-lapiz').className = herramienta === 'lapiz' ? activo : inactivo;
+    if ($('btn-whiteboard-borrador')) $('btn-whiteboard-borrador').className = herramienta === 'borrador' ? activo : inactivo;
+}
+
+function cambiarGrosorWhiteboard(valor) {
+    whiteboardGrosor = parseInt(valor) || 4;
+}
+
+function limpiarWhiteboard() {
+    const canvas = $('consulta-whiteboard');
+    if (!canvas) return;
+    canvas.getContext('2d').clearRect(0, 0, canvas.width, canvas.height);
+    whiteboardTieneContenido = false;
+}
+
+function obtenerWhiteboardDataUrl() {
+    const canvas = $('consulta-whiteboard');
+    if (!canvas || !whiteboardTieneContenido) return '';
+    return canvas.toDataURL('image/png');
+}

@@ -65,6 +65,12 @@ function descargarResponsivaHistorialPDF(ownerId, petId, consultaId) {
             <div class="pt-4 border-t border-gray-200 mt-4">
                 <p class="text-justify text-slate-600 mb-2 font-mono text-[9px] bg-slate-100 p-2 rounded"><b>Cláusula Aceptada:</b> ${consultaObj.disclaimer}</p>
             </div>
+            ${consultaObj.notasRapidas ? `
+                <div class="pt-3 border-t border-gray-200">
+                    <h5 class="font-bold text-slate-900 uppercase text-[11px] border-b pb-0.5 mb-2">### NOTAS RÁPIDAS DE CONSULTA</h5>
+                    <img src="${consultaObj.notasRapidas}" class="w-full max-h-52 object-contain border rounded-xl bg-white">
+                </div>
+            ` : ''}
             <div>
                 <div class="grid grid-cols-2 gap-4 pt-2 items-center">
                     <div class="flex flex-col items-center space-y-1 bg-slate-50 p-3 rounded-xl border border-gray-200 text-center">

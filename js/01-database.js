@@ -116,6 +116,7 @@ function mapearEstadoNormalizado(rows) {
             metodoPago: pago?.metodo_pago || 'Efectivo',
             estadoPago: pago?.estado_pago || 'Pagado',
             notaPago: pago?.nota_pago || '',
+            notasRapidas: row.notas_rapidas || '',
             vacunasControlStock: row.vacunas_control_stock,
             firmaDueno: row.firma_dueno || '',
             firmaVet: row.firma_vet || ''
@@ -287,6 +288,7 @@ async function guardarEstadoBaseNormalizada() {
                     vacunas: consulta.vacunas,
                     desparasitante: consulta.desparasitante,
                     disclaimer: consulta.disclaimer || '',
+                    notas_rapidas: consulta.notasRapidas || '',
                     insumos: consulta.insumos || [],
                     vacunas_control_stock: consulta.vacunasControlStock || null,
                     firma_dueno: consulta.firmaDueno || '',

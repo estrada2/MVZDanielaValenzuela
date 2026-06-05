@@ -12,6 +12,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     refrescarInterfaz();
     setupSignatureCanvas('canvas-firma'); 
     setupSignatureCanvas('canvas-firma-vet');
+    setupWhiteboardCanvas();
     renderIcons();
 });
 function refrescarInterfaz() {
@@ -32,5 +33,6 @@ function regresarAlDirectorioDesdeConsulta() {
     if($('consulta-paciente-nombre')) {
         $('consulta-paciente-nombre').innerText = "Ninguno seleccionado";
     }
+    limpiarWhiteboard();
     renderClientes();
 }
