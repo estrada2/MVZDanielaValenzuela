@@ -40,6 +40,19 @@ function fechaHoraCita(cita) {
     const hora = horaCita(cita);
     return new Date(`${fecha}T${hora === '--:--' ? '00:00' : hora}`);
 }
+function conflictoHorarioAgenda(fecha, hora, editId = '') {
+    const nuevaFecha = new Date(`${fecha}T${hora}`);
+    if (Number.isNaN(nuevaFecha.getTime())) return null;
+    const idEditando = editId ? parseInt(editId) : null;
+    return agenda.find(cita => {
+        if (idEditando && cita.id === idEditando) return false;
+        if (!['Programada', 'Confirmada'].includes(cita.estado || 'Programada')) return false;
+        const fechaExistente = fechaHoraCita(cita);
+        if (Number.isNaN(fechaExistente.getTime())) return false;
+        const diferenciaMinutos = Math.abs(nuevaFecha.getTime() - fechaExistente.getTime()) / (1000 * 60);
+        return diferenciaMinutos < 45;
+    }) || null;
+}
 function fechaCitaBonita(cita) {
     const fecha = fechaHoraCita(cita);
     if (Number.isNaN(fecha.getTime())) return normalizarFechaCita(cita) || 'Sin fecha';
@@ -151,9 +164,9 @@ function guardarCita(e) {
     const editId = $('edit-agenda-id').value;
     const fecha = $('agenda-fecha').value;
     const hora = $('agenda-hora').value;
-    const duplicada = agenda.some(item => item.id !== parseInt(editId) && item.fecha === fecha && item.hora === hora && (item.estado || 'Programada') !== 'Cancelada');
-    if (duplicada) {
-        alert("Ya existe una visita programada en ese horario.");
+    const conflicto = conflictoHorarioAgenda(fecha, hora, editId);
+    if (conflicto) {
+        alert(`Ya hay una visita activa muy cerca de ese horario.\n\nCita existente: ${horaCita(conflicto)} hrs · ${conflicto.clienteNombre || 'Cliente'} ${conflicto.petName ? `(${conflicto.petName})` : ''}\n\nAgenda la siguiente visita al menos 45 minutos después.`);
         return;
     }
     if (editId) {
