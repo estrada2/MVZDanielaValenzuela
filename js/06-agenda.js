@@ -40,6 +40,11 @@ function fechaHoraCita(cita) {
     const hora = horaCita(cita);
     return new Date(`${fecha}T${hora === '--:--' ? '00:00' : hora}`);
 }
+function minutosAHora(minutos) {
+    const h = String(Math.floor(minutos / 60)).padStart(2, '0');
+    const m = String(minutos % 60).padStart(2, '0');
+    return `${h}:${m}`;
+}
 function conflictoHorarioAgenda(fecha, hora, editId = '') {
     const nuevaFecha = new Date(`${fecha}T${hora}`);
     if (Number.isNaN(nuevaFecha.getTime())) return null;
@@ -52,6 +57,54 @@ function conflictoHorarioAgenda(fecha, hora, editId = '') {
         const diferenciaMinutos = Math.abs(nuevaFecha.getTime() - fechaExistente.getTime()) / (1000 * 60);
         return diferenciaMinutos < 45;
     }) || null;
+}
+function seleccionarHoraRecomendada(hora) {
+    if ($('agenda-hora')) $('agenda-hora').value = hora;
+    renderHorariosRecomendados();
+}
+function horariosDisponiblesAgenda(fecha, editId = '') {
+    if (!fecha) return [];
+    const inicio = 9 * 60;
+    const fin = 20 * 60;
+    const ahora = new Date();
+    const hoy = fechaLocalISO(ahora);
+    const horarios = [];
+    for (let minuto = inicio; minuto <= fin; minuto += 15) {
+        const hora = minutosAHora(minuto);
+        const fechaHora = new Date(`${fecha}T${hora}`);
+        if (fecha === hoy && fechaHora < ahora) continue;
+        if (!conflictoHorarioAgenda(fecha, hora, editId)) horarios.push(hora);
+    }
+    return horarios;
+}
+function renderHorariosRecomendados() {
+    const contenedor = $('agenda-horarios-recomendados');
+    if (!contenedor) return;
+    const fecha = $('agenda-fecha')?.value || '';
+    const horaActual = $('agenda-hora')?.value || '';
+    const editId = $('edit-agenda-id')?.value || '';
+    if (!fecha) {
+        contenedor.innerHTML = `<span class="text-[11px] text-slate-400">Selecciona una fecha para ver horas libres.</span>`;
+        return;
+    }
+    const disponibles = horariosDisponiblesAgenda(fecha, editId);
+    const recomendados = horaActual
+        ? disponibles
+            .map(hora => ({ hora, distancia: Math.abs(new Date(`${fecha}T${hora}`) - new Date(`${fecha}T${horaActual}`)) }))
+            .sort((a, b) => a.distancia - b.distancia)
+            .slice(0, 12)
+            .map(item => item.hora)
+            .sort()
+        : disponibles.slice(0, 12);
+    if (!recomendados.length) {
+        contenedor.innerHTML = `<span class="text-[11px] text-rose-500 font-semibold">No hay horarios libres ese día con separación de 45 min.</span>`;
+        return;
+    }
+    contenedor.innerHTML = recomendados.map(hora => `
+        <button type="button" onclick="seleccionarHoraRecomendada('${hora}')" class="px-2.5 py-1.5 rounded-lg border text-[11px] font-bold transition-all ${hora === horaActual ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-slate-700 border-slate-200 hover:bg-blue-50 hover:text-blue-700'}">
+            ${hora}
+        </button>
+    `).join('');
 }
 function fechaCitaBonita(cita) {
     const fecha = fechaHoraCita(cita);
@@ -203,6 +256,7 @@ function guardarCita(e) {
     saveStore('agenda'); 
     $('form-agenda').reset(); 
     renderAgenda();
+    renderHorariosRecomendados();
 }
 function iniciarEdicionAgenda(id) {
     const target = agenda.find(item => item.id === id);
@@ -218,6 +272,7 @@ function iniciarEdicionAgenda(id) {
     $('titulo-form-agenda').innerHTML = `<i data-lucide="calendar-range" class="text-amber-600 w-5 h-5"></i> Reagendar Visita`;
     $('btn-guardar-agenda').innerText = "Actualizar Cita";
     $('btn-cancelar-agenda').classList.remove('hidden');
+    renderHorariosRecomendados();
     renderIcons();
 }
 function cambiarEstadoCita(id, estado) {
@@ -226,6 +281,7 @@ function cambiarEstadoCita(id, estado) {
     cita.estado = estado;
     saveStore('agenda');
     renderAgenda();
+    renderHorariosRecomendados();
 }
 function atenderCita(id) {
     const cita = agenda.find(item => item.id === id);
@@ -242,6 +298,7 @@ function cancelarEdicionAgenda() {
     $('titulo-form-agenda').innerHTML = `<i data-lucide="calendar-plus" class="text-blue-600 w-5 h-5"></i> Agendar Nueva Visita`;
     $('btn-guardar-agenda').innerText = "Agregar a la Agenda";
     $('btn-cancelar-agenda').classList.add('hidden');
+    renderHorariosRecomendados();
     renderIcons();
 }
 function abrirNavegacionMaps(direccion) {

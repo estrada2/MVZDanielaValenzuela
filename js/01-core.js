@@ -369,6 +369,7 @@ function switchTab(tabId) {
         $('page-title').innerText = titles[tabId];
     }
     if (tabId === 'dashboard' && typeof renderDashboard === 'function') renderDashboard();
+    if (tabId === 'agenda' && typeof renderHorariosRecomendados === 'function') renderHorariosRecomendados();
     if (tabId === 'finanzas') renderFinanzas();
     if (tabId === 'servicios-externos' && typeof renderServiciosExternos === 'function') renderServiciosExternos();
     if (tabId === 'inventario') renderInventario();
