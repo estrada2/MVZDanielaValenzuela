@@ -275,15 +275,8 @@ async function crearRecordatorioApple(idCita) {
     if (!cita) return;
     const datos = datosRecordatorioCita(cita);
     const shortcutName = 'VetHome Recordatorio';
-    const payload = JSON.stringify({
-        title: datos.titulo,
-        notes: datos.detalle,
-        dueDate: datos.fecha,
-        dueTime: datos.hora,
-        list: 'VetHome'
-    });
     const textoPlano = `${datos.titulo}\n\n${datos.detalle}`;
-    const shortcutUrl = `shortcuts://x-callback-url/run-shortcut?name=${encodeURIComponent(shortcutName)}&input=text&text=${encodeURIComponent(payload)}`;
+    const shortcutUrl = `shortcuts://x-callback-url/run-shortcut?name=${encodeURIComponent(shortcutName)}&input=text&text=${encodeURIComponent(textoPlano)}`;
     if (!esDispositivoAppleMovil()) {
         const copiado = await copiarTextoSeguro(textoPlano);
         alert(copiado
@@ -293,7 +286,7 @@ async function crearRecordatorioApple(idCita) {
     }
     await copiarTextoSeguro(textoPlano);
     if (!localStorage.getItem('vethome_reminders_shortcut_hint')) {
-        alert('Beta Apple Reminders: primero crea un atajo en Shortcuts llamado exactamente "VetHome Recordatorio". No es una app; es un atajo que recibe texto y crea un recordatorio. También copié los datos por si necesitas pegarlos manualmente.');
+        alert('Beta Apple Reminders: el atajo "VetHome Recordatorio" solo debe recibir Texto y agregar la Entrada del atajo a Recordatorios. También copié los datos por si necesitas pegarlos manualmente.');
         localStorage.setItem('vethome_reminders_shortcut_hint', '1');
     }
     window.location.href = shortcutUrl;
