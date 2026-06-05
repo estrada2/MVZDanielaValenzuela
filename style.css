@@ -49,6 +49,11 @@
         }
 
         @media (max-width: 767px) {
+            .app-header {
+                padding-top: calc(0.75rem + env(safe-area-inset-top));
+                min-height: calc(4rem + env(safe-area-inset-top));
+            }
+
             input,
             select,
             textarea {
