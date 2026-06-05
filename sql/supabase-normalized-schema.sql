@@ -10,7 +10,7 @@ values (
     'vet-files',
     true,
     10485760,
-    array['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/heif']
+    array['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/heif', 'application/pdf']
 )
 on conflict (id) do update
 set public = excluded.public,
@@ -48,6 +48,7 @@ alter table public.mascotas
     add column if not exists peso numeric,
     add column if not exists esterilizado text,
     add column if not exists foto text,
+    add column if not exists estudios jsonb not null default '[]'::jsonb,
     add column if not exists legacy_id bigint,
     add column if not exists updated_at timestamp without time zone default now();
 
