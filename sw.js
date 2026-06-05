@@ -1,4 +1,4 @@
-const CACHE_NAME = 'vethome-pro-v2026-06-05-01';
+const CACHE_NAME = 'vethome-pro-v10-schnauzer-2026-06-05-02';
 const APP_SHELL = [
     '/',
     '/index.html',

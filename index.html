@@ -57,6 +57,9 @@
                     <button onclick="switchTab('agenda')" id="nav-agenda" class="w-full flex items-center gap-3 px-4 py-3 hover:bg-white/10 text-blue-100 hover:text-white rounded-xl text-left font-medium transition-all">
                         <i data-lucide="calendar" class="w-5 h-5"></i> Agenda
                     </button>
+                    <button onclick="switchTab('servicios-externos')" id="nav-servicios-externos" class="w-full flex items-center gap-3 px-4 py-3 hover:bg-white/10 text-blue-100 hover:text-white rounded-xl text-left font-medium transition-all">
+                        <i data-lucide="briefcase-medical" class="w-5 h-5"></i> Servicios Externos
+                    </button>
                     <button onclick="switchTab('inventario')" id="nav-inventario" class="w-full flex items-center gap-3 px-4 py-3 hover:bg-white/10 text-blue-100 hover:text-white rounded-xl text-left font-medium transition-all">
                         <i data-lucide="package" class="w-5 h-5"></i> Control de Stock
                     </button>
@@ -709,6 +712,77 @@
                 </div>
             </section>
 
+            <section id="view-servicios-externos" class="hidden space-y-6">
+                <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+                    <div>
+                        <h3 class="text-lg font-black text-slate-900">Servicios Externos</h3>
+                        <p class="text-xs text-gray-500">Registra ingresos sin crear expediente de paciente.</p>
+                    </div>
+                    <button type="button" onclick="switchTab('finanzas')" class="bg-emerald-50 text-emerald-700 border border-emerald-100 rounded-xl px-3 py-2 text-xs font-bold flex items-center gap-2">
+                        <i data-lucide="bar-chart-3" class="w-4 h-4"></i> Ver finanzas
+                    </button>
+                </div>
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                    <details open class="bg-white p-6 rounded-2xl border border-gray-200 shadow-xs space-y-4 h-fit">
+                        <summary class="text-md font-bold text-slate-900 flex items-center gap-2 cursor-pointer list-none">
+                            <i data-lucide="briefcase-medical" class="text-blue-600 w-5 h-5"></i> Nuevo servicio externo
+                        </summary>
+                        <p class="text-xs text-gray-500 mt-3">Ultrasonidos, toma de sangre, cortes de uñas u otros servicios solicitados por veterinarias.</p>
+                        <form id="form-servicio-externo" class="space-y-3" onsubmit="guardarServicioExterno(event)">
+                            <input type="hidden" id="edit-servicio-externo-id">
+                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                <div>
+                                    <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Fecha</label>
+                                    <input type="date" id="externo-fecha" required class="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm outline-none">
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Monto ($)</label>
+                                    <input type="number" id="externo-total" required min="0" step="0.01" class="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm outline-none">
+                                </div>
+                            </div>
+                            <div>
+                                <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Veterinaria / Contacto</label>
+                                <input type="text" id="externo-cliente" placeholder="Ej. Vet San Ángel" required class="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm outline-none">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Servicio realizado</label>
+                                <input type="text" id="externo-servicio" placeholder="Ultrasonido, toma de sangre, corte de uñas..." required class="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm outline-none">
+                            </div>
+                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                <div>
+                                    <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Método</label>
+                                    <select id="externo-metodo" class="w-full px-3 py-2 border rounded-xl text-sm bg-white outline-none">
+                                        <option>Efectivo</option>
+                                        <option>Transferencia</option>
+                                        <option>Tarjeta</option>
+                                        <option>Crédito</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Estado</label>
+                                    <select id="externo-estado" class="w-full px-3 py-2 border rounded-xl text-sm bg-white outline-none">
+                                        <option>Pagado</option>
+                                        <option>Pendiente</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div>
+                                <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Nota</label>
+                                <input type="text" id="externo-nota" placeholder="Paciente referido, folio, observaciones..." class="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm outline-none">
+                            </div>
+                            <div class="flex gap-2">
+                                <button type="submit" id="btn-servicio-externo" class="flex-1 bg-blue-600 text-white font-bold py-2.5 rounded-xl text-sm hover:bg-blue-700 shadow-xs">Guardar Servicio Externo</button>
+                                <button type="button" onclick="cancelarEdicionServicioExterno()" id="btn-cancelar-servicio-externo" class="hidden px-3 py-2.5 bg-gray-100 text-gray-600 font-medium rounded-xl text-sm hover:bg-gray-200">Cancelar</button>
+                            </div>
+                        </form>
+                    </details>
+                    <div class="lg:col-span-2 bg-white p-6 rounded-2xl border border-gray-200 shadow-xs flex flex-col h-[620px]">
+                        <h3 class="text-sm font-bold text-gray-700 mb-3 uppercase tracking-wider">Servicios Externos Registrados</h3>
+                        <div class="flex-1 overflow-y-auto space-y-2.5 p-1 rounded-xl" id="lista-servicios-externos"></div>
+                    </div>
+                </div>
+            </section>
+
             <section id="view-finanzas" class="hidden space-y-6">
                 <div class="bg-white p-6 rounded-2xl border border-gray-200 shadow-3xs space-y-4">
                     <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
@@ -768,63 +842,6 @@
                     </div>
                 </div>
                 <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                    <details open class="bg-white p-6 rounded-2xl border border-gray-200 shadow-xs space-y-4 h-fit">
-                        <summary class="text-md font-bold text-slate-900 flex items-center gap-2 cursor-pointer list-none">
-                            <i data-lucide="briefcase-medical" class="text-blue-600 w-5 h-5"></i> Servicios Externos
-                        </summary>
-                        <p class="text-xs text-gray-500 mt-3">Registra ultrasonidos, toma de sangre, cortes de uñas u otros servicios solicitados por veterinarias sin crear expediente.</p>
-                        <form id="form-servicio-externo" class="space-y-3" onsubmit="guardarServicioExterno(event)">
-                            <input type="hidden" id="edit-servicio-externo-id">
-                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                                <div>
-                                    <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Fecha</label>
-                                    <input type="date" id="externo-fecha" required class="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm outline-none">
-                                </div>
-                                <div>
-                                    <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Monto ($)</label>
-                                    <input type="number" id="externo-total" required min="0" step="0.01" class="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm outline-none">
-                                </div>
-                            </div>
-                            <div>
-                                <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Veterinaria / Contacto</label>
-                                <input type="text" id="externo-cliente" placeholder="Ej. Vet San Ángel" required class="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm outline-none">
-                            </div>
-                            <div>
-                                <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Servicio realizado</label>
-                                <input type="text" id="externo-servicio" placeholder="Ultrasonido, toma de sangre, corte de uñas..." required class="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm outline-none">
-                            </div>
-                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                                <div>
-                                    <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Método</label>
-                                    <select id="externo-metodo" class="w-full px-3 py-2 border rounded-xl text-sm bg-white outline-none">
-                                        <option>Efectivo</option>
-                                        <option>Transferencia</option>
-                                        <option>Tarjeta</option>
-                                        <option>Crédito</option>
-                                    </select>
-                                </div>
-                                <div>
-                                    <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Estado</label>
-                                    <select id="externo-estado" class="w-full px-3 py-2 border rounded-xl text-sm bg-white outline-none">
-                                        <option>Pagado</option>
-                                        <option>Pendiente</option>
-                                    </select>
-                                </div>
-                            </div>
-                            <div>
-                                <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Nota</label>
-                                <input type="text" id="externo-nota" placeholder="Paciente referido, folio, observaciones..." class="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm outline-none">
-                            </div>
-                            <div class="flex gap-2">
-                                <button type="submit" id="btn-servicio-externo" class="flex-1 bg-blue-600 text-white font-bold py-2.5 rounded-xl text-sm hover:bg-blue-700 shadow-xs">Guardar Servicio Externo</button>
-                                <button type="button" onclick="cancelarEdicionServicioExterno()" id="btn-cancelar-servicio-externo" class="hidden px-3 py-2.5 bg-gray-100 text-gray-600 font-medium rounded-xl text-sm hover:bg-gray-200">Cancelar</button>
-                            </div>
-                        </form>
-                    </details>
-                    <div class="lg:col-span-2 bg-white p-6 rounded-2xl border border-gray-200 shadow-xs flex flex-col h-[520px]">
-                        <h3 class="text-sm font-bold text-gray-700 mb-3 uppercase tracking-wider">Servicios Externos Registrados</h3>
-                        <div class="flex-1 overflow-y-auto space-y-2.5 p-1 rounded-xl" id="lista-servicios-externos"></div>
-                    </div>
                     <details class="bg-white p-6 rounded-2xl border border-gray-200 shadow-xs space-y-4 h-fit">
                         <summary class="text-md font-bold text-slate-900 flex items-center gap-2 cursor-pointer list-none">
                             <i data-lucide="tag" class="text-emerald-600 w-5 h-5"></i> Configuración de Servicios
@@ -1310,6 +1327,7 @@
         <button onclick="switchTab('dashboard')" id="nav-mobile-dashboard" class="flex flex-col items-center text-amber-300"><i data-lucide="layout-dashboard" class="w-5 h-5"></i><span class="text-[10px] mt-1">Inicio</span></button>
         <button onclick="switchTab('clientes')" id="nav-mobile-clientes" class="flex flex-col items-center text-blue-200"><i data-lucide="users" class="w-5 h-5"></i><span class="text-[10px] mt-1">Clientes</span></button>
         <button onclick="switchTab('agenda')" id="nav-mobile-agenda" class="flex flex-col items-center text-blue-200"><i data-lucide="calendar" class="w-5 h-5"></i><span class="text-[10px] mt-1">Agenda</span></button>
+        <button onclick="switchTab('servicios-externos')" id="nav-mobile-servicios-externos" class="flex flex-col items-center text-blue-200"><i data-lucide="briefcase-medical" class="w-5 h-5"></i><span class="text-[10px] mt-1">Externos</span></button>
         <button onclick="switchTab('inventario')" id="nav-mobile-inventario" class="flex flex-col items-center text-blue-200"><i data-lucide="package" class="w-5 h-5"></i><span class="text-[10px] mt-1">Stock</span></button>
         <button onclick="switchTab('finanzas')" id="nav-mobile-finanzas" class="flex flex-col items-center text-blue-200"><i data-lucide="dollar-sign" class="w-5 h-5"></i><span class="text-[10px] mt-1">Finanzas</span></button>
     </nav>
