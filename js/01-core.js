@@ -50,9 +50,24 @@ function dataUrlToBlob(dataUrl) {
     return new Blob([bytes], { type: mime });
 }
 function extensionDesdeMime(mime) {
+    if (mime?.includes('pdf')) return 'pdf';
     if (mime?.includes('png')) return 'png';
     if (mime?.includes('webp')) return 'webp';
     return 'jpg';
+}
+function extensionDesdeArchivo(file) {
+    const nombre = file?.name || '';
+    const extensionNombre = nombre.includes('.') ? nombre.split('.').pop().toLowerCase() : '';
+    if (extensionNombre) return extensionNombre;
+    return extensionDesdeMime(file?.type || '');
+}
+function archivoToDataUrl(file) {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = event => resolve(event.target?.result || '');
+        reader.onerror = () => reject(reader.error);
+        reader.readAsDataURL(file);
+    });
 }
 async function subirImagenDataUrl(dataUrl, carpeta, nombreBase) {
     if (!usuarioActivo || !dataUrl || !String(dataUrl).startsWith('data:image/')) return dataUrl || '';
@@ -69,6 +84,23 @@ async function subirImagenDataUrl(dataUrl, carpeta, nombreBase) {
     } catch (error) {
         console.warn('No se pudo subir imagen a Storage. Se conservará en base64.', error);
         return dataUrl;
+    }
+}
+async function subirArchivoStorage(file, carpeta, nombreBase) {
+    if (!file) return '';
+    if (!usuarioActivo) return archivoToDataUrl(file);
+    try {
+        const extension = extensionDesdeArchivo(file);
+        const path = `${usuarioActivo.id}/${carpeta}/${nombreBase}-${Date.now()}.${extension}`;
+        const { error } = await supabaseClient.storage
+            .from(STORAGE_BUCKET)
+            .upload(path, file, { contentType: file.type || 'application/octet-stream', upsert: true });
+        if (error) throw error;
+        const { data } = supabaseClient.storage.from(STORAGE_BUCKET).getPublicUrl(path);
+        return data?.publicUrl || archivoToDataUrl(file);
+    } catch (error) {
+        console.warn('No se pudo subir archivo a Storage. Se conservará en base64.', error);
+        return archivoToDataUrl(file);
     }
 }
 async function guardarEstadoRemoto() {

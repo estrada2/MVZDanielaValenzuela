@@ -86,6 +86,7 @@ function mapearEstadoNormalizado(rows) {
             peso: row.peso ?? '',
             spayed: row.esterilizado || '',
             photo: row.foto || '',
+            estudios: row.estudios || [],
             historial: []
         };
         mascotasPorId.set(row.id, mascota);
@@ -231,6 +232,7 @@ async function guardarEstadoBaseNormalizada() {
         peso: numeroONulo(mascota.peso),
         esterilizado: mascota.spayed || '',
         foto: mascota.photo || '',
+        estudios: mascota.estudios || [],
         updated_at: new Date().toISOString()
     }))).filter(row => row.cliente_id);
     const mascotasGuardadas = await upsertTabla('mascotas', mascotasRows, 'id, legacy_id');

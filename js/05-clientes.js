@@ -13,6 +13,16 @@ function formatoFechaCorta(fecha) {
     return fecha ? fecha.toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' }) : 'Sin fecha';
 }
 
+function escapeHTML(valor) {
+    return String(valor ?? '').replace(/[&<>"']/g, caracter => ({
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        '"': '&quot;',
+        "'": '&#039;'
+    }[caracter]));
+}
+
 function claseBadgePago(estadoPago) {
     if (estadoPago === 'Pagado') return 'bg-emerald-100 text-emerald-800 border-emerald-200';
     if (estadoPago === 'Pendiente') return 'bg-rose-100 text-rose-800 border-rose-200';
@@ -32,6 +42,141 @@ function consultasFiltradasHistorial(historial) {
 
 function cambiarFiltroHistorial(filtro) {
     historialActivo.filtro = filtro;
+    renderHistorialClinicoActivo();
+}
+
+function estudiosPaciente(pet) {
+    return Array.isArray(pet?.estudios) ? pet.estudios : [];
+}
+
+function archivoEsPDF(file) {
+    return file && (file.type === 'application/pdf' || /\.pdf$/i.test(file.name || ''));
+}
+
+function fechaEstudioTexto(estudio) {
+    if (estudio.fecha) return estudio.fecha;
+    if (!estudio.fechaISO) return 'Sin fecha';
+    const fecha = new Date(estudio.fechaISO);
+    return Number.isNaN(fecha.getTime()) ? 'Sin fecha' : formatoFechaCorta(fecha);
+}
+
+function renderEstudiosClinicos(owner, pet) {
+    const estudios = estudiosPaciente(pet)
+        .slice()
+        .sort((a, b) => new Date(b.fechaISO || b.fecha || 0).getTime() - new Date(a.fechaISO || a.fecha || 0).getTime());
+    return `
+        <section class="bg-white border border-gray-200 rounded-2xl p-4 shadow-xs space-y-3">
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div>
+                    <p class="text-[10px] font-bold uppercase text-slate-400">Archivos clínicos</p>
+                    <h4 class="text-base font-black text-slate-900">Estudios y resultados</h4>
+                </div>
+                <button type="button" onclick="abrirModalEstudioClinico(${owner.id}, ${pet.id})" class="bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold px-3 py-2 rounded-xl flex items-center justify-center gap-1">
+                    <i data-lucide="file-plus-2" class="w-4 h-4"></i> Adjuntar PDF
+                </button>
+            </div>
+            ${estudios.length ? `
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
+                    ${estudios.map(estudio => `
+                        <article class="border border-slate-200 rounded-xl p-3 bg-slate-50 flex items-start gap-3">
+                            <div class="w-10 h-10 rounded-xl bg-rose-50 text-rose-700 border border-rose-100 flex items-center justify-center shrink-0">
+                                <i data-lucide="file-text" class="w-5 h-5"></i>
+                            </div>
+                            <div class="min-w-0 flex-1">
+                                <div class="flex items-start justify-between gap-2">
+                                    <div class="min-w-0">
+                                        <p class="text-sm font-black text-slate-900 truncate">${escapeHTML(estudio.nombre || 'Estudio clínico')}</p>
+                                        <p class="text-[11px] font-bold text-blue-700">${escapeHTML(estudio.tipo || 'Resultado')} · ${escapeHTML(fechaEstudioTexto(estudio))}</p>
+                                    </div>
+                                    <button type="button" onclick="eliminarEstudioClinico(${owner.id}, ${pet.id}, ${estudio.id})" class="text-slate-400 hover:text-rose-600 p-1 shrink-0" title="Eliminar">
+                                        <i data-lucide="trash-2" class="w-4 h-4"></i>
+                                    </button>
+                                </div>
+                                ${estudio.notas ? `<p class="text-xs text-slate-500 mt-1 line-clamp-2">${escapeHTML(estudio.notas)}</p>` : ''}
+                                <div class="flex items-center justify-between gap-2 mt-2">
+                                    <p class="text-[10px] text-slate-400 truncate">${escapeHTML(estudio.archivoNombre || 'PDF')}</p>
+                                    <a href="${estudio.archivoUrl}" target="_blank" rel="noopener" class="bg-white hover:bg-blue-50 text-blue-700 border border-blue-100 text-[11px] font-bold px-2.5 py-1.5 rounded-lg flex items-center gap-1 shrink-0">
+                                        <i data-lucide="external-link" class="w-3.5 h-3.5"></i> Abrir
+                                    </a>
+                                </div>
+                            </div>
+                        </article>
+                    `).join('')}
+                </div>
+            ` : `<div class="border border-dashed border-slate-200 rounded-xl p-5 text-center text-xs text-slate-400">Aún no hay análisis, ultrasonidos o resultados adjuntos para este paciente.</div>`}
+        </section>
+    `;
+}
+
+function abrirModalEstudioClinico(ownerId, petId) {
+    const owner = clientes.find(c => c.id === ownerId);
+    const pet = owner?.mascotas.find(m => m.id === petId);
+    if (!owner || !pet) return;
+    $('form-estudio-clinico')?.reset();
+    if ($('estudio-owner-id')) $('estudio-owner-id').value = ownerId;
+    if ($('estudio-pet-id')) $('estudio-pet-id').value = petId;
+    if ($('estudio-fecha')) $('estudio-fecha').value = typeof fechaLocalISO === 'function' ? fechaLocalISO() : new Date().toISOString().slice(0, 10);
+    if ($('estudio-paciente-label')) $('estudio-paciente-label').innerText = `${pet.name} | ${owner.owner}`;
+    setHidden('modal-estudio-clinico', false);
+    renderIcons();
+}
+
+function cerrarModalEstudioClinico() {
+    setHidden('modal-estudio-clinico', true);
+}
+
+async function guardarEstudioClinico(event) {
+    event.preventDefault();
+    const ownerId = parseInt($('estudio-owner-id')?.value || 0);
+    const petId = parseInt($('estudio-pet-id')?.value || 0);
+    const owner = clientes.find(c => c.id === ownerId);
+    const pet = owner?.mascotas.find(m => m.id === petId);
+    const file = $('estudio-archivo')?.files?.[0];
+    if (!owner || !pet) return;
+    if (!archivoEsPDF(file)) {
+        alert('Selecciona un archivo PDF válido.');
+        return;
+    }
+    const boton = $('btn-guardar-estudio');
+    if (boton) {
+        boton.disabled = true;
+        boton.innerText = 'Guardando...';
+    }
+    try {
+        const estudioId = uid();
+        const archivoUrl = typeof subirArchivoStorage === 'function'
+            ? await subirArchivoStorage(file, 'estudios', `paciente-${petId}-estudio-${estudioId}`)
+            : await archivoToDataUrl(file);
+        pet.estudios = estudiosPaciente(pet);
+        pet.estudios.unshift({
+            id: estudioId,
+            tipo: $('estudio-tipo')?.value || 'Estudio clínico',
+            nombre: $('estudio-nombre')?.value.trim() || file.name,
+            fecha: $('estudio-fecha')?.value || '',
+            fechaISO: new Date().toISOString(),
+            notas: $('estudio-notas')?.value.trim() || '',
+            archivoNombre: file.name,
+            archivoUrl
+        });
+        saveStore('clientes');
+        cerrarModalEstudioClinico();
+        renderHistorialClinicoActivo();
+    } finally {
+        if (boton) {
+            boton.disabled = false;
+            boton.innerHTML = '<i data-lucide="upload-cloud" class="w-4 h-4"></i> Guardar estudio';
+            renderIcons();
+        }
+    }
+}
+
+function eliminarEstudioClinico(ownerId, petId, estudioId) {
+    if (!confirm('¿Eliminar este estudio del expediente?')) return;
+    const owner = clientes.find(c => c.id === ownerId);
+    const pet = owner?.mascotas.find(m => m.id === petId);
+    if (!pet) return;
+    pet.estudios = estudiosPaciente(pet).filter(estudio => estudio.id !== estudioId);
+    saveStore('clientes');
     renderHistorialClinicoActivo();
 }
 
@@ -145,6 +290,7 @@ function renderHistorialClinicoActivo() {
     const contenedor = $('historial-contenedor-consultas');
     if(!contenedor) return;
     const historial = [...(pet.historial || [])].sort((a, b) => (fechaConsultaObj(b)?.getTime() || 0) - (fechaConsultaObj(a)?.getTime() || 0));
+    const estudios = estudiosPaciente(pet);
     const filtradas = consultasFiltradasHistorial(historial);
     const ultimaConsulta = historial[0];
     const ultimaVacuna = historial.find(h => h.tipo === 'Vacunacion' && h.vacunas);
@@ -172,13 +318,20 @@ function renderHistorialClinicoActivo() {
                     <button onclick="prepararAgendaDesdeExpediente(${owner.id}, ${pet.id})" class="bg-blue-50 hover:bg-blue-100 text-blue-700 text-xs font-bold px-3 py-2 rounded-xl border border-blue-100 flex items-center gap-1">
                         <i data-lucide="calendar-plus" class="w-4 h-4"></i> Agendar
                     </button>
+                    <button type="button" onclick="abrirModalEstudioClinico(${owner.id}, ${pet.id})" class="bg-white hover:bg-slate-50 text-slate-700 text-xs font-bold px-3 py-2 rounded-xl border border-slate-200 flex items-center gap-1">
+                        <i data-lucide="file-plus-2" class="w-4 h-4"></i> Adjuntar estudio
+                    </button>
                 </div>
             </div>
         </section>
-        <section class="grid grid-cols-2 lg:grid-cols-5 gap-3">
+        <section class="grid grid-cols-2 lg:grid-cols-6 gap-3">
             <div class="bg-white border rounded-xl p-3">
                 <p class="text-[10px] font-bold uppercase text-slate-400">Consultas</p>
                 <p class="text-xl font-black text-slate-900">${historial.length}</p>
+            </div>
+            <div class="bg-white border rounded-xl p-3">
+                <p class="text-[10px] font-bold uppercase text-slate-400">Estudios</p>
+                <p class="text-xl font-black text-slate-900">${estudios.length}</p>
             </div>
             <div class="bg-white border rounded-xl p-3">
                 <p class="text-[10px] font-bold uppercase text-slate-400">Último peso</p>
@@ -198,6 +351,7 @@ function renderHistorialClinicoActivo() {
             </div>
         </section>
         ${ultimaVacuna ? `<section class="bg-blue-50 border border-blue-100 rounded-xl p-3 text-xs text-blue-900"><b>Últimas vacunas:</b> ${ultimaVacuna.vacunas} · ${formatoFechaCorta(fechaConsultaObj(ultimaVacuna))}</section>` : ''}
+        ${renderEstudiosClinicos(owner, pet)}
         <section class="flex flex-wrap gap-2">
             ${renderBotonesFiltroHistorial(historial)}
         </section>
@@ -594,8 +748,8 @@ document.addEventListener('DOMContentLoaded', () => {
 function salvarMascotaData(oId, pId, nm, sp, ag, spy, b64) {
     clientes = clientes.map(c => {
         if(c.id === oId) {
-            if(pId) c.mascotas = c.mascotas.map(m => m.id===parseInt(pId) ? {...m, name:nm, species:sp, age:ag, spayed:spy, photo:b64||m.photo} : m);
-            else c.mascotas.push({ id: Date.now(), name:nm, species:sp, age:ag, spayed:spy, photo:b64, historial:[] });
+            if(pId) c.mascotas = c.mascotas.map(m => m.id===parseInt(pId) ? {...m, name:nm, species:sp, age:ag, spayed:spy, photo:b64||m.photo, estudios: estudiosPaciente(m)} : m);
+            else c.mascotas.push({ id: Date.now(), name:nm, species:sp, age:ag, spayed:spy, photo:b64, estudios:[], historial:[] });
         }
         return c;
     });
