@@ -1,0 +1,19 @@
+{
+  "name": "VetHome Pro",
+  "short_name": "VetHome",
+  "description": "Sistema veterinario a domicilio para expedientes, agenda, stock y finanzas.",
+  "start_url": "/index.html",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#f1f5f9",
+  "theme_color": "#0f172a",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "icon.svg",
+      "sizes": "512x512",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

@@ -2,8 +2,13 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="theme-color" content="#0f172a">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="VetHome Pro">
     <title>VetHome Pro - MVZ Daniela Valenzuela</title>
+    <link rel="manifest" href="manifest.webmanifest">
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
@@ -25,7 +30,10 @@
                 </div>
 
                 <nav class="space-y-2">
-                    <button onclick="switchTab('clientes')" id="nav-clientes" class="w-full flex items-center gap-3 px-4 py-3 bg-amber-500 rounded-xl text-left font-bold text-slate-950 transition-all shadow-md">
+                    <button onclick="switchTab('dashboard')" id="nav-dashboard" class="w-full flex items-center gap-3 px-4 py-3 bg-amber-500 rounded-xl text-left font-bold text-slate-950 transition-all shadow-md">
+                        <i data-lucide="layout-dashboard" class="w-5 h-5"></i> Inicio
+                    </button>
+                    <button onclick="switchTab('clientes')" id="nav-clientes" class="w-full flex items-center gap-3 px-4 py-3 hover:bg-white/10 text-blue-100 hover:text-white rounded-xl text-left font-medium transition-all">
                         <i data-lucide="users" class="w-5 h-5"></i> Clientes y Mascotas
                     </button>
                     <button onclick="switchTab('agenda')" id="nav-agenda" class="w-full flex items-center gap-3 px-4 py-3 hover:bg-white/10 text-blue-100 hover:text-white rounded-xl text-left font-medium transition-all">
@@ -84,11 +92,11 @@
     </div>
 
     <main class="flex-1 flex flex-col overflow-hidden glass-main">
-        <header class="bg-white/80 border-b border-gray-200 h-16 flex items-center justify-between px-6 z-10 backdrop-blur-md">
+        <header class="bg-white/80 border-b border-gray-200 min-h-16 flex items-center justify-between gap-3 px-4 sm:px-6 py-3 z-10 backdrop-blur-md">
             <div class="flex items-center gap-3">
-                <h2 id="page-title" class="text-lg font-bold text-slate-800">Clientes y Mascotas</h2>
+                <h2 id="page-title" class="text-lg font-bold text-slate-800">Inicio</h2>
             </div>
-            <div class="flex items-center gap-2 text-xs font-semibold text-blue-800 bg-blue-50 px-3 py-1.5 rounded-full border border-blue-100">
+            <div class="hidden sm:flex items-center gap-2 text-xs font-semibold text-blue-800 bg-blue-50 px-3 py-1.5 rounded-full border border-blue-100">
                 <i data-lucide="pen-tool" class="w-4 h-4 text-blue-600"></i> Sistema a Domicilio Activo
             </div>
         </header>
@@ -100,9 +108,92 @@
             </div>
         </div>
 
-        <div class="flex-1 overflow-y-auto p-6 space-y-6 pb-24 md:pb-6">
+        <div class="flex-1 overflow-y-auto p-4 sm:p-6 space-y-6 pb-28 md:pb-6">
             
-            <section id="view-clientes" class="space-y-6">
+            <section id="view-dashboard" class="space-y-6">
+                <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+                    <div class="bg-white border border-gray-200 rounded-xl p-4 shadow-xs">
+                        <div class="flex items-center justify-between">
+                            <span class="text-[10px] font-bold uppercase text-slate-400">Citas hoy</span>
+                            <i data-lucide="calendar-check" class="w-4 h-4 text-blue-600"></i>
+                        </div>
+                        <p class="text-3xl font-black text-slate-900 mt-2" id="dash-citas-hoy">0</p>
+                    </div>
+                    <div class="bg-white border border-gray-200 rounded-xl p-4 shadow-xs">
+                        <div class="flex items-center justify-between">
+                            <span class="text-[10px] font-bold uppercase text-slate-400">Ingresos hoy</span>
+                            <i data-lucide="badge-dollar-sign" class="w-4 h-4 text-emerald-600"></i>
+                        </div>
+                        <p class="text-3xl font-black text-emerald-700 mt-2">$<span id="dash-ingresos-hoy">0.00</span></p>
+                    </div>
+                    <div class="bg-white border border-gray-200 rounded-xl p-4 shadow-xs">
+                        <div class="flex items-center justify-between">
+                            <span class="text-[10px] font-bold uppercase text-slate-400">Pagos pendientes</span>
+                            <i data-lucide="clock-alert" class="w-4 h-4 text-rose-600"></i>
+                        </div>
+                        <p class="text-3xl font-black text-rose-700 mt-2">$<span id="dash-pendiente">0.00</span></p>
+                    </div>
+                    <div class="bg-white border border-gray-200 rounded-xl p-4 shadow-xs">
+                        <div class="flex items-center justify-between">
+                            <span class="text-[10px] font-bold uppercase text-slate-400">Stock crítico</span>
+                            <i data-lucide="package-search" class="w-4 h-4 text-amber-600"></i>
+                        </div>
+                        <p class="text-3xl font-black text-amber-700 mt-2" id="dash-stock-critico">0</p>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 xl:grid-cols-3 gap-6">
+                    <div class="xl:col-span-2 bg-white border border-gray-200 rounded-xl p-5 shadow-xs space-y-4">
+                        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                            <div>
+                                <h3 class="text-base font-bold text-slate-900">Agenda de hoy</h3>
+                                <p class="text-xs text-slate-500">Visitas activas y acciones rápidas para trabajar el día.</p>
+                            </div>
+                            <button type="button" onclick="switchTab('agenda')" class="bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold px-3 py-2 rounded-xl flex items-center gap-2 w-full sm:w-auto justify-center">
+                                <i data-lucide="calendar-plus" class="w-4 h-4"></i> Ver agenda
+                            </button>
+                        </div>
+                        <div id="dash-lista-agenda" class="space-y-2"></div>
+                    </div>
+                    <div class="bg-white border border-gray-200 rounded-xl p-5 shadow-xs space-y-4">
+                        <div>
+                            <h3 class="text-base font-bold text-slate-900">Accesos rápidos</h3>
+                            <p class="text-xs text-slate-500">Tareas frecuentes sin buscar entre secciones.</p>
+                        </div>
+                        <div class="grid grid-cols-2 gap-2">
+                            <button type="button" onclick="switchTab('clientes'); abrirModalCliente()" class="bg-slate-900 text-white rounded-xl p-3 text-xs font-bold flex flex-col items-center gap-2">
+                                <i data-lucide="user-plus" class="w-5 h-5"></i> Cliente
+                            </button>
+                            <button type="button" onclick="switchTab('agenda')" class="bg-blue-50 text-blue-700 border border-blue-100 rounded-xl p-3 text-xs font-bold flex flex-col items-center gap-2">
+                                <i data-lucide="calendar-plus" class="w-5 h-5"></i> Cita
+                            </button>
+                            <button type="button" onclick="switchTab('inventario')" class="bg-amber-50 text-amber-700 border border-amber-100 rounded-xl p-3 text-xs font-bold flex flex-col items-center gap-2">
+                                <i data-lucide="package-plus" class="w-5 h-5"></i> Stock
+                            </button>
+                            <button type="button" onclick="switchTab('finanzas')" class="bg-emerald-50 text-emerald-700 border border-emerald-100 rounded-xl p-3 text-xs font-bold flex flex-col items-center gap-2">
+                                <i data-lucide="chart-no-axes-combined" class="w-5 h-5"></i> Finanzas
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                    <div class="bg-white border border-gray-200 rounded-xl p-5 shadow-xs">
+                        <h3 class="text-sm font-bold text-slate-900 mb-3">Pacientes recientes</h3>
+                        <div id="dash-pacientes-recientes" class="space-y-2"></div>
+                    </div>
+                    <div class="bg-white border border-gray-200 rounded-xl p-5 shadow-xs">
+                        <h3 class="text-sm font-bold text-slate-900 mb-3">Stock por atender</h3>
+                        <div id="dash-stock-lista" class="space-y-2"></div>
+                    </div>
+                    <div class="bg-white border border-gray-200 rounded-xl p-5 shadow-xs">
+                        <h3 class="text-sm font-bold text-slate-900 mb-3">Cobros pendientes</h3>
+                        <div id="dash-pagos-pendientes" class="space-y-2"></div>
+                    </div>
+                </div>
+            </section>
+
+            <section id="view-clientes" class="hidden space-y-6">
                 <div id="directorio-clientes-area" class="space-y-6">
                     <div class="bg-white p-4 rounded-2xl border border-gray-200 shadow-xs flex flex-col sm:flex-row gap-3 items-center justify-between">
                         <div class="relative w-full sm:w-96">
@@ -654,7 +745,7 @@
     </main>
 
     <div id="modal-responsiva" class="fixed inset-0 bg-slate-950/70 z-50 flex items-center justify-center p-4 hidden backdrop-blur-xs">
-        <div class="bg-white rounded-2xl max-w-3xl w-full h-[90vh] flex flex-col shadow-2xl overflow-hidden border border-slate-200">
+        <div class="modal-mobile-sheet bg-white rounded-2xl max-w-3xl w-full h-[90vh] flex flex-col shadow-2xl overflow-hidden border border-slate-200">
             <div class="bg-slate-950 text-white p-5 flex justify-between items-center shrink-0">
                 <div class="flex items-center gap-3">
                     <div class="p-2 bg-amber-500 text-slate-950 rounded-xl shadow-xs">
@@ -693,11 +784,26 @@
                         <p class="text-justify" id="resp-parrafo-declaracion">Declaro que la información proporcionada sobre el estado de salud de mi mascota es veraz, completa y actualizada. Asimismo, informo cualquier antecedente médico, enfermedad previa, tratamiento reciente o síntomas presentes antes de la atención veterinaria.</p>
                         
                         <div class="mt-2 p-3 border rounded-xl bg-gray-50/70" id="resp-sintomas-box"></div>
+                        <div class="mt-2 text-[10px] text-slate-600 bg-slate-50 p-3 rounded-xl border border-slate-200">
+                            <p class="font-bold text-slate-800 mb-1">Entiendo que es mi responsabilidad informar cualquier signo clínico, incluyendo, pero no limitándose a:</p>
+                            <p>vómito, diarrea, fiebre, decaimiento, pérdida de apetito, tos, secreciones, contacto con animales enfermos, tratamientos o medicamentos recientes.</p>
+                        </div>
+                    </div>
+
+                    <div>
+                        <h5 class="font-bold text-slate-900 uppercase text-[11px] border-b pb-0.5 mb-1.5">### SOBRE LOS SERVICIOS A DOMICILIO</h5>
+                        <p class="text-justify">Entiendo que los servicios veterinarios a domicilio se realizan bajo las condiciones disponibles en el entorno del paciente y que algunos procedimientos, estudios diagnósticos o tratamientos pueden requerir atención en clínica u hospital veterinario para garantizar la seguridad y bienestar de la mascota.</p>
+                        <p class="text-justify mt-2">Reconozco que la consulta a domicilio no sustituye hospitalización, monitoreo continuo ni servicios de emergencia veterinaria.</p>
                     </div>
 
                     <div>
                         <h5 class="font-bold text-slate-900 uppercase text-[11px] border-b pb-0.5 mb-1.5">### CONSENTIMIENTO Y RESPONSIVA</h5>
-                        <p class="text-justify" id="resp-parrafo-consentimiento">Entiendo y acepto que la aplicación de vacunas o tratamientos en animales que ya cursan con enfermedades, infecciones o padecimientos no reportados puede incrementar el riesgo de complicaciones graves, reacciones adversas e incluso el fallecimiento de la mascota. Acepto que el médico veterinario no será responsable por complicaciones, deterioro en la salud o fallecimiento derivados de enfermedades, síntomas o antecedentes clínicos omitidos, ocultados o no informados por el propietario antes del procedimiento.</p>
+                        <p class="text-justify" id="resp-parrafo-consentimiento">Entiendo y acepto que la aplicación de vacunas o tratamientos en animales que ya cursan con enfermedades, infecciones o padecimientos no reportados puede incrementar el riesgo de complicaciones graves, reacciones adversas e incluso el fallecimiento de la mascota. Asimismo, acepto que el médico veterinario no será responsable por complicaciones, deterioro en la salud o fallecimiento derivados de enfermedades, síntomas o antecedentes clínicos omitidos, ocultados o no informados por el propietario antes del procedimiento, siempre que la atención haya sido brindada conforme a la práctica veterinaria adecuada. El médico veterinario podrá negarse a realizar procedimientos, aplicar vacunas o administrar tratamientos si considera que la mascota requiere valoración clínica adicional, estudios diagnósticos o atención hospitalaria para salvaguardar su bienestar.</p>
+                    </div>
+
+                    <div>
+                        <h5 class="font-bold text-slate-900 uppercase text-[11px] border-b pb-0.5 mb-1.5">### FIRMA DE CONFORMIDAD</h5>
+                        <p class="text-justify">Declaro haber leído y comprendido el presente documento, así como haber tenido oportunidad de resolver mis dudas antes de autorizar el procedimiento.</p>
                     </div>
 
                     <div>
@@ -746,7 +852,7 @@
     </div>
 
     <div id="modal-cliente" class="fixed inset-0 bg-slate-950/70 z-50 flex items-center justify-center p-4 hidden backdrop-blur-xs">
-        <div class="bg-white rounded-2xl max-w-lg w-full p-6 space-y-4 shadow-2xl relative border">
+        <div class="modal-mobile-sheet bg-white rounded-2xl max-w-lg w-full p-6 space-y-4 shadow-2xl relative border overflow-y-auto">
             <button onclick="cerrarModalCliente()" class="absolute right-4 top-4 bg-gray-100 hover:bg-gray-200 text-gray-600 p-2 rounded-xl">
                 <i data-lucide="x" class="w-4 h-4"></i>
             </button>
@@ -785,7 +891,7 @@
     </div>
 
     <div id="modal-historial-clinico" class="fixed inset-0 bg-slate-950/70 z-50 flex items-center justify-center p-4 hidden backdrop-blur-xs">
-        <div class="bg-white rounded-2xl max-w-3xl w-full h-[85vh] flex flex-col shadow-2xl overflow-hidden border border-slate-200">
+        <div class="modal-mobile-sheet bg-white rounded-2xl max-w-5xl w-full h-[88vh] flex flex-col shadow-2xl overflow-hidden border border-slate-200">
             <div class="bg-slate-900 text-white p-5 flex justify-between items-center shrink-0">
                 <div class="flex items-center gap-3">
                     <div class="p-2 bg-amber-500 text-slate-950 rounded-xl shadow-xs">
@@ -809,7 +915,7 @@
     </div>
 
     <div id="modal-id-viewer" class="fixed inset-0 bg-slate-950/80 z-50 flex items-center justify-center p-4 hidden backdrop-blur-sm">
-        <div class="bg-white rounded-2xl max-w-lg w-full p-4 flex flex-col shadow-2xl relative border">
+        <div class="modal-mobile-sheet bg-white rounded-2xl max-w-lg w-full p-4 flex flex-col shadow-2xl relative border">
             <button onclick="cerrarVisorID()" class="absolute right-3 top-3 bg-slate-900 text-white p-2 rounded-full shadow hover:bg-slate-800 z-10"><i data-lucide="x" class="w-4 h-4"></i></button>
             <h4 class="font-bold text-sm text-slate-800 mb-2 uppercase tracking-wide flex items-center gap-1.5"><i data-lucide="image" class="text-blue-600"></i> Verificación de ID Oficial</h4>
             <div class="bg-slate-100 rounded-xl overflow-hidden border flex justify-center items-center p-1 min-h-[250px]">
@@ -819,7 +925,7 @@
     </div>
 
     <div id="modal-duplicado" class="fixed inset-0 bg-slate-950/70 z-50 flex items-center justify-center p-4 hidden backdrop-blur-xs">
-        <div class="bg-white rounded-2xl max-w-md w-full p-6 space-y-4 shadow-2xl">
+        <div class="modal-mobile-sheet bg-white rounded-2xl max-w-md w-full p-6 space-y-4 shadow-2xl overflow-y-auto">
             <div class="flex items-center gap-3 text-amber-600 border-b pb-3">
                 <i data-lucide="alert-octagon" class="w-7 h-7"></i>
                 <h3 class="text-base font-bold text-slate-900">¿Cliente ya Registrado?</h3>
@@ -838,7 +944,7 @@
     </div>
 
     <div id="modal-agregar-mascota" class="fixed inset-0 bg-slate-950/60 z-50 flex items-center justify-center p-4 hidden backdrop-blur-xs">
-        <div class="bg-white rounded-2xl max-w-md w-full p-6 space-y-4 shadow-xl">
+        <div class="modal-mobile-sheet bg-white rounded-2xl max-w-md w-full p-6 space-y-4 shadow-xl overflow-y-auto">
             <div class="flex justify-between items-center border-b pb-3">
                 <h3 class="text-md font-bold text-gray-900 flex items-center gap-2" id="titulo-modal-mascota">
                     <i data-lucide="dog" class="text-blue-600 w-5 h-5"></i> Registrar Paciente
@@ -882,11 +988,12 @@
         </div>
     </div>
 
-    <nav class="md:hidden fixed bottom-0 left-0 right-0 bg-slate-900 border-t border-blue-900 text-white h-16 flex items-center justify-around px-2 z-20 shadow-lg">
-        <button onclick="switchTab('clientes')" class="flex flex-col items-center text-blue-200"><i data-lucide="users" class="w-5 h-5"></i><span class="text-[10px] mt-1">Clientes</span></button>
-        <button onclick="switchTab('agenda')" class="flex flex-col items-center text-blue-200"><i data-lucide="calendar" class="w-5 h-5"></i><span class="text-[10px] mt-1">Agenda</span></button>
-        <button onclick="switchTab('inventario')" class="flex flex-col items-center text-blue-200"><i data-lucide="package" class="w-5 h-5"></i><span class="text-[10px] mt-1">Stock</span></button>
-        <button onclick="switchTab('finanzas')" class="flex flex-col items-center text-blue-200"><i data-lucide="dollar-sign" class="w-5 h-5"></i><span class="text-[10px] mt-1">Servicios</span></button>
+    <nav class="mobile-bottom-nav md:hidden fixed bottom-0 left-0 right-0 bg-slate-900 border-t border-blue-900 text-white min-h-16 flex items-center justify-around px-2 z-20 shadow-lg">
+        <button onclick="switchTab('dashboard')" id="nav-mobile-dashboard" class="flex flex-col items-center text-amber-300"><i data-lucide="layout-dashboard" class="w-5 h-5"></i><span class="text-[10px] mt-1">Inicio</span></button>
+        <button onclick="switchTab('clientes')" id="nav-mobile-clientes" class="flex flex-col items-center text-blue-200"><i data-lucide="users" class="w-5 h-5"></i><span class="text-[10px] mt-1">Clientes</span></button>
+        <button onclick="switchTab('agenda')" id="nav-mobile-agenda" class="flex flex-col items-center text-blue-200"><i data-lucide="calendar" class="w-5 h-5"></i><span class="text-[10px] mt-1">Agenda</span></button>
+        <button onclick="switchTab('inventario')" id="nav-mobile-inventario" class="flex flex-col items-center text-blue-200"><i data-lucide="package" class="w-5 h-5"></i><span class="text-[10px] mt-1">Stock</span></button>
+        <button onclick="switchTab('finanzas')" id="nav-mobile-finanzas" class="flex flex-col items-center text-blue-200"><i data-lucide="dollar-sign" class="w-5 h-5"></i><span class="text-[10px] mt-1">Finanzas</span></button>
     </nav>
 
     <script src="js/00-supabase.js"></script>
