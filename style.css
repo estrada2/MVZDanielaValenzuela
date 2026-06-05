@@ -53,6 +53,10 @@
             height: calc(4rem + env(safe-area-inset-bottom));
         }
 
+        .edit-consulta-sheet {
+            max-height: calc(100dvh - 1.5rem);
+        }
+
         @media (max-width: 767px) {
             .app-header {
                 padding-top: calc(0.75rem + env(safe-area-inset-top));
@@ -77,5 +81,15 @@
                 max-height: calc(100dvh - 1rem);
                 border-radius: 1rem 1rem 0 0;
                 align-self: flex-end;
+            }
+
+            .edit-consulta-sheet {
+                height: calc(100dvh - 0.5rem);
+                max-height: calc(100dvh - 0.5rem);
+                border-radius: 1rem 1rem 0 0;
+            }
+
+            .edit-consulta-footer {
+                padding-bottom: calc(0.75rem + env(safe-area-inset-bottom));
             }
         }
