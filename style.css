@@ -32,6 +32,10 @@
             cursor: crosshair;
         }
 
+        #video-captura-id {
+            background: #020617;
+        }
+
         .chip-checkbox input:checked + div {
             background-color: #dbeafe;
             border-color: #3b82f6;

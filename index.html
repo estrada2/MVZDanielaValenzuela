@@ -880,8 +880,25 @@
                     </div>
                 </div>
                 <div>
-                    <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Identificación Oficial (ID / INE)</label>
-                    <input type="file" id="owner-id-file" accept="image/*" class="w-full text-xs text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100">
+                    <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Fotografía de Identificación Oficial (INE / ID)</label>
+                    <div class="grid grid-cols-1 sm:grid-cols-[1fr_auto] gap-2">
+                        <input type="file" id="owner-id-file" accept="image/jpeg,image/png,image/webp,image/heic,image/heif" capture="environment" onchange="fotoIdentificacionCapturada=''; actualizarPreviewIdentificacionArchivo(this.files[0])" class="w-full text-xs text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100">
+                        <button type="button" onclick="abrirCamaraIdentificacion()" class="bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold px-3 py-2 rounded-xl flex items-center justify-center gap-2">
+                            <i data-lucide="camera" class="w-4 h-4"></i> Cámara
+                        </button>
+                    </div>
+                    <p class="text-[10px] text-slate-400 mt-1">Solo fotografía o escaneo en JPG, PNG, HEIC o WebP. No se aceptan PDF u otros archivos.</p>
+                    <div id="owner-id-preview" class="hidden mt-2 bg-slate-50 border rounded-xl p-2 flex items-center gap-3">
+                        <img id="owner-id-preview-img" class="w-20 h-14 rounded-lg object-cover border bg-white">
+                        <div>
+                            <p class="text-xs font-bold text-slate-700">Identificación lista</p>
+                            <p class="text-[10px] text-slate-400">Se guardará al guardar el propietario.</p>
+                        </div>
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Notas internas del propietario</label>
+                    <textarea id="owner-notes" rows="2" placeholder="Ej: prefiere WhatsApp, zona, forma de pago, observaciones..." class="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm outline-none"></textarea>
                 </div>
                 <button type="submit" id="btn-guardar-cliente" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 rounded-xl text-sm flex items-center justify-center gap-2 transition-all shadow-xs mt-2">
                     <i data-lucide="plus-circle" class="w-4 h-4"></i> Guardar Propietario
@@ -920,6 +937,38 @@
             <h4 class="font-bold text-sm text-slate-800 mb-2 uppercase tracking-wide flex items-center gap-1.5"><i data-lucide="image" class="text-blue-600"></i> Verificación de ID Oficial</h4>
             <div class="bg-slate-100 rounded-xl overflow-hidden border flex justify-center items-center p-1 min-h-[250px]">
                 <img id="img-visor-target" class="max-w-full max-h-[60vh] object-contain rounded-lg">
+            </div>
+        </div>
+    </div>
+
+    <div id="modal-captura-id" class="fixed inset-0 bg-slate-950/90 z-[70] flex items-center justify-center p-4 hidden backdrop-blur-sm">
+        <div class="modal-mobile-sheet bg-slate-950 rounded-2xl max-w-2xl w-full h-[86vh] flex flex-col shadow-2xl overflow-hidden border border-slate-800">
+            <div class="p-4 text-white flex items-center justify-between border-b border-white/10">
+                <div>
+                    <h3 class="text-sm font-bold">Capturar identificación</h3>
+                    <p class="text-[11px] text-slate-400">Coloca el INE/ID dentro del marco y captura.</p>
+                </div>
+                <button type="button" onclick="cerrarCamaraIdentificacion()" class="bg-white/10 hover:bg-white/20 p-2 rounded-xl">
+                    <i data-lucide="x" class="w-4 h-4"></i>
+                </button>
+            </div>
+            <div class="relative flex-1 bg-black overflow-hidden flex items-center justify-center">
+                <video id="video-captura-id" autoplay playsinline muted class="w-full h-full object-cover"></video>
+                <div class="absolute inset-0 pointer-events-none bg-slate-950/35"></div>
+                <div class="absolute w-[84%] max-w-xl aspect-[1.58/1] border-2 border-amber-400 rounded-xl shadow-[0_0_0_9999px_rgba(15,23,42,0.55)] pointer-events-none">
+                    <div class="absolute -top-7 left-0 right-0 text-center text-[11px] font-bold text-amber-200">Alinea la identificación dentro de esta zona</div>
+                    <div class="absolute -left-1 -top-1 w-8 h-8 border-l-4 border-t-4 border-white rounded-tl-xl"></div>
+                    <div class="absolute -right-1 -top-1 w-8 h-8 border-r-4 border-t-4 border-white rounded-tr-xl"></div>
+                    <div class="absolute -left-1 -bottom-1 w-8 h-8 border-l-4 border-b-4 border-white rounded-bl-xl"></div>
+                    <div class="absolute -right-1 -bottom-1 w-8 h-8 border-r-4 border-b-4 border-white rounded-br-xl"></div>
+                </div>
+                <canvas id="canvas-captura-id" class="hidden"></canvas>
+            </div>
+            <div class="p-4 bg-slate-950 border-t border-white/10 flex flex-col sm:flex-row gap-2">
+                <button type="button" onclick="capturarIdentificacionGuiada()" class="flex-1 bg-amber-500 hover:bg-amber-600 text-slate-950 font-black py-3 rounded-xl text-sm flex items-center justify-center gap-2">
+                    <i data-lucide="scan-line" class="w-4 h-4"></i> Capturar zona marcada
+                </button>
+                <button type="button" onclick="cerrarCamaraIdentificacion()" class="px-4 py-3 bg-white/10 text-white font-bold rounded-xl text-sm hover:bg-white/20">Cancelar</button>
             </div>
         </div>
     </div>
