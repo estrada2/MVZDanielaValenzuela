@@ -1,4 +1,6 @@
 let historialActivo = { ownerId: null, petId: null, filtro: 'todas' };
+let fotoIdentificacionCapturada = '';
+let streamIdentificacion = null;
 
 function fechaConsultaObj(consulta) {
     if (consulta.fechaISO) return new Date(consulta.fechaISO);
@@ -262,9 +264,13 @@ function renderClientes() {
         div.className = "p-4 bg-white rounded-xl border border-gray-200 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 hover:border-blue-200 hover:shadow-xs transition-all";
         div.innerHTML = `
             <div class="space-y-1">
-                <h4 class="text-sm font-bold text-slate-900">${c.owner}</h4>
+                <div class="flex flex-wrap items-center gap-2">
+                    <h4 class="text-sm font-bold text-slate-900">${c.owner}</h4>
+                    ${c.ownerIdFile ? `<button type="button" onclick="abrirVisorID('${c.ownerIdFile}')" class="text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-100 px-2 py-0.5 rounded-full flex items-center gap-1"><i data-lucide="badge-check" class="w-3 h-3"></i> ID verificado</button>` : `<span class="text-[10px] font-bold text-amber-700 bg-amber-50 border border-amber-100 px-2 py-0.5 rounded-full">ID pendiente</span>`}
+                </div>
                 <p class="text-xs text-gray-500">📍 ${c.address} • 📱 ${c.phone}</p>
                 <p class="text-[11px] font-bold text-blue-700">${c.mascotas ? c.mascotas.length : 0} mascotas en archivo</p>
+                ${c.ownerNotes ? `<p class="text-[11px] text-slate-500 italic">Nota: ${c.ownerNotes}</p>` : ''}
                 ${mascotasCoincidentes.length ? `<p class="text-[11px] font-semibold text-emerald-700">Mascota encontrada: ${mascotasCoincidentes.join(', ')}</p>` : ''}
             </div>
             <div class="flex items-center gap-2 w-full sm:w-auto justify-end">
@@ -359,6 +365,8 @@ function eliminarMascotaDefinitiva(oId, pId) {
 }
 function abrirModalCliente(id = null) {
     $('form-cliente').reset(); 
+    fotoIdentificacionCapturada = '';
+    actualizarPreviewIdentificacion('');
     $('edit-cliente-id').value = id || '';
     if (id) {
         const c = clientes.find(cl => cl.id === id);
@@ -366,6 +374,8 @@ function abrirModalCliente(id = null) {
         $('address').value = c.address;
         $('phone').value = c.phone; 
         $('email').value = c.email || '';
+        if ($('owner-notes')) $('owner-notes').value = c.ownerNotes || '';
+        if (c.ownerIdFile) actualizarPreviewIdentificacion(c.ownerIdFile);
         $('titulo-form-cliente').innerHTML = `<i data-lucide="edit" class="text-amber-600 w-5 h-5"></i> Modificar Propietario`;
     } else { 
         $('titulo-form-cliente').innerHTML = `<i data-lucide="user-plus" class="text-blue-600 w-5 h-5"></i> Registrar Propietario`; 
@@ -374,6 +384,89 @@ function abrirModalCliente(id = null) {
     renderIcons();
 }
 function cerrarModalCliente() { $('modal-cliente').classList.add('hidden'); }
+function actualizarPreviewIdentificacion(src) {
+    const preview = $('owner-id-preview');
+    const img = $('owner-id-preview-img');
+    if (!preview || !img) return;
+    preview.classList.toggle('hidden', !src);
+    if (src) img.src = src;
+}
+function actualizarPreviewIdentificacionArchivo(file) {
+    if (!file) {
+        actualizarPreviewIdentificacion('');
+        return;
+    }
+    if (!archivoEsImagenIdentificacion(file)) {
+        alert("La identificación debe ser una fotografía o imagen válida: JPG, PNG, HEIC o WebP. No se aceptan PDF u otros archivos.");
+        $('owner-id-file').value = "";
+        actualizarPreviewIdentificacion('');
+        return;
+    }
+    const reader = new FileReader();
+    reader.onload = ev => actualizarPreviewIdentificacion(ev.target.result);
+    reader.readAsDataURL(file);
+}
+function archivoEsImagenIdentificacion(file) {
+    if (!file) return true;
+    const tiposPermitidos = ['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/heif'];
+    const extensionesPermitidas = ['jpg', 'jpeg', 'png', 'webp', 'heic', 'heif'];
+    const extension = String(file.name || '').split('.').pop().toLowerCase();
+    return tiposPermitidos.includes(file.type) || extensionesPermitidas.includes(extension);
+}
+async function abrirCamaraIdentificacion() {
+    if (!navigator.mediaDevices?.getUserMedia) {
+        alert("Este navegador no permite abrir la cámara desde la app. Usa el botón de archivo para tomar o seleccionar la foto.");
+        return;
+    }
+    $('modal-captura-id')?.classList.remove('hidden');
+    try {
+        streamIdentificacion = await navigator.mediaDevices.getUserMedia({
+            video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } },
+            audio: false
+        });
+        const video = $('video-captura-id');
+        if (video) video.srcObject = streamIdentificacion;
+    } catch (error) {
+        console.error('No se pudo abrir la cámara para identificación.', error);
+        alert("No se pudo abrir la cámara. Revisa permisos del navegador o usa el selector de archivo.");
+        cerrarCamaraIdentificacion();
+    }
+    renderIcons();
+}
+function cerrarCamaraIdentificacion() {
+    if (streamIdentificacion) {
+        streamIdentificacion.getTracks().forEach(track => track.stop());
+        streamIdentificacion = null;
+    }
+    const video = $('video-captura-id');
+    if (video) video.srcObject = null;
+    $('modal-captura-id')?.classList.add('hidden');
+}
+function capturarIdentificacionGuiada() {
+    const video = $('video-captura-id');
+    const canvas = $('canvas-captura-id');
+    if (!video || !canvas || !video.videoWidth) {
+        alert("La cámara todavía no está lista.");
+        return;
+    }
+    const aspect = 1.58;
+    let cropWidth = video.videoWidth * 0.84;
+    let cropHeight = cropWidth / aspect;
+    if (cropHeight > video.videoHeight * 0.72) {
+        cropHeight = video.videoHeight * 0.72;
+        cropWidth = cropHeight * aspect;
+    }
+    const sx = (video.videoWidth - cropWidth) / 2;
+    const sy = (video.videoHeight - cropHeight) / 2;
+    canvas.width = 1000;
+    canvas.height = Math.round(1000 / aspect);
+    const ctx = canvas.getContext('2d');
+    ctx.drawImage(video, sx, sy, cropWidth, cropHeight, 0, 0, canvas.width, canvas.height);
+    fotoIdentificacionCapturada = canvas.toDataURL('image/jpeg', 0.9);
+    if ($('owner-id-file')) $('owner-id-file').value = '';
+    actualizarPreviewIdentificacion(fotoIdentificacionCapturada);
+    cerrarCamaraIdentificacion();
+}
 function validarYPrevenirDuplicado(e) {
     e.preventDefault();
     const id = $('edit-cliente-id').value;
@@ -381,25 +474,33 @@ function validarYPrevenirDuplicado(e) {
     const ph = $('phone').value;
     const ad = $('address').value; 
     const em = $('email').value;
+    const notes = $('owner-notes')?.value || '';
     const f = $('owner-id-file');
     if(!id && clientes.find(c => c.owner.toLowerCase() === ow.toLowerCase() || c.phone === ph)) {
         alert("Ya existe un cliente registrado con este nombre o teléfono."); 
         return;
     }
-    if(f && f.files[0]) {
+    if (fotoIdentificacionCapturada) {
+        finalizarGuardadoCliente(ow, ph, ad, em, fotoIdentificacionCapturada, notes, id);
+    } else if(f && f.files[0]) {
+        if (!archivoEsImagenIdentificacion(f.files[0])) {
+            alert("La identificación debe ser una fotografía o imagen válida: JPG, PNG, HEIC o WebP. No se aceptan PDF u otros archivos.");
+            f.value = "";
+            return;
+        }
         const r = new FileReader(); 
-        r.onload = ev => { finalizarGuardadoCliente(ow, ph, ad, em, ev.target.result, id); }; 
+        r.onload = ev => { finalizarGuardadoCliente(ow, ph, ad, em, ev.target.result, notes, id); }; 
         r.readAsDataURL(f.files[0]);
     } else {
         const exist = clientes.find(c=>c.id===parseInt(id)); 
-        finalizarGuardadoCliente(ow, ph, ad, em, exist?.ownerIdFile, id);
+        finalizarGuardadoCliente(ow, ph, ad, em, exist?.ownerIdFile, notes, id);
     }
 }
-function finalizarGuardadoCliente(ow, ph, ad, em, b64, id) {
+function finalizarGuardadoCliente(ow, ph, ad, em, b64, notes, id) {
     if(id) {
-        clientes = clientes.map(c => c.id===parseInt(id) ? {...c, owner:ow, phone:ph, address:ad, email:em, ownerIdFile:b64||c.ownerIdFile} : c);
+        clientes = clientes.map(c => c.id===parseInt(id) ? {...c, owner:ow, phone:ph, address:ad, email:em, ownerNotes: notes, ownerIdFile:b64||c.ownerIdFile} : c);
     } else {
-        clientes.push({ id: Date.now(), owner:ow, phone:ph, address:ad, email:em, ownerIdFile:b64, mascotas: [] });
+        clientes.push({ id: Date.now(), owner:ow, phone:ph, address:ad, email:em, ownerNotes: notes, ownerIdFile:b64, mascotas: [] });
     }
     saveStore('clientes'); 
     cerrarModalCliente(); 

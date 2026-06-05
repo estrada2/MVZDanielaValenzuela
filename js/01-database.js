@@ -69,6 +69,7 @@ function mapearEstadoNormalizado(rows) {
             phone: row.telefono || '',
             email: row.email || '',
             address: row.direccion || '',
+            ownerNotes: row.notas || '',
             ownerIdFile: row.id_photo || '',
             mascotas: []
         });
@@ -209,6 +210,7 @@ async function guardarEstadoBaseNormalizada() {
         telefono: cliente.phone || '',
         email: cliente.email || '',
         direccion: cliente.address || '',
+        notas: cliente.ownerNotes || '',
         id_photo: cliente.ownerIdFile || '',
         updated_at: new Date().toISOString()
     }));
