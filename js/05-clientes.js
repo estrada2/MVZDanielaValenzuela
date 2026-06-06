@@ -789,12 +789,12 @@ function renderClientes() {
                 ${c.ownerNotes ? `<p class="text-[11px] text-slate-500 italic">Nota: ${c.ownerNotes}</p>` : ''}
                 ${mascotasCoincidentes.length ? `<p class="text-[11px] font-semibold text-emerald-700">Mascota encontrada: ${mascotasCoincidentes.join(', ')}</p>` : ''}
             </div>
-            <div class="flex items-center gap-2 w-full sm:w-auto justify-end">
+            <div class="client-actions">
                 ${tel ? `<a href="https://wa.me/52${tel}" target="_blank" rel="noopener" class="icon-action text-emerald-700" title="WhatsApp"><i data-lucide="message-circle" class="w-4 h-4"></i> WhatsApp</a>` : ''}
                 <button onclick="verMascotasCliente(${c.id})" class="btn-primary">Mascotas</button>
-                <details class="action-menu">
+                <details class="action-menu row-action-menu client-more-menu">
                     <summary class="icon-action cursor-pointer" title="Más acciones"><i data-lucide="more-horizontal" class="w-4 h-4"></i> Más</summary>
-                    <div class="action-menu-popover">
+                    <div class="action-menu-popover row-action-panel">
                         ${tel ? `<a href="tel:${tel}"><i data-lucide="phone" class="w-4 h-4 text-blue-700"></i> Llamar</a>` : ''}
                         <button type="button" onclick="abrirModalCliente(${c.id})"><i data-lucide="edit-3" class="w-4 h-4 text-amber-700"></i> Editar propietario</button>
                         <button type="button" onclick="eliminarClienteDefinitivo(${c.id})" class="text-rose-700"><i data-lucide="trash-2" class="w-4 h-4"></i> Eliminar</button>
@@ -863,9 +863,9 @@ function renderSubpaginaMascotas() {
                         <button onclick="abrirModalHistorial(${c.id}, ${m.id})" class="btn-soft text-amber-700">
                             <i data-lucide="folder-open" class="w-3.5 h-3.5"></i> Expediente (${totalConsultas})
                         </button>
-                        <details class="action-menu">
+                        <details class="action-menu row-action-menu pet-more-menu">
                             <summary class="icon-action cursor-pointer" title="Más acciones"><i data-lucide="more-horizontal" class="w-4 h-4"></i> Más</summary>
-                            <div class="action-menu-popover">
+                            <div class="action-menu-popover row-action-panel">
                                 <button type="button" onclick="abrirModalMascota(${c.id}, ${m.id})"><i data-lucide="edit" class="w-4 h-4 text-amber-700"></i> Editar paciente</button>
                                 <button type="button" onclick="eliminarMascotaDefinitiva(${c.id}, ${m.id})" class="text-rose-700"><i data-lucide="trash-2" class="w-4 h-4"></i> Eliminar</button>
                             </div>
