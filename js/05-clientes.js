@@ -49,6 +49,100 @@ function estudiosPaciente(pet) {
     return Array.isArray(pet?.estudios) ? pet.estudios : [];
 }
 
+function separarVacunasTexto(texto) {
+    return String(texto || '')
+        .split(/,|\+|;|\|/)
+        .map(item => item.trim())
+        .filter(Boolean);
+}
+
+function fechaMasUnAnio(fecha) {
+    if (!fecha || Number.isNaN(fecha.getTime())) return null;
+    const siguiente = new Date(fecha);
+    siguiente.setFullYear(siguiente.getFullYear() + 1);
+    return siguiente;
+}
+
+function estadoRefuerzoVacuna(fechaRefuerzo) {
+    if (!fechaRefuerzo) return { label: 'Sin fecha', className: 'bg-slate-100 text-slate-600 border-slate-200' };
+    const hoy = new Date();
+    hoy.setHours(0, 0, 0, 0);
+    const dias = Math.ceil((fechaRefuerzo.getTime() - hoy.getTime()) / (1000 * 60 * 60 * 24));
+    if (dias < 0) return { label: 'Refuerzo vencido', className: 'bg-rose-100 text-rose-700 border-rose-200' };
+    if (dias <= 45) return { label: 'Próximo refuerzo', className: 'bg-amber-100 text-amber-700 border-amber-200' };
+    return { label: 'Vigente', className: 'bg-emerald-100 text-emerald-700 border-emerald-200' };
+}
+
+function vacunasPacienteDesdeHistorial(pet) {
+    return (pet?.historial || [])
+        .filter(consulta => consulta.tipo === 'Vacunacion' && consulta.vacunas)
+        .flatMap(consulta => {
+            const fechaAplicacion = fechaConsultaObj(consulta);
+            return separarVacunasTexto(consulta.vacunas).map(nombre => ({
+                id: `${consulta.id}-${nombre}`,
+                consultaId: consulta.id,
+                nombre,
+                fechaAplicacion,
+                fechaRefuerzo: fechaMasUnAnio(fechaAplicacion),
+                desparasitante: consulta.desparasitante || '',
+                nota: consulta.motivo || 'Vacunación / profilaxis'
+            }));
+        })
+        .sort((a, b) => (b.fechaAplicacion?.getTime() || 0) - (a.fechaAplicacion?.getTime() || 0));
+}
+
+function renderVacunasYRefuerzos(owner, pet) {
+    const vacunas = vacunasPacienteDesdeHistorial(pet);
+    if (!vacunas.length) {
+        return `
+            <section class="bg-white border border-gray-200 rounded-2xl p-4 shadow-xs">
+                <div class="flex items-center justify-between gap-3">
+                    <div>
+                        <p class="text-[10px] font-bold uppercase text-slate-400">Vacunas y refuerzos</p>
+                        <h4 class="text-base font-black text-slate-900">Sin vacunas registradas</h4>
+                    </div>
+                    <button type="button" onclick="cerrarModalHistorial(); cargarPacienteAConsulta(${owner.id}, ${pet.id})" class="bg-blue-50 text-blue-700 border border-blue-100 text-xs font-bold px-3 py-2 rounded-xl flex items-center gap-1">
+                        <i data-lucide="syringe" class="w-4 h-4"></i> Registrar
+                    </button>
+                </div>
+                <p class="text-xs text-slate-500 mt-2">Cuando guardes una consulta de vacunación, aquí aparecerá la fecha de aplicación y el refuerzo anual sugerido.</p>
+            </section>
+        `;
+    }
+    return `
+        <section class="bg-white border border-gray-200 rounded-2xl p-4 shadow-xs space-y-3">
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div>
+                    <p class="text-[10px] font-bold uppercase text-slate-400">Vacunas y refuerzos</p>
+                    <h4 class="text-base font-black text-slate-900">Control anual de vacunas</h4>
+                </div>
+                <span class="text-[11px] font-bold text-blue-700 bg-blue-50 border border-blue-100 px-2.5 py-1 rounded-full">${vacunas.length} registro${vacunas.length === 1 ? '' : 's'}</span>
+            </div>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
+                ${vacunas.map(vacuna => {
+                    const estado = estadoRefuerzoVacuna(vacuna.fechaRefuerzo);
+                    return `
+                        <article class="border border-slate-200 rounded-xl p-3 bg-slate-50 flex items-start gap-3">
+                            <div class="w-10 h-10 rounded-xl bg-blue-50 text-blue-700 border border-blue-100 flex items-center justify-center shrink-0">
+                                <i data-lucide="syringe" class="w-5 h-5"></i>
+                            </div>
+                            <div class="min-w-0 flex-1">
+                                <div class="flex flex-wrap items-center gap-2">
+                                    <p class="text-sm font-black text-slate-900">${escapeHTML(vacuna.nombre)}</p>
+                                    <span class="text-[10px] font-bold px-2 py-0.5 rounded-full border ${estado.className}">${estado.label}</span>
+                                </div>
+                                <p class="text-[11px] text-slate-500 mt-1"><b>Aplicada:</b> ${formatoFechaCorta(vacuna.fechaAplicacion)}</p>
+                                <p class="text-[11px] text-slate-500"><b>Refuerzo anual:</b> ${formatoFechaCorta(vacuna.fechaRefuerzo)}</p>
+                                ${vacuna.desparasitante && vacuna.desparasitante !== 'No' ? `<p class="text-[10px] text-slate-400 mt-1">Desparasitante: ${escapeHTML(vacuna.desparasitante)}</p>` : ''}
+                            </div>
+                        </article>
+                    `;
+                }).join('')}
+            </div>
+        </section>
+    `;
+}
+
 function archivoEsPDF(file) {
     return file && (file.type === 'application/pdf' || /\.pdf$/i.test(file.name || ''));
 }
@@ -357,6 +451,7 @@ function renderHistorialClinicoActivo() {
             </div>
         </section>
         ${ultimaVacuna ? `<section class="bg-blue-50 border border-blue-100 rounded-xl p-3 text-xs text-blue-900"><b>Últimas vacunas:</b> ${ultimaVacuna.vacunas} · ${formatoFechaCorta(fechaConsultaObj(ultimaVacuna))}</section>` : ''}
+        ${renderVacunasYRefuerzos(owner, pet)}
         ${renderEstudiosClinicos(owner, pet)}
         <section class="flex flex-wrap gap-2">
             ${renderBotonesFiltroHistorial(historial)}
