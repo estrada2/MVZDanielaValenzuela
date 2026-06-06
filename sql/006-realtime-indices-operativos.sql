@@ -14,6 +14,7 @@ declare
         'consultas',
         'pagos',
         'servicios_externos',
+        'clinicas_externas',
         'gastos',
         'movimientos_inventario',
         'vacunas_paciente',
@@ -77,6 +78,12 @@ begin
     select count(*) into faltantes from unnest(columnas) c where not exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'servicios_externos' and column_name = c);
     if to_regclass('public.servicios_externos') is not null and faltantes = 0 then
         create index if not exists idx_servicios_externos_scope_fecha on public.servicios_externos (workspace_id, user_id, fecha_iso desc);
+    end if;
+
+    columnas := array['workspace_id', 'user_id', 'nombre'];
+    select count(*) into faltantes from unnest(columnas) c where not exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'clinicas_externas' and column_name = c);
+    if to_regclass('public.clinicas_externas') is not null and faltantes = 0 then
+        create index if not exists idx_clinicas_externas_scope_nombre on public.clinicas_externas (workspace_id, user_id, nombre);
     end if;
 
     columnas := array['workspace_id', 'user_id', 'stock', 'stock_minimo'];
