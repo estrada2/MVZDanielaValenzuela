@@ -10,6 +10,7 @@ const TABLAS_NORMALIZADAS = [
     'consultas',
     'pagos',
     'servicios_externos',
+    'gastos',
     'movimientos_inventario'
 ];
 
@@ -88,6 +89,7 @@ function mapearEstadoNormalizado(rows) {
             spayed: row.esterilizado || '',
             photo: row.foto || '',
             estudios: row.estudios || [],
+            vacunasManuales: row.vacunas_manuales || [],
             historial: []
         };
         mascotasPorId.set(row.id, mascota);
@@ -152,11 +154,12 @@ function mapearEstadoNormalizado(rows) {
             hora: row.hora ? String(row.hora).slice(0, 5) : '',
             clienteId: cliente?.id || row.cliente_id,
             petId: mascota?.id || row.mascota_id,
-            clienteNombre: cliente?.owner || '',
-            petName: mascota?.name || '',
+            clienteNombre: cliente?.owner || row.cliente_nombre || '',
+            petName: mascota?.name || row.pet_name || '',
             direccion: row.direccion || '',
             notas: row.notas || 'Sin notas',
-            estado: row.estado || 'Programada'
+            estado: row.estado || 'Programada',
+            origen: row.origen || 'Consulta'
         };
     });
 
@@ -171,7 +174,8 @@ function mapearEstadoNormalizado(rows) {
             minStock: row.stock_minimo ?? 3,
             lote: row.lote || '',
             caducidad: row.caducidad || '',
-            proveedor: row.proveedor || ''
+            proveedor: row.proveedor || '',
+            costoUnitario: parseFloat(row.costo_unitario || 0)
         })),
         agenda: agendaMapeada,
         finanzas: (rows.servicios || []).map(row => ({
@@ -183,13 +187,24 @@ function mapearEstadoNormalizado(rows) {
             id: row.legacy_id || row.id,
             fechaISO: row.fecha_iso,
             fecha: row.fecha_texto || '',
+            hora: row.hora ? String(row.hora).slice(0, 5) : '',
             clienteNombre: row.cliente_nombre || '',
             servicioCobrado: row.servicio || '',
+            direccion: row.direccion || '',
+            agendaId: row.agenda_id || null,
             total: parseFloat(row.total || 0),
             metodoPago: row.metodo_pago || 'Efectivo',
             estadoPago: row.estado_pago || 'Pagado',
             notaPago: row.nota || '',
             tipo: row.tipo || 'Servicio externo'
+        })),
+        gastosFinancieros: (rows.gastos || []).map(row => ({
+            id: row.legacy_id || row.id,
+            fechaISO: row.fecha_iso,
+            fecha: row.fecha_texto || '',
+            categoria: row.categoria || 'Gasolina',
+            descripcion: row.descripcion || '',
+            monto: parseFloat(row.monto || 0)
         })),
         movimientosInventario: (rows.movimientos_inventario || []).map(row => ({
             id: row.legacy_id || row.id,
@@ -246,6 +261,7 @@ async function guardarEstadoBaseNormalizada() {
         esterilizado: mascota.spayed || '',
         foto: mascota.photo || '',
         estudios: mascota.estudios || [],
+        vacunas_manuales: mascota.vacunasManuales || [],
         updated_at: new Date().toISOString()
     }))).filter(row => row.cliente_id);
     const mascotasGuardadas = await upsertTabla('mascotas', mascotasRows, 'id, legacy_id');
@@ -272,6 +288,7 @@ async function guardarEstadoBaseNormalizada() {
         lote: item.lote || '',
         caducidad: item.caducidad || null,
         proveedor: item.proveedor || '',
+        costo_unitario: parseFloat(item.costoUnitario || 0),
         updated_at: new Date().toISOString()
     }));
     const inventarioGuardado = await upsertTabla('inventario', inventarioRows, 'id, legacy_id');
@@ -282,11 +299,14 @@ async function guardarEstadoBaseNormalizada() {
         legacy_id: cita.id,
         cliente_id: clienteDbPorLegacy.get(cita.clienteId || cita.ownerId) || null,
         mascota_id: mascotaDbPorLegacy.get(cita.petId) || null,
+        cliente_nombre: cita.clienteNombre || cita.ownerName || '',
+        pet_name: cita.petName || '',
         fecha: fechaAgenda(cita),
         hora: horaAgenda(cita),
         direccion: cita.direccion || cita.address || '',
         notas: cita.notas || cita.notes || 'Sin notas',
         estado: cita.estado || 'Programada',
+        origen: cita.origen || 'Consulta',
         updated_at: new Date().toISOString()
     }));
     await upsertTabla('agenda', agendaRows, 'id, legacy_id');
@@ -354,6 +374,9 @@ async function guardarEstadoBaseNormalizada() {
         fecha_texto: servicio.fecha || '',
         cliente_nombre: servicio.clienteNombre || '',
         servicio: servicio.servicioCobrado || '',
+        hora: servicio.hora || '',
+        direccion: servicio.direccion || '',
+        agenda_id: servicio.agendaId || null,
         total: parseFloat(servicio.total || 0),
         metodo_pago: servicio.metodoPago || 'Efectivo',
         estado_pago: servicio.estadoPago || 'Pagado',
@@ -362,6 +385,18 @@ async function guardarEstadoBaseNormalizada() {
         updated_at: new Date().toISOString()
     }));
     await upsertTabla('servicios_externos', serviciosExternosRows, 'id, legacy_id');
+
+    const gastosRows = gastosFinancieros.map(gasto => ({
+        user_id: userId,
+        legacy_id: gasto.id,
+        fecha_iso: gasto.fechaISO || new Date().toISOString(),
+        fecha_texto: gasto.fecha || '',
+        categoria: gasto.categoria || 'Gasolina',
+        descripcion: gasto.descripcion || '',
+        monto: parseFloat(gasto.monto || 0),
+        updated_at: new Date().toISOString()
+    }));
+    await upsertTabla('gastos', gastosRows, 'id, legacy_id');
 
     const movimientosRows = movimientosInventario.map(mov => ({
         user_id: userId,
@@ -379,6 +414,7 @@ async function guardarEstadoBaseNormalizada() {
     await borrarFaltantes('pagos', idsLegacy(pagosRows));
     await borrarFaltantes('consultas', idsLegacy(consultasRows));
     await borrarFaltantes('servicios_externos', idsLegacy(serviciosExternosRows));
+    await borrarFaltantes('gastos', idsLegacy(gastosRows));
     await borrarFaltantes('movimientos_inventario', idsLegacy(movimientosInventario));
     await borrarFaltantes('agenda', idsLegacy(agenda));
     await borrarFaltantes('mascotas', idsLegacy(mascotasRows));

@@ -109,7 +109,7 @@ function descontarVacunasDelInventario(insumosAplicados) {
         const yaRegistrado = insumosAplicados.find(ins => ins.id === item.id);
         if (yaRegistrado) {
             yaRegistrado.origen = yaRegistrado.origen || 'Vacuna';
-            resultado.descontadas.push({ id: item.id, name: item.name, qty: yaRegistrado.qty, unit: item.unit, origen: 'Vacuna' });
+        resultado.descontadas.push({ id: item.id, name: item.name, qty: yaRegistrado.qty, unit: item.unit, origen: 'Vacuna', costoUnitario: parseFloat(item.costoUnitario || 0), costoSubtotal: parseFloat(item.costoUnitario || 0) * yaRegistrado.qty });
             return;
         }
         if (item.stock <= 0) {
@@ -123,8 +123,8 @@ function descontarVacunasDelInventario(insumosAplicados) {
             cantidad: -1,
             motivo: `Vacunación: ${vacuna} · ${consultaSeleccionada.petObj?.name || 'Paciente'}`
         });
-        resultado.descontadas.push({ id: item.id, name: item.name, qty: 1, unit: item.unit, origen: 'Vacuna' });
-        insumosAplicados.push({ id: item.id, name: item.name, qty: 1, unit: item.unit, origen: 'Vacuna' });
+        resultado.descontadas.push({ id: item.id, name: item.name, qty: 1, unit: item.unit, origen: 'Vacuna', costoUnitario: parseFloat(item.costoUnitario || 0), costoSubtotal: parseFloat(item.costoUnitario || 0) });
+        insumosAplicados.push({ id: item.id, name: item.name, qty: 1, unit: item.unit, origen: 'Vacuna', costoUnitario: parseFloat(item.costoUnitario || 0), costoSubtotal: parseFloat(item.costoUnitario || 0) });
     });
     return resultado;
 }
@@ -239,7 +239,9 @@ async function guardarConsulta(e) {
                         stockValido = false; 
                         break; 
                     }
-                    insumosAplicados.push({ id: med.id, name: med.name, qty: parseInt(input.value), unit: med.unit });
+                    const qty = parseInt(input.value);
+                    const costoUnitario = parseFloat(med.costoUnitario || 0);
+                    insumosAplicados.push({ id: med.id, name: med.name, qty, unit: med.unit, costoUnitario, costoSubtotal: costoUnitario * qty });
                 }
             }
         }

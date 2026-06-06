@@ -49,6 +49,10 @@ function estudiosPaciente(pet) {
     return Array.isArray(pet?.estudios) ? pet.estudios : [];
 }
 
+function vacunasManualesPaciente(pet) {
+    return Array.isArray(pet?.vacunasManuales) ? pet.vacunasManuales : [];
+}
+
 function separarVacunasTexto(texto) {
     return String(texto || '')
         .split(/,|\+|;|\|/)
@@ -63,6 +67,17 @@ function fechaMasUnAnio(fecha) {
     return siguiente;
 }
 
+function fechaDesdeInputLocal(valor) {
+    if (!valor) return null;
+    const fecha = new Date(`${valor}T12:00:00`);
+    return Number.isNaN(fecha.getTime()) ? null : fecha;
+}
+
+function fechaInputDesdeFecha(fecha) {
+    if (!fecha || Number.isNaN(fecha.getTime())) return '';
+    return fecha.toISOString().slice(0, 10);
+}
+
 function estadoRefuerzoVacuna(fechaRefuerzo) {
     if (!fechaRefuerzo) return { label: 'Sin fecha', className: 'bg-slate-100 text-slate-600 border-slate-200' };
     const hoy = new Date();
@@ -74,7 +89,7 @@ function estadoRefuerzoVacuna(fechaRefuerzo) {
 }
 
 function vacunasPacienteDesdeHistorial(pet) {
-    return (pet?.historial || [])
+    const vacunasConsulta = (pet?.historial || [])
         .filter(consulta => consulta.tipo === 'Vacunacion' && consulta.vacunas)
         .flatMap(consulta => {
             const fechaAplicacion = fechaConsultaObj(consulta);
@@ -85,9 +100,22 @@ function vacunasPacienteDesdeHistorial(pet) {
                 fechaAplicacion,
                 fechaRefuerzo: fechaMasUnAnio(fechaAplicacion),
                 desparasitante: consulta.desparasitante || '',
-                nota: consulta.motivo || 'Vacunación / profilaxis'
+                nota: consulta.motivo || 'Vacunación / profilaxis',
+                origen: 'Consulta'
             }));
-        })
+        });
+    const vacunasManuales = vacunasManualesPaciente(pet).map(vacuna => {
+        const fechaAplicacion = fechaDesdeInputLocal(vacuna.fecha) || new Date(vacuna.fechaISO || '');
+        const fechaRefuerzo = fechaDesdeInputLocal(vacuna.fechaRefuerzo) || fechaMasUnAnio(fechaAplicacion);
+        return {
+            ...vacuna,
+            nombre: vacuna.nombre || 'Vacuna manual',
+            fechaAplicacion,
+            fechaRefuerzo,
+            origen: 'Manual'
+        };
+    });
+    return [...vacunasConsulta, ...vacunasManuales]
         .sort((a, b) => (b.fechaAplicacion?.getTime() || 0) - (a.fechaAplicacion?.getTime() || 0));
 }
 
@@ -101,11 +129,11 @@ function renderVacunasYRefuerzos(owner, pet) {
                         <p class="text-[10px] font-bold uppercase text-slate-400">Vacunas y refuerzos</p>
                         <h4 class="text-base font-black text-slate-900">Sin vacunas registradas</h4>
                     </div>
-                    <button type="button" onclick="cerrarModalHistorial(); cargarPacienteAConsulta(${owner.id}, ${pet.id})" class="bg-blue-50 text-blue-700 border border-blue-100 text-xs font-bold px-3 py-2 rounded-xl flex items-center gap-1">
-                        <i data-lucide="syringe" class="w-4 h-4"></i> Registrar
+                    <button type="button" onclick="abrirModalVacunaManual(${owner.id}, ${pet.id})" class="bg-blue-50 text-blue-700 border border-blue-100 text-xs font-bold px-3 py-2 rounded-xl flex items-center gap-1">
+                        <i data-lucide="syringe" class="w-4 h-4"></i> Agregar manual
                     </button>
                 </div>
-                <p class="text-xs text-slate-500 mt-2">Cuando guardes una consulta de vacunación, aquí aparecerá la fecha de aplicación y el refuerzo anual sugerido.</p>
+                <p class="text-xs text-slate-500 mt-2">Puedes guardar una consulta de vacunación o capturar manualmente vacunas aplicadas fuera de la app.</p>
             </section>
         `;
     }
@@ -116,7 +144,12 @@ function renderVacunasYRefuerzos(owner, pet) {
                     <p class="text-[10px] font-bold uppercase text-slate-400">Vacunas y refuerzos</p>
                     <h4 class="text-base font-black text-slate-900">Control anual de vacunas</h4>
                 </div>
-                <span class="text-[11px] font-bold text-blue-700 bg-blue-50 border border-blue-100 px-2.5 py-1 rounded-full">${vacunas.length} registro${vacunas.length === 1 ? '' : 's'}</span>
+                <div class="flex items-center gap-2">
+                    <span class="text-[11px] font-bold text-blue-700 bg-blue-50 border border-blue-100 px-2.5 py-1 rounded-full">${vacunas.length} registro${vacunas.length === 1 ? '' : 's'}</span>
+                    <button type="button" onclick="abrirModalVacunaManual(${owner.id}, ${pet.id})" class="bg-slate-900 hover:bg-slate-800 text-white text-[11px] font-bold px-3 py-1.5 rounded-lg flex items-center gap-1">
+                        <i data-lucide="plus" class="w-3.5 h-3.5"></i> Manual
+                    </button>
+                </div>
             </div>
             <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
                 ${vacunas.map(vacuna => {
@@ -127,13 +160,30 @@ function renderVacunasYRefuerzos(owner, pet) {
                                 <i data-lucide="syringe" class="w-5 h-5"></i>
                             </div>
                             <div class="min-w-0 flex-1">
-                                <div class="flex flex-wrap items-center gap-2">
-                                    <p class="text-sm font-black text-slate-900">${escapeHTML(vacuna.nombre)}</p>
-                                    <span class="text-[10px] font-bold px-2 py-0.5 rounded-full border ${estado.className}">${estado.label}</span>
+                                <div class="flex items-start justify-between gap-2">
+                                    <div class="min-w-0">
+                                        <div class="flex flex-wrap items-center gap-2">
+                                            <p class="text-sm font-black text-slate-900">${escapeHTML(vacuna.nombre)}</p>
+                                            <span class="text-[10px] font-bold px-2 py-0.5 rounded-full border ${estado.className}">${estado.label}</span>
+                                            <span class="text-[10px] font-bold px-2 py-0.5 rounded-full border ${vacuna.origen === 'Manual' ? 'bg-amber-50 text-amber-700 border-amber-100' : 'bg-white text-slate-500 border-slate-200'}">${vacuna.origen}</span>
+                                        </div>
+                                    </div>
+                                    ${vacuna.origen === 'Manual' ? `
+                                        <div class="flex items-center gap-1 shrink-0">
+                                            <button type="button" onclick="abrirModalVacunaManual(${owner.id}, ${pet.id}, ${vacuna.id})" class="p-1 rounded-lg bg-white border text-slate-500 hover:text-amber-600" title="Editar vacuna">
+                                                <i data-lucide="edit-3" class="w-3.5 h-3.5"></i>
+                                            </button>
+                                            <button type="button" onclick="eliminarVacunaManual(${owner.id}, ${pet.id}, ${vacuna.id})" class="p-1 rounded-lg bg-white border text-slate-500 hover:text-rose-600" title="Eliminar vacuna">
+                                                <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+                                            </button>
+                                        </div>
+                                    ` : ''}
                                 </div>
                                 <p class="text-[11px] text-slate-500 mt-1"><b>Aplicada:</b> ${formatoFechaCorta(vacuna.fechaAplicacion)}</p>
                                 <p class="text-[11px] text-slate-500"><b>Refuerzo anual:</b> ${formatoFechaCorta(vacuna.fechaRefuerzo)}</p>
                                 ${vacuna.desparasitante && vacuna.desparasitante !== 'No' ? `<p class="text-[10px] text-slate-400 mt-1">Desparasitante: ${escapeHTML(vacuna.desparasitante)}</p>` : ''}
+                                ${vacuna.lote || vacuna.laboratorio ? `<p class="text-[10px] text-slate-400 mt-1">Lote/Lab: ${escapeHTML([vacuna.lote, vacuna.laboratorio].filter(Boolean).join(' · '))}</p>` : ''}
+                                ${vacuna.nota ? `<p class="text-[10px] text-slate-500 mt-1 line-clamp-2">${escapeHTML(vacuna.nota)}</p>` : ''}
                             </div>
                         </article>
                     `;
@@ -141,6 +191,86 @@ function renderVacunasYRefuerzos(owner, pet) {
             </div>
         </section>
     `;
+}
+
+function abrirModalVacunaManual(ownerId, petId, vacunaId = '') {
+    const owner = clientes.find(c => c.id === ownerId);
+    const pet = owner?.mascotas.find(m => m.id === petId);
+    if (!owner || !pet) return;
+    const vacuna = vacunasManualesPaciente(pet).find(item => item.id === vacunaId);
+    $('form-vacuna-manual')?.reset();
+    if ($('vacuna-manual-owner-id')) $('vacuna-manual-owner-id').value = ownerId;
+    if ($('vacuna-manual-pet-id')) $('vacuna-manual-pet-id').value = petId;
+    if ($('vacuna-manual-id')) $('vacuna-manual-id').value = vacunaId || '';
+    if ($('vacuna-manual-label')) $('vacuna-manual-label').innerText = `${pet.name} | ${owner.owner}`;
+    if ($('titulo-vacuna-manual')) {
+        $('titulo-vacuna-manual').innerHTML = `<i data-lucide="syringe" class="w-5 h-5 text-blue-600"></i> ${vacuna ? 'Editar vacuna manual' : 'Agregar vacuna manual'}`;
+    }
+    if ($('vacuna-manual-nombre')) $('vacuna-manual-nombre').value = vacuna?.nombre || '';
+    if ($('vacuna-manual-fecha')) $('vacuna-manual-fecha').value = vacuna?.fecha || (typeof fechaLocalISO === 'function' ? fechaLocalISO() : new Date().toISOString().slice(0, 10));
+    if ($('vacuna-manual-refuerzo')) {
+        const fechaAplicacion = fechaDesdeInputLocal(vacuna?.fecha || $('vacuna-manual-fecha')?.value);
+        $('vacuna-manual-refuerzo').value = vacuna?.fechaRefuerzo || fechaInputDesdeFecha(fechaMasUnAnio(fechaAplicacion));
+    }
+    if ($('vacuna-manual-lote')) $('vacuna-manual-lote').value = vacuna?.lote || '';
+    if ($('vacuna-manual-laboratorio')) $('vacuna-manual-laboratorio').value = vacuna?.laboratorio || '';
+    if ($('vacuna-manual-desparasitante')) $('vacuna-manual-desparasitante').value = vacuna?.desparasitante || '';
+    if ($('vacuna-manual-nota')) $('vacuna-manual-nota').value = vacuna?.nota || '';
+    setHidden('modal-vacuna-manual', false);
+    renderIcons();
+}
+
+function cerrarModalVacunaManual() {
+    setHidden('modal-vacuna-manual', true);
+}
+
+function actualizarRefuerzoVacunaManual() {
+    const fecha = fechaDesdeInputLocal($('vacuna-manual-fecha')?.value);
+    if ($('vacuna-manual-refuerzo')) {
+        $('vacuna-manual-refuerzo').value = fechaInputDesdeFecha(fechaMasUnAnio(fecha));
+    }
+}
+
+function guardarVacunaManual(event) {
+    event.preventDefault();
+    const ownerId = parseInt($('vacuna-manual-owner-id')?.value || 0);
+    const petId = parseInt($('vacuna-manual-pet-id')?.value || 0);
+    const vacunaId = parseInt($('vacuna-manual-id')?.value || 0);
+    const owner = clientes.find(c => c.id === ownerId);
+    const pet = owner?.mascotas.find(m => m.id === petId);
+    if (!owner || !pet) return;
+    const fecha = $('vacuna-manual-fecha')?.value || '';
+    const fechaRefuerzo = $('vacuna-manual-refuerzo')?.value || fechaInputDesdeFecha(fechaMasUnAnio(fechaDesdeInputLocal(fecha)));
+    const registro = {
+        id: vacunaId || uid(),
+        nombre: $('vacuna-manual-nombre')?.value.trim() || 'Vacuna manual',
+        fecha,
+        fechaRefuerzo,
+        lote: $('vacuna-manual-lote')?.value.trim() || '',
+        laboratorio: $('vacuna-manual-laboratorio')?.value.trim() || '',
+        desparasitante: $('vacuna-manual-desparasitante')?.value.trim() || '',
+        nota: $('vacuna-manual-nota')?.value.trim() || '',
+        fechaISO: new Date().toISOString()
+    };
+    pet.vacunasManuales = vacunasManualesPaciente(pet);
+    if (vacunaId) {
+        pet.vacunasManuales = pet.vacunasManuales.map(vacuna => vacuna.id === vacunaId ? registro : vacuna);
+    } else {
+        pet.vacunasManuales.unshift(registro);
+    }
+    saveStore('clientes');
+    cerrarModalVacunaManual();
+    renderHistorialClinicoActivo();
+}
+
+function eliminarVacunaManual(ownerId, petId, vacunaId) {
+    if (!confirm('¿Eliminar esta vacuna manual del expediente?')) return;
+    const owner = clientes.find(c => c.id === ownerId);
+    const pet = owner?.mascotas.find(m => m.id === petId);
+    if (!pet) return;
+    pet.vacunasManuales = vacunasManualesPaciente(pet).filter(vacuna => vacuna.id !== vacunaId);
+    saveStore('clientes');
+    renderHistorialClinicoActivo();
 }
 
 function archivoEsPDF(file) {
@@ -918,8 +1048,8 @@ document.addEventListener('DOMContentLoaded', () => {
 function salvarMascotaData(oId, pId, nm, sp, ag, spy, b64) {
     clientes = clientes.map(c => {
         if(c.id === oId) {
-            if(pId) c.mascotas = c.mascotas.map(m => m.id===parseInt(pId) ? {...m, name:nm, species:sp, age:ag, spayed:spy, photo:b64||m.photo, estudios: estudiosPaciente(m)} : m);
-            else c.mascotas.push({ id: Date.now(), name:nm, species:sp, age:ag, spayed:spy, photo:b64, estudios:[], historial:[] });
+            if(pId) c.mascotas = c.mascotas.map(m => m.id===parseInt(pId) ? {...m, name:nm, species:sp, age:ag, spayed:spy, photo:b64||m.photo, estudios: estudiosPaciente(m), vacunasManuales: vacunasManualesPaciente(m)} : m);
+            else c.mascotas.push({ id: Date.now(), name:nm, species:sp, age:ag, spayed:spy, photo:b64, estudios:[], vacunasManuales:[], historial:[] });
         }
         return c;
     });

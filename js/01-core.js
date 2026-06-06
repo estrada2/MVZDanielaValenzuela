@@ -3,7 +3,8 @@ const STORE_KEYS = {
     inventario: 'vet_pro_stock',
     agenda: 'vet_pro_agenda',
     finanzas: 'vet_pro_finanzas',
-    serviciosExternos: 'vet_pro_servicios_externos'
+    serviciosExternos: 'vet_pro_servicios_externos',
+    gastosFinancieros: 'vet_pro_gastos_financieros'
 };
 const $ = id => document.getElementById(id);
 const $$ = selector => document.querySelectorAll(selector);
@@ -26,7 +27,7 @@ function loadStore(key, fallback) {
     }
 }
 function estadoCompleto() {
-    return { clientes, inventario, agenda, finanzas, movimientosInventario, serviciosExternos };
+    return { clientes, inventario, agenda, finanzas, movimientosInventario, serviciosExternos, gastosFinancieros };
 }
 function aplicarEstado(data = {}) {
     clientes = data.clientes || [];
@@ -35,6 +36,7 @@ function aplicarEstado(data = {}) {
     finanzas = data.finanzas || [];
     movimientosInventario = data.movimientosInventario || [];
     serviciosExternos = data.serviciosExternos || [];
+    gastosFinancieros = data.gastosFinancieros || [];
 }
 function actualizarEstadoSync(texto, error = false) {
     if (!$('sync-status')) return;
@@ -164,7 +166,8 @@ function datosLocalesAnteriores() {
         agenda: loadStore(STORE_KEYS.agenda, []),
         finanzas: loadStore(STORE_KEYS.finanzas, []),
         movimientosInventario: [],
-        serviciosExternos: loadStore(STORE_KEYS.serviciosExternos, [])
+        serviciosExternos: loadStore(STORE_KEYS.serviciosExternos, []),
+        gastosFinancieros: loadStore(STORE_KEYS.gastosFinancieros, [])
     };
 }
 function tieneDatos(data) {
@@ -353,12 +356,13 @@ let finanzas = loadStore(STORE_KEYS.finanzas, [
 ]);
 let movimientosInventario = [];
 let serviciosExternos = loadStore(STORE_KEYS.serviciosExternos, []);
+let gastosFinancieros = loadStore(STORE_KEYS.gastosFinancieros, []);
 let consultaSeleccionada = { ownerId: null, petId: null, ownerObj: null, petObj: null };
 let clienteActivoSubpaginaId = null;
 let firmaDuenoEstablecida = false;
 let firmaVetEstablecida = false;
 function exportarAICloud() {
-    const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify({ clientes, inventario, agenda, finanzas, serviciosExternos }));
+    const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify({ clientes, inventario, agenda, finanzas, serviciosExternos, gastosFinancieros }));
     const downloadAnchor = document.createElement('a');
     downloadAnchor.setAttribute("href", dataStr);
     downloadAnchor.setAttribute("download", `VetHomePro_iCloudBackup_${new Date().toISOString().split('T')[0]}.json`);
@@ -379,6 +383,7 @@ function importarDesdeICloud(event) {
                 agenda = importado.agenda || agenda;
                 finanzas = importado.finanzas || finanzas;
                 serviciosExternos = importado.serviciosExternos || serviciosExternos;
+                gastosFinancieros = importado.gastosFinancieros || gastosFinancieros;
                 saveAllStores();
                 alert("¡Sincronización iCloud completada exitosamente!");
                 location.reload();

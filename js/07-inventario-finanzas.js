@@ -74,6 +74,7 @@ function renderInventario() {
         const critico = m.stock <= stockMinimo(m);
         const vencido = caducidadVencida(m);
         const porVencer = caducidadProxima(m);
+        const valorInventario = (parseFloat(m.costoUnitario || 0) * parseInt(m.stock || 0));
         return `
             <div class="p-3 border rounded-xl flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 shadow-xs transition-all ${critico || vencido ? 'bg-rose-50 border-rose-200' : porVencer ? 'bg-amber-50 border-amber-200' : 'bg-white'}">
                 <div>
@@ -82,6 +83,7 @@ function renderInventario() {
                     <div class="flex flex-wrap gap-1.5 mt-1">
                         ${m.lote ? `<span class="text-[10px] bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full">Lote ${m.lote}</span>` : ''}
                         ${m.proveedor ? `<span class="text-[10px] bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full">${m.proveedor}</span>` : ''}
+                        ${m.costoUnitario ? `<span class="text-[10px] bg-emerald-50 text-emerald-700 px-2 py-0.5 rounded-full">Costo $${formatoMoneda(m.costoUnitario)} · Valor $${formatoMoneda(valorInventario)}</span>` : ''}
                         ${m.caducidad ? `<span class="text-[10px] ${vencido ? 'bg-rose-600 text-white' : porVencer ? 'bg-amber-500 text-slate-950' : 'bg-slate-100 text-slate-600'} px-2 py-0.5 rounded-full">Caduca ${m.caducidad}</span>` : ''}
                     </div>
                 </div>
@@ -110,7 +112,8 @@ function guardarMedicamento(e) {
         minStock: parseInt($('medMinStock').value),
         lote: $('medLote')?.value || '',
         caducidad: $('medCaducidad')?.value || '',
-        proveedor: $('medProveedor')?.value || ''
+        proveedor: $('medProveedor')?.value || '',
+        costoUnitario: parseFloat($('medCostoUnitario')?.value || 0)
     };
     const anterior = inventario.find(m => m.id === item.id);
     inventario = editId
@@ -143,6 +146,7 @@ function iniciarEdicionMedicamento(id) {
     if ($('medLote')) $('medLote').value = target.lote || '';
     if ($('medCaducidad')) $('medCaducidad').value = target.caducidad || '';
     if ($('medProveedor')) $('medProveedor').value = target.proveedor || '';
+    if ($('medCostoUnitario')) $('medCostoUnitario').value = target.costoUnitario || '';
     $(INVENTARIO_FORM.titleId).innerHTML = INVENTARIO_FORM.titleEdit;
     document.querySelector(INVENTARIO_FORM.submitSelector).innerText = INVENTARIO_FORM.submitEdit;
     renderIcons();
@@ -151,6 +155,7 @@ function cancelarEdicionMedicamento() {
     ensureHiddenInput(INVENTARIO_FORM.formId, INVENTARIO_FORM.editId);
     resetFormState(INVENTARIO_FORM);
     if ($('medMinStock')) $('medMinStock').value = 3;
+    if ($('medCostoUnitario')) $('medCostoUnitario').value = '';
 }
 function eliminarMedicamento(id) { 
     if(confirm("¿Eliminar este insumo del inventario?")){
@@ -341,6 +346,15 @@ function estaEnFiltro(fechaConsulta, ahora = new Date()) {
     }
     return true;
 }
+function costoInsumosConsulta(con) {
+    return (con.insumos || []).reduce((acc, ins) => acc + (parseFloat(ins.costoSubtotal) || (parseFloat(ins.costoUnitario) || 0) * (parseInt(ins.qty) || 0)), 0);
+}
+function obtenerGastosFiltrados() {
+    return (gastosFinancieros || [])
+        .map(gasto => ({ ...gasto, fechaObj: parseFechaConsulta(gasto), monto: parseFloat(gasto.monto || 0) }))
+        .filter(gasto => estaEnFiltro(gasto.fechaObj))
+        .sort((a, b) => (b.fechaObj?.getTime() || 0) - (a.fechaObj?.getTime() || 0));
+}
 function obtenerConsultasFinanzas() {
     const consultas = clientes.flatMap(c => (c.mascotas || []).flatMap(m => (m.historial || []).map(con => ({
         ...con,
@@ -351,6 +365,7 @@ function obtenerConsultasFinanzas() {
         mascotaNombre: m.name,
         fechaObj: parseFechaConsulta(con),
         total: parseFloat(con.costoTotal) || 0,
+        costoInsumos: costoInsumosConsulta(con),
         estadoPago: con.estadoPago || 'Pagado',
         metodoPago: con.metodoPago || 'Efectivo',
         notaPago: con.notaPago || ''
@@ -376,13 +391,21 @@ function renderGananciasConsultas() {
     const cobradas = consultasFiltradas.filter(con => con.estadoPago === 'Pagado');
     const pendientes = consultasFiltradas.filter(con => con.estadoPago === 'Pendiente');
     const totalAcumulado = cobradas.reduce((acc, con) => acc + con.total, 0);
+    const costoInsumos = cobradas.reduce((acc, con) => acc + (parseFloat(con.costoInsumos || 0)), 0);
+    const gastos = obtenerGastosFiltrados();
+    const totalGastos = gastos.reduce((acc, gasto) => acc + gasto.monto, 0);
+    const utilidadNeta = totalAcumulado - costoInsumos - totalGastos;
     const totalPendiente = pendientes.reduce((acc, con) => acc + con.total, 0);
     const ticketPromedio = cobradas.length ? totalAcumulado / cobradas.length : 0;
     txtMonto.innerText = formatoMoneda(totalAcumulado);
     if ($('total-consultas-filtrado')) $('total-consultas-filtrado').innerText = cobradas.length;
     if ($('ticket-promedio-filtrado')) $('ticket-promedio-filtrado').innerText = formatoMoneda(ticketPromedio);
+    if ($('monto-costo-insumos')) $('monto-costo-insumos').innerText = formatoMoneda(costoInsumos);
+    if ($('monto-gastos-filtrado')) $('monto-gastos-filtrado').innerText = formatoMoneda(totalGastos);
+    if ($('monto-utilidad-neta')) $('monto-utilidad-neta').innerText = formatoMoneda(utilidadNeta);
     if ($('monto-pendiente-filtrado')) $('monto-pendiente-filtrado').innerText = formatoMoneda(totalPendiente);
     renderListaIngresos(consultasFiltradas);
+    renderGastosFinancieros(gastos);
     renderResumenServicios(cobradas);
     renderResumenMetodosPago(cobradas);
 }
@@ -412,6 +435,7 @@ function renderListaIngresos(consultas) {
                 <div class="text-right space-y-1">
                     <span class="inline-block text-[10px] font-bold px-2 py-0.5 rounded-full ${badgePago}">${con.estadoPago}</span>
                     <p class="text-sm font-black ${con.estadoPago === 'Pagado' ? 'text-emerald-700' : 'text-slate-600'}">$${formatoMoneda(con.total)}</p>
+                    ${con.costoInsumos ? `<p class="text-[10px] text-blue-600 font-bold">Costo insumos: $${formatoMoneda(con.costoInsumos)}</p>` : ''}
                     ${con.estadoPago === 'Pendiente' ? (con.origenFinanciero === 'Externo'
                         ? `<button type="button" onclick="marcarServicioExternoPagado(${con.id})" class="text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-100 px-2 py-1 rounded-lg">Marcar pagado</button>`
                         : `<button type="button" onclick="marcarConsultaPagada(${con.ownerId}, ${con.petId}, ${con.id})" class="text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-100 px-2 py-1 rounded-lg">Marcar pagado</button>`
@@ -419,6 +443,69 @@ function renderListaIngresos(consultas) {
                 </div>
             </div>`;
     }).join('');
+}
+function renderGastosFinancieros(gastos = obtenerGastosFiltrados()) {
+    const lista = $('lista-gastos-financieros');
+    if (!lista) return;
+    if ($('gasto-fecha') && !$('gasto-fecha').value) $('gasto-fecha').value = fechaLocalInputFinanzas();
+    if (!gastos.length) {
+        lista.innerHTML = `<p class="text-xs text-gray-400 text-center py-8">No hay gastos en este periodo.</p>`;
+        return;
+    }
+    lista.innerHTML = gastos.map(gasto => `
+        <div class="bg-slate-50 border rounded-xl p-3 flex items-center justify-between gap-3">
+            <div>
+                <p class="text-xs font-bold text-slate-900">${gasto.categoria || 'Gasto'} · $${formatoMoneda(gasto.monto)}</p>
+                <p class="text-[11px] text-slate-500">${gasto.fechaObj ? gasto.fechaObj.toLocaleDateString('es-MX') : gasto.fecha || 'Sin fecha'} · ${gasto.descripcion || 'Sin descripción'}</p>
+            </div>
+            <div class="flex items-center gap-1">
+                <button type="button" onclick="iniciarEdicionGastoFinanciero(${gasto.id})" class="text-gray-400 hover:text-amber-600 p-1 bg-white border rounded-lg"><i data-lucide="edit" class="w-3.5 h-3.5"></i></button>
+                <button type="button" onclick="eliminarGastoFinanciero(${gasto.id})" class="text-gray-300 hover:text-red-500 p-1 bg-white border rounded-lg"><i data-lucide="trash-2" class="w-3.5 h-3.5"></i></button>
+            </div>
+        </div>
+    `).join('');
+    renderIcons();
+}
+function guardarGastoFinanciero(e) {
+    e.preventDefault();
+    const editId = $('edit-gasto-id')?.value;
+    const fecha = $('gasto-fecha')?.value || fechaLocalInputFinanzas();
+    const item = {
+        id: editId ? parseInt(editId) : uid(),
+        fecha,
+        fechaISO: editId ? (gastosFinancieros.find(g => g.id === parseInt(editId))?.fechaISO || new Date(`${fecha}T12:00:00`).toISOString()) : new Date(`${fecha}T12:00:00`).toISOString(),
+        categoria: $('gasto-categoria')?.value || 'Gasolina',
+        descripcion: $('gasto-descripcion')?.value.trim() || '',
+        monto: parseFloat($('gasto-monto')?.value || 0)
+    };
+    gastosFinancieros = editId ? gastosFinancieros.map(g => g.id === item.id ? item : g) : [item, ...gastosFinancieros];
+    saveStore('gastosFinancieros');
+    cancelarEdicionGastoFinanciero();
+    renderGananciasConsultas();
+}
+function iniciarEdicionGastoFinanciero(id) {
+    const gasto = gastosFinancieros.find(g => g.id === id);
+    if (!gasto) return;
+    $('edit-gasto-id').value = gasto.id;
+    $('gasto-fecha').value = gasto.fecha || fechaLocalInputFinanzas(parseFechaConsulta(gasto) || new Date());
+    $('gasto-categoria').value = gasto.categoria || 'Gasolina';
+    $('gasto-descripcion').value = gasto.descripcion || '';
+    $('gasto-monto').value = gasto.monto || 0;
+    $('btn-gasto-financiero').innerText = 'Actualizar gasto';
+    $('btn-cancelar-gasto')?.classList.remove('hidden');
+}
+function cancelarEdicionGastoFinanciero() {
+    $('form-gasto-financiero')?.reset();
+    if ($('edit-gasto-id')) $('edit-gasto-id').value = '';
+    if ($('gasto-fecha')) $('gasto-fecha').value = fechaLocalInputFinanzas();
+    if ($('btn-gasto-financiero')) $('btn-gasto-financiero').innerText = 'Guardar gasto';
+    $('btn-cancelar-gasto')?.classList.add('hidden');
+}
+function eliminarGastoFinanciero(id) {
+    if (!confirm('¿Eliminar este gasto?')) return;
+    gastosFinancieros = gastosFinancieros.filter(g => g.id !== id);
+    saveStore('gastosFinancieros');
+    renderGananciasConsultas();
 }
 function renderServiciosExternos() {
     const lista = $('lista-servicios-externos');
@@ -440,9 +527,11 @@ function renderServiciosExternos() {
                     </div>
                     <p class="text-[11px] text-slate-500">${item.clienteNombre || 'Sin contacto'} · ${item.fecha || formatoFechaCorta(parseFechaConsulta(item))}</p>
                     ${item.notaPago ? `<p class="text-[10px] text-slate-400 italic">${item.notaPago}</p>` : ''}
+                    ${item.hora ? `<p class="text-[10px] text-blue-600 font-bold mt-1">Agenda: ${item.fecha || ''} · ${item.hora} hrs</p>` : ''}
                 </div>
                 <div class="flex items-center gap-2 justify-end">
                     <span class="font-black text-sm ${pendiente ? 'text-rose-700' : 'text-emerald-700'}">$${formatoMoneda(item.total)}</span>
+                    ${item.agendaId ? `<button onclick="crearRecordatorioApple(${item.agendaId})" class="text-amber-600 hover:bg-amber-50 p-1 bg-white border rounded-lg shadow-2xs transition-all" title="Apple Reminders"><i data-lucide="list-todo" class="w-3.5 h-3.5"></i></button>` : ''}
                     ${pendiente ? `<button onclick="marcarServicioExternoPagado(${item.id})" class="text-emerald-600 hover:bg-emerald-50 p-1 bg-white border rounded-lg shadow-2xs transition-all" title="Marcar pagado"><i data-lucide="check-circle" class="w-3.5 h-3.5"></i></button>` : ''}
                     <button onclick="iniciarEdicionServicioExterno(${item.id})" class="text-gray-400 hover:text-amber-600 p-1 bg-white border rounded-lg shadow-2xs transition-all" title="Editar"><i data-lucide="edit" class="w-3.5 h-3.5"></i></button>
                     <button onclick="eliminarServicioExterno(${item.id})" class="text-gray-300 hover:text-red-500 p-1 bg-white border rounded-lg shadow-2xs transition-all" title="Eliminar"><i data-lucide="trash-2" class="w-3.5 h-3.5"></i></button>
@@ -451,6 +540,39 @@ function renderServiciosExternos() {
     }).join('');
     renderIcons();
 }
+function sincronizarAgendaServicioExterno(item, agendar) {
+    if (!agendar) return true;
+    if (!item.fecha || !item.hora) {
+        alert('Para agendar un servicio externo necesitas fecha y hora.');
+        return false;
+    }
+    const conflicto = typeof conflictoHorarioAgenda === 'function'
+        ? conflictoHorarioAgenda(item.fecha, item.hora, item.agendaId || '')
+        : null;
+    if (conflicto) {
+        alert(`Ese horario interfiere con una cita activa.\n\nCita existente: ${horaCita(conflicto)} hrs · ${conflicto.clienteNombre || 'Cliente'} ${conflicto.petName ? `(${conflicto.petName})` : ''}\n\nUsa un horario con al menos 45 minutos de separación.`);
+        return false;
+    }
+    const agendaItem = {
+        id: item.agendaId || uid(),
+        fecha: item.fecha,
+        hora: item.hora,
+        clienteId: null,
+        petId: null,
+        clienteNombre: item.clienteNombre || 'Servicio externo',
+        petName: item.servicioCobrado || 'Externo',
+        direccion: item.direccion || '',
+        notas: item.servicioCobrado || 'Servicio externo',
+        estado: 'Programada',
+        origen: 'Servicio externo'
+    };
+    const existe = agenda.some(cita => cita.id === agendaItem.id);
+    agenda = existe ? agenda.map(cita => cita.id === agendaItem.id ? { ...cita, ...agendaItem } : cita) : [...agenda, agendaItem];
+    item.agendaId = agendaItem.id;
+    saveStore('agenda');
+    if (typeof renderAgenda === 'function') renderAgenda();
+    return true;
+}
 function guardarServicioExterno(e) {
     e.preventDefault();
     const editId = $('edit-servicio-externo-id')?.value;
@@ -458,15 +580,19 @@ function guardarServicioExterno(e) {
     const item = {
         id: editId ? parseInt(editId) : uid(),
         fecha,
+        hora: $('externo-hora')?.value || '',
         fechaISO: editId ? (serviciosExternos.find(s => s.id === parseInt(editId))?.fechaISO || new Date(`${fecha}T12:00:00`).toISOString()) : new Date(`${fecha}T12:00:00`).toISOString(),
         clienteNombre: $('externo-cliente')?.value.trim() || '',
         servicioCobrado: $('externo-servicio')?.value.trim() || '',
+        direccion: $('externo-direccion')?.value.trim() || '',
+        agendaId: editId ? (serviciosExternos.find(s => s.id === parseInt(editId))?.agendaId || null) : null,
         total: parseFloat($('externo-total')?.value || 0),
         metodoPago: $('externo-metodo')?.value || 'Efectivo',
         estadoPago: $('externo-estado')?.value || 'Pagado',
         notaPago: $('externo-nota')?.value.trim() || '',
         tipo: 'Servicio externo'
     };
+    if (!sincronizarAgendaServicioExterno(item, $('externo-agendar')?.checked)) return;
     serviciosExternos = editId
         ? serviciosExternos.map(s => s.id === item.id ? item : s)
         : [item, ...serviciosExternos];
@@ -481,12 +607,15 @@ function iniciarEdicionServicioExterno(id) {
     if (!item) return;
     $('edit-servicio-externo-id').value = item.id;
     $('externo-fecha').value = item.fecha || fechaLocalInputFinanzas(parseFechaConsulta(item) || new Date());
+    $('externo-hora').value = item.hora || '';
     $('externo-cliente').value = item.clienteNombre || '';
     $('externo-servicio').value = item.servicioCobrado || '';
+    $('externo-direccion').value = item.direccion || '';
     $('externo-total').value = item.total || 0;
     $('externo-metodo').value = item.metodoPago || 'Efectivo';
     $('externo-estado').value = item.estadoPago || 'Pagado';
     $('externo-nota').value = item.notaPago || '';
+    if ($('externo-agendar')) $('externo-agendar').checked = Boolean(item.agendaId || item.hora);
     $('btn-servicio-externo').innerText = 'Actualizar Servicio Externo';
     $('btn-cancelar-servicio-externo')?.classList.remove('hidden');
 }
@@ -494,11 +623,19 @@ function cancelarEdicionServicioExterno() {
     $('form-servicio-externo')?.reset();
     if ($('edit-servicio-externo-id')) $('edit-servicio-externo-id').value = '';
     if ($('externo-fecha')) $('externo-fecha').value = fechaLocalInputFinanzas();
+    if ($('externo-hora')) $('externo-hora').value = '';
+    if ($('externo-agendar')) $('externo-agendar').checked = false;
     if ($('btn-servicio-externo')) $('btn-servicio-externo').innerText = 'Guardar Servicio Externo';
     $('btn-cancelar-servicio-externo')?.classList.add('hidden');
 }
 function eliminarServicioExterno(id) {
     if (!confirm('¿Eliminar este servicio externo?')) return;
+    const item = serviciosExternos.find(s => s.id === id);
+    if (item?.agendaId) {
+        agenda = agenda.filter(cita => cita.id !== item.agendaId);
+        saveStore('agenda');
+        if (typeof renderAgenda === 'function') renderAgenda();
+    }
     serviciosExternos = serviciosExternos.filter(s => s.id !== id);
     saveStore('serviciosExternos');
     renderServiciosExternos();
@@ -604,7 +741,7 @@ function exportarIngresosCSV() {
         alert("No hay ingresos para exportar en este periodo.");
         return;
     }
-    const headers = ['Fecha', 'Cliente', 'Mascota', 'Tipo', 'Servicios', 'Total', 'Estado de pago', 'Metodo', 'Nota'];
+    const headers = ['Fecha', 'Cliente', 'Mascota', 'Tipo', 'Servicios', 'Total', 'Costo insumos', 'Utilidad bruta', 'Estado de pago', 'Metodo', 'Nota'];
     const rows = consultas.map(con => [
         con.fechaObj ? con.fechaObj.toLocaleString('es-MX') : con.fecha,
         con.clienteNombre,
@@ -612,6 +749,8 @@ function exportarIngresosCSV() {
         con.tipo || '',
         con.servicioCobrado || '',
         con.total,
+        con.costoInsumos || 0,
+        (parseFloat(con.total || 0) - parseFloat(con.costoInsumos || 0)),
         con.estadoPago,
         con.metodoPago,
         con.notaPago
@@ -637,6 +776,10 @@ function exportarCorteDelDia() {
     const cobradas = consultas.filter(con => con.estadoPago === 'Pagado');
     const pendientes = consultas.filter(con => con.estadoPago === 'Pendiente');
     const totalCobrado = cobradas.reduce((acc, con) => acc + con.total, 0);
+    const costoInsumos = cobradas.reduce((acc, con) => acc + (parseFloat(con.costoInsumos || 0)), 0);
+    const gastos = obtenerGastosFiltrados();
+    const totalGastos = gastos.reduce((acc, gasto) => acc + gasto.monto, 0);
+    const utilidadNeta = totalCobrado - costoInsumos - totalGastos;
     const totalPendiente = pendientes.reduce((acc, con) => acc + con.total, 0);
     const porMetodo = {};
     cobradas.forEach(con => {
@@ -647,14 +790,20 @@ function exportarCorteDelDia() {
         new Date().toLocaleString('es-MX'),
         '',
         `Total cobrado: $${formatoMoneda(totalCobrado)}`,
+        `Costo de insumos: $${formatoMoneda(costoInsumos)}`,
+        `Gastos: $${formatoMoneda(totalGastos)}`,
+        `Utilidad neta: $${formatoMoneda(utilidadNeta)}`,
         `Pendiente: $${formatoMoneda(totalPendiente)}`,
         `Consultas cobradas: ${cobradas.length}`,
         '',
         'Por método de pago:',
         ...Object.entries(porMetodo).map(([metodo, total]) => `${metodo}: $${formatoMoneda(total)}`),
         '',
+        'Gastos:',
+        ...gastos.map(gasto => `${gasto.fechaObj ? gasto.fechaObj.toLocaleTimeString('es-MX') : ''} | ${gasto.categoria} | $${formatoMoneda(gasto.monto)} | ${gasto.descripcion || ''}`),
+        '',
         'Movimientos:',
-        ...consultas.map(con => `${con.fechaObj ? con.fechaObj.toLocaleTimeString('es-MX') : ''} | ${con.clienteNombre} | ${con.mascotaNombre} | ${con.estadoPago} | $${formatoMoneda(con.total)} | ${con.servicioCobrado || ''}`)
+        ...consultas.map(con => `${con.fechaObj ? con.fechaObj.toLocaleTimeString('es-MX') : ''} | ${con.clienteNombre} | ${con.mascotaNombre} | ${con.estadoPago} | $${formatoMoneda(con.total)} | costo $${formatoMoneda(con.costoInsumos || 0)} | ${con.servicioCobrado || ''}`)
     ];
     const blob = new Blob([lineas.join('\n')], { type: 'text/plain;charset=utf-8' });
     const link = document.createElement('a');
