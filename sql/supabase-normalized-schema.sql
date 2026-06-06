@@ -123,6 +123,7 @@ create table if not exists public.consultas (
     notas_rapidas text,
     insumos jsonb not null default '[]'::jsonb,
     vacunas_control_stock jsonb,
+    seguimiento jsonb not null default '{}'::jsonb,
     firma_dueno text,
     firma_vet text,
     legacy_id bigint,
@@ -144,6 +145,7 @@ create table if not exists public.pagos (
     metodo_pago text default 'Efectivo',
     estado_pago text default 'Pagado',
     nota_pago text,
+    abonos jsonb not null default '[]'::jsonb,
     fecha_iso timestamp with time zone not null default now(),
     legacy_id bigint,
     created_at timestamp without time zone default now(),
@@ -165,6 +167,7 @@ create table if not exists public.servicios_externos (
     metodo_pago text default 'Efectivo',
     estado_pago text default 'Pagado',
     nota text,
+    abonos jsonb not null default '[]'::jsonb,
     tipo text default 'Servicio externo',
     created_at timestamp without time zone default now(),
     updated_at timestamp without time zone default now()
