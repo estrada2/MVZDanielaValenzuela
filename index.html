@@ -131,6 +131,13 @@
                 <h2 id="page-title" class="text-lg font-bold text-slate-800">Inicio</h2>
             </div>
             <div class="flex items-center gap-2 min-w-0">
+                <button type="button" onclick="abrirPanelNotificaciones()" class="relative h-9 w-9 bg-white border border-slate-200 rounded-xl text-slate-600 hover:text-blue-700 hover:bg-blue-50 flex items-center justify-center shrink-0" title="Notificaciones">
+                    <i data-lucide="bell" class="w-4 h-4"></i>
+                    <span id="badge-notificaciones" class="hidden absolute -top-1 -right-1 min-w-5 h-5 px-1 rounded-full bg-rose-600 text-white text-[10px] font-black flex items-center justify-center"></span>
+                </button>
+                <button type="button" onclick="abrirBusquedaGlobalMovil()" class="md:hidden h-9 w-9 bg-white border border-slate-200 rounded-xl text-slate-600 hover:text-blue-700 hover:bg-blue-50 flex items-center justify-center shrink-0" title="Buscar">
+                    <i data-lucide="search" class="w-4 h-4"></i>
+                </button>
                 <div class="hidden md:block relative w-72">
                     <i data-lucide="search" class="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2"></i>
                     <input type="search" id="buscador-global" oninput="renderBusquedaGlobal()" onfocus="renderBusquedaGlobal()" placeholder="Buscar en toda la app..." class="w-full pl-9 pr-3 py-2 border border-slate-200 rounded-xl text-xs bg-white outline-none focus:border-blue-400">
@@ -149,94 +156,160 @@
             </div>
         </div>
 
+        <div id="banner-notificacion-principal" class="hidden border-b px-4 sm:px-6 py-3">
+            <div class="flex items-start sm:items-center justify-between gap-3">
+                <button type="button" onclick="abrirPanelNotificaciones()" class="text-left flex items-start gap-2 min-w-0">
+                    <i id="banner-notificacion-icono" data-lucide="bell" class="w-4 h-4 mt-0.5 shrink-0"></i>
+                    <span class="min-w-0">
+                        <span id="banner-notificacion-titulo" class="block text-xs font-black"></span>
+                        <span id="banner-notificacion-detalle" class="block text-[11px] font-medium opacity-80"></span>
+                    </span>
+                </button>
+                <button type="button" onclick="ocultarBannerNotificacion()" class="p-1 rounded-lg hover:bg-white/40 shrink-0">
+                    <i data-lucide="x" class="w-4 h-4"></i>
+                </button>
+            </div>
+        </div>
+
+        <div id="sync-toast" class="sync-toast hidden">
+            <div class="flex items-start gap-2">
+                <i data-lucide="refresh-cw" class="w-4 h-4 text-blue-600 mt-0.5 shrink-0"></i>
+                <div class="min-w-0">
+                    <p id="sync-toast-title" class="text-xs font-black text-slate-900">Datos actualizados</p>
+                    <p id="sync-toast-detail" class="text-[11px] text-slate-500">Se recibieron cambios de otro dispositivo.</p>
+                </div>
+            </div>
+        </div>
+
         <div class="app-shell-content flex-1 overflow-y-auto p-4 sm:p-6 space-y-6 pb-28 md:pb-6">
             
-            <section id="view-dashboard" class="space-y-6">
-                <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
-                    <div class="bg-white border border-gray-200 rounded-xl p-4 shadow-xs">
-                        <div class="flex items-center justify-between">
-                            <span class="text-[10px] font-bold uppercase text-slate-400">Citas hoy</span>
-                            <i data-lucide="calendar-check" class="w-4 h-4 text-blue-600"></i>
-                        </div>
-                        <p class="text-3xl font-black text-slate-900 mt-2" id="dash-citas-hoy">0</p>
+            <section id="view-dashboard" class="space-y-4 dashboard-modern">
+                <div class="dashboard-hero">
+                    <div class="min-w-0">
+                        <p id="dash-fecha-hoy" class="text-[11px] font-black uppercase text-blue-700">Hoy</p>
+                        <h3 class="text-xl sm:text-2xl font-black text-slate-950 mt-1">Panel operativo</h3>
+                        <p id="dash-resumen-dia" class="text-xs text-slate-500 mt-1">Agenda, cobros y alertas del día.</p>
                     </div>
-                    <div class="bg-white border border-gray-200 rounded-xl p-4 shadow-xs">
-                        <div class="flex items-center justify-between">
-                            <span class="text-[10px] font-bold uppercase text-slate-400">Ingresos hoy</span>
-                            <i data-lucide="badge-dollar-sign" class="w-4 h-4 text-emerald-600"></i>
-                        </div>
-                        <p class="text-3xl font-black text-emerald-700 mt-2">$<span id="dash-ingresos-hoy">0.00</span></p>
-                    </div>
-                    <div class="bg-white border border-gray-200 rounded-xl p-4 shadow-xs">
-                        <div class="flex items-center justify-between">
-                            <span class="text-[10px] font-bold uppercase text-slate-400">Pagos pendientes</span>
-                            <i data-lucide="clock-alert" class="w-4 h-4 text-rose-600"></i>
-                        </div>
-                        <p class="text-3xl font-black text-rose-700 mt-2">$<span id="dash-pendiente">0.00</span></p>
-                    </div>
-                    <div class="bg-white border border-gray-200 rounded-xl p-4 shadow-xs">
-                        <div class="flex items-center justify-between">
-                            <span class="text-[10px] font-bold uppercase text-slate-400">Stock crítico</span>
-                            <i data-lucide="package-search" class="w-4 h-4 text-amber-600"></i>
-                        </div>
-                        <p class="text-3xl font-black text-amber-700 mt-2" id="dash-stock-critico">0</p>
+                    <div class="dashboard-hero-actions">
+                        <button type="button" onclick="switchTab('agenda')" class="dash-action-primary">
+                            <i data-lucide="calendar-plus" class="w-4 h-4"></i> Agendar
+                        </button>
+                        <button type="button" onclick="switchTab('clientes'); abrirModalCliente()" class="dash-action-secondary">
+                            <i data-lucide="user-plus" class="w-4 h-4"></i> Cliente
+                        </button>
                     </div>
                 </div>
 
-                <div class="grid grid-cols-1 xl:grid-cols-3 gap-6">
-                    <div class="xl:col-span-2 bg-white border border-gray-200 rounded-xl p-5 shadow-xs space-y-4">
-                        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div class="dashboard-metrics">
+                    <button type="button" onclick="switchTab('agenda')" class="dash-metric">
+                        <span class="dash-metric-icon text-blue-700 bg-blue-50"><i data-lucide="calendar-check" class="w-4 h-4"></i></span>
+                        <span class="min-w-0">
+                            <span class="dash-metric-label">Citas hoy</span>
+                            <span class="dash-metric-value" id="dash-citas-hoy">0</span>
+                        </span>
+                    </button>
+                    <button type="button" onclick="switchTab('finanzas')" class="dash-metric">
+                        <span class="dash-metric-icon text-emerald-700 bg-emerald-50"><i data-lucide="badge-dollar-sign" class="w-4 h-4"></i></span>
+                        <span class="min-w-0">
+                            <span class="dash-metric-label">Ingresos hoy</span>
+                            <span class="dash-metric-value text-emerald-700">$<span id="dash-ingresos-hoy">0.00</span></span>
+                        </span>
+                    </button>
+                    <button type="button" onclick="switchTab('finanzas')" class="dash-metric">
+                        <span class="dash-metric-icon text-rose-700 bg-rose-50"><i data-lucide="clock-alert" class="w-4 h-4"></i></span>
+                        <span class="min-w-0">
+                            <span class="dash-metric-label">Pendiente</span>
+                            <span class="dash-metric-value text-rose-700">$<span id="dash-pendiente">0.00</span></span>
+                        </span>
+                    </button>
+                    <button type="button" onclick="switchTab('inventario')" class="dash-metric">
+                        <span class="dash-metric-icon text-amber-700 bg-amber-50"><i data-lucide="package-search" class="w-4 h-4"></i></span>
+                        <span class="min-w-0">
+                            <span class="dash-metric-label">Stock crítico</span>
+                            <span class="dash-metric-value text-amber-700" id="dash-stock-critico">0</span>
+                        </span>
+                    </button>
+                </div>
+
+                <div class="grid grid-cols-1 xl:grid-cols-12 gap-4">
+                    <div class="xl:col-span-7 dashboard-panel">
+                        <div class="dashboard-panel-header">
                             <div>
-                                <h3 class="text-base font-bold text-slate-900">Agenda de hoy</h3>
-                                <p class="text-xs text-slate-500">Visitas activas y acciones rápidas para trabajar el día.</p>
+                                <h3>Agenda de hoy</h3>
+                                <p>Visitas activas ordenadas por hora.</p>
                             </div>
-                            <button type="button" onclick="switchTab('agenda')" class="bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold px-3 py-2 rounded-xl flex items-center gap-2 w-full sm:w-auto justify-center">
-                                <i data-lucide="calendar-plus" class="w-4 h-4"></i> Ver agenda
+                            <button type="button" onclick="switchTab('agenda')" class="dash-mini-button">
+                                <i data-lucide="arrow-right" class="w-4 h-4"></i>
                             </button>
                         </div>
                         <div id="dash-lista-agenda" class="space-y-2"></div>
                     </div>
-                    <div class="bg-white border border-gray-200 rounded-xl p-5 shadow-xs space-y-4">
-                        <div>
-                            <h3 class="text-base font-bold text-slate-900">Accesos rápidos</h3>
-                            <p class="text-xs text-slate-500">Tareas frecuentes sin buscar entre secciones.</p>
+
+                    <div class="xl:col-span-5 space-y-4">
+                        <div class="dashboard-panel">
+                            <div class="dashboard-panel-header">
+                                <div>
+                                    <h3>Alertas prioritarias</h3>
+                                    <p>Vacunas, pagos, agenda y stock.</p>
+                                </div>
+                                <button type="button" onclick="abrirPanelNotificaciones()" class="dash-mini-button">
+                                    <i data-lucide="bell" class="w-4 h-4"></i>
+                                </button>
+                            </div>
+                            <div id="dash-notificaciones" class="space-y-2"></div>
                         </div>
-                        <div class="grid grid-cols-2 gap-2">
-                            <button type="button" onclick="switchTab('clientes'); abrirModalCliente()" class="bg-slate-900 text-white rounded-xl p-3 text-xs font-bold flex flex-col items-center gap-2">
-                                <i data-lucide="user-plus" class="w-5 h-5"></i> Cliente
+
+                        <div class="dashboard-quick-grid">
+                            <button type="button" onclick="switchTab('servicios-externos')" class="dash-quick">
+                                <i data-lucide="briefcase-medical" class="w-4 h-4"></i>
+                                <span>Externo</span>
                             </button>
-                            <button type="button" onclick="switchTab('agenda')" class="bg-blue-50 text-blue-700 border border-blue-100 rounded-xl p-3 text-xs font-bold flex flex-col items-center gap-2">
-                                <i data-lucide="calendar-plus" class="w-5 h-5"></i> Cita
+                            <button type="button" onclick="switchTab('inventario')" class="dash-quick">
+                                <i data-lucide="package-plus" class="w-4 h-4"></i>
+                                <span>Stock</span>
                             </button>
-                            <button type="button" onclick="switchTab('inventario')" class="bg-amber-50 text-amber-700 border border-amber-100 rounded-xl p-3 text-xs font-bold flex flex-col items-center gap-2">
-                                <i data-lucide="package-plus" class="w-5 h-5"></i> Stock
+                            <button type="button" onclick="switchTab('nueva-consulta')" class="dash-quick">
+                                <i data-lucide="stethoscope" class="w-4 h-4"></i>
+                                <span>Consulta</span>
                             </button>
-                            <button type="button" onclick="switchTab('finanzas')" class="bg-emerald-50 text-emerald-700 border border-emerald-100 rounded-xl p-3 text-xs font-bold flex flex-col items-center gap-2">
-                                <i data-lucide="chart-no-axes-combined" class="w-5 h-5"></i> Finanzas
+                            <button type="button" onclick="switchTab('finanzas')" class="dash-quick">
+                                <i data-lucide="chart-no-axes-combined" class="w-4 h-4"></i>
+                                <span>Finanzas</span>
                             </button>
                         </div>
                     </div>
                 </div>
 
-                <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                    <div class="bg-white border border-gray-200 rounded-xl p-5 shadow-xs">
-                        <h3 class="text-sm font-bold text-slate-900 mb-3">Pacientes recientes</h3>
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+                    <div class="dashboard-panel compact">
+                        <h3 class="panel-title-sm">Pacientes recientes</h3>
                         <div id="dash-pacientes-recientes" class="space-y-2"></div>
                     </div>
-                    <div class="bg-white border border-gray-200 rounded-xl p-5 shadow-xs">
-                        <h3 class="text-sm font-bold text-slate-900 mb-3">Stock por atender</h3>
+                    <div class="dashboard-panel compact">
+                        <h3 class="panel-title-sm">Stock por atender</h3>
                         <div id="dash-stock-lista" class="space-y-2"></div>
                     </div>
-                    <div class="bg-white border border-gray-200 rounded-xl p-5 shadow-xs">
-                        <h3 class="text-sm font-bold text-slate-900 mb-3">Cobros pendientes</h3>
+                    <div class="dashboard-panel compact">
+                        <h3 class="panel-title-sm">Cobros pendientes</h3>
                         <div id="dash-pagos-pendientes" class="space-y-2"></div>
                     </div>
+                </div>
+
+                <div class="dashboard-panel compact">
+                    <div class="dashboard-panel-header">
+                        <div>
+                            <h3>Actividad reciente</h3>
+                            <p>Cambios importantes realizados en la app.</p>
+                        </div>
+                        <i data-lucide="history" class="w-4 h-4 text-slate-400"></i>
+                    </div>
+                    <div id="dash-auditoria" class="space-y-2"></div>
                 </div>
             </section>
 
             <section id="view-clientes" class="hidden space-y-6">
                 <div id="directorio-clientes-area" class="space-y-6">
-                    <div class="bg-white p-4 rounded-2xl border border-gray-200 shadow-xs flex flex-col sm:flex-row gap-3 items-center justify-between">
+                    <div class="app-panel flex flex-col sm:flex-row gap-3 items-center justify-between">
                         <div class="relative w-full sm:w-96">
                             <i data-lucide="search" class="w-4 h-4 text-gray-400 absolute left-3.5 top-3"></i>
                             <input type="text" id="buscador" oninput="renderClientes()" placeholder="Buscar dueño, mascota, cel o dirección..." class="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-blue-500 bg-gray-50/50">
@@ -256,13 +329,13 @@
                         </div>
                     </div>
 
-                    <div class="bg-white p-6 rounded-2xl border border-gray-200 shadow-xs flex flex-col min-h-[500px]">
+                    <div class="app-panel flex flex-col min-h-[500px]">
                         <div class="space-y-4" id="lista-clientes"></div>
                     </div>
                 </div>
 
                 <div id="subpagina-mascotas-area" class="hidden space-y-4">
-                    <div class="bg-white p-4 rounded-2xl border flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+                    <div class="app-panel flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
                         <div>
                             <button onclick="volverAlDirectorioClientes()" class="text-xs font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 px-3 py-2 rounded-xl flex items-center gap-1.5 transition-all mb-1">
                                 <i data-lucide="arrow-left" class="w-4 h-4"></i> Volver al Directorio
@@ -274,13 +347,13 @@
                             <i data-lucide="plus-circle" class="w-4 h-4"></i> Dar de Alta Nueva Mascota
                         </button>
                     </div>
-                    <div class="bg-white p-6 rounded-2xl border grid grid-cols-1 md:grid-cols-2 gap-4 min-h-[400px]" id="contenedor-subpagina-mascotas"></div>
+                    <div class="app-panel grid grid-cols-1 md:grid-cols-2 gap-4 min-h-[400px]" id="contenedor-subpagina-mascotas"></div>
                 </div>
             </section>
 
             <section id="view-agenda" class="hidden space-y-6">
                 <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                    <div class="bg-white p-6 rounded-2xl border border-gray-200 shadow-xs space-y-4 h-fit">
+                    <div class="app-panel space-y-4 h-fit">
                         <h3 class="text-md font-bold text-slate-900 flex items-center gap-2" id="titulo-form-agenda">
                             <i data-lucide="calendar-plus" class="text-blue-600 w-5 h-5"></i> Agendar Nueva Visita
                         </h3>
@@ -334,14 +407,25 @@
                             </div>
                         </form>
                     </div>
-                    <div class="lg:col-span-2 bg-white p-6 rounded-2xl border border-gray-200 shadow-xs flex flex-col h-[550px]">
-                        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-3">
-                            <h3 class="text-sm font-bold text-gray-700 uppercase tracking-wider">Cronograma de Consultas a Domicilio</h3>
-                            <div class="flex flex-wrap gap-1 bg-slate-100 p-1 rounded-lg">
-                                <button type="button" onclick="filtrarAgenda('todas')" id="btn-agenda-todas" class="px-2 py-1 text-[10px] font-bold rounded bg-white shadow-xs">Todas</button>
-                                <button type="button" onclick="filtrarAgenda('hoy')" id="btn-agenda-hoy" class="px-2 py-1 text-[10px] font-bold rounded text-slate-600">Hoy</button>
-                                <button type="button" onclick="filtrarAgenda('semana')" id="btn-agenda-semana" class="px-2 py-1 text-[10px] font-bold rounded text-slate-600">Semana</button>
-                                <button type="button" onclick="filtrarAgenda('pendientes')" id="btn-agenda-pendientes" class="px-2 py-1 text-[10px] font-bold rounded text-slate-600">Pendientes</button>
+                    <div class="lg:col-span-2 app-panel flex flex-col h-[550px]">
+                        <div class="flex flex-col gap-3 mb-3">
+                            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                                <div>
+                                    <h3 class="text-sm font-black text-slate-900 uppercase tracking-wider">Cronograma</h3>
+                                    <p class="text-[11px] text-slate-500">Consulta tus visitas en lista o por bloques del día.</p>
+                                </div>
+                                <div class="flex items-center gap-2">
+                                    <div class="flex bg-slate-100 p-1 rounded-xl border border-slate-200">
+                                        <button type="button" onclick="cambiarModoAgenda('lista')" id="btn-agenda-modo-lista" class="px-3 py-1.5 text-[11px] font-bold rounded-lg bg-white shadow-xs">Lista</button>
+                                        <button type="button" onclick="cambiarModoAgenda('calendario')" id="btn-agenda-modo-calendario" class="px-3 py-1.5 text-[11px] font-bold rounded-lg text-slate-600">Día</button>
+                                    </div>
+                                    <select id="filtro-agenda-select" onchange="filtrarAgenda(this.value)" class="px-3 py-2 border border-slate-200 rounded-xl text-xs bg-white font-bold text-slate-700">
+                                        <option value="todas">Todas</option>
+                                        <option value="hoy">Hoy</option>
+                                        <option value="semana">Semana</option>
+                                        <option value="pendientes">Pendientes</option>
+                                    </select>
+                                </div>
                             </div>
                         </div>
                         <div class="flex-1 overflow-y-auto space-y-3" id="lista-agenda"></div>
@@ -555,6 +639,26 @@
                             </div>
                         </div>
 
+                        <div class="bg-indigo-50/60 p-4 rounded-xl border border-indigo-200 space-y-3">
+                            <div class="flex items-start gap-2">
+                                <input type="checkbox" id="consulta-requiere-seguimiento" onchange="document.getElementById('wrapper-seguimiento-general').classList.toggle('hidden', !this.checked)" class="mt-0.5 w-4 h-4 text-indigo-600 rounded">
+                                <div>
+                                    <label for="consulta-requiere-seguimiento" class="text-xs font-black text-indigo-900 uppercase">Requiere seguimiento</label>
+                                    <p class="text-[11px] text-indigo-700">Deja al paciente en radar clínico y agenda control si hace falta.</p>
+                                </div>
+                            </div>
+                            <div id="wrapper-seguimiento-general" class="hidden grid grid-cols-1 sm:grid-cols-3 gap-3">
+                                <div class="sm:col-span-2">
+                                    <label class="block text-xs font-semibold text-indigo-700 uppercase mb-1">Motivo de seguimiento</label>
+                                    <input type="text" id="consulta-seguimiento-nota" placeholder="Ej. revisar evolución, repetir tratamiento, retirar puntos..." class="w-full px-3 py-2 border rounded-xl text-sm outline-none">
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-semibold text-indigo-700 uppercase mb-1">Fecha sugerida</label>
+                                    <input type="date" id="consulta-seguimiento-fecha" class="w-full px-3 py-2 border rounded-xl text-sm outline-none">
+                                </div>
+                            </div>
+                        </div>
+
                         <div class="border border-slate-200 rounded-xl p-4 bg-white space-y-3">
                             <div class="flex justify-between items-center">
                                 <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider">Insumos del Almacén a descontar</label>
@@ -658,8 +762,9 @@
 
             <section id="view-inventario" class="hidden space-y-6">
                 <div class="grid grid-cols-1 xl:grid-cols-[minmax(420px,0.95fr)_minmax(0,1.35fr)] gap-6 items-start">
-                    <div class="bg-white p-5 sm:p-6 rounded-2xl border border-gray-200 shadow-xs space-y-4 h-fit">
-                        <h3 class="text-base font-black text-slate-900 flex items-center gap-2" id="titulo-form-inventario">
+                    <div class="app-panel space-y-4 h-fit">
+                        <p class="section-kicker">Capturar información</p>
+                        <h3 class="section-title flex items-center gap-2" id="titulo-form-inventario">
                             <i data-lucide="package-plus" class="text-blue-600 w-5 h-5"></i> Registrar Insumo
                         </h3>
                         <form id="form-inventario" class="space-y-3" onsubmit="guardarMedicamento(event)">
@@ -717,9 +822,12 @@
                             <button type="submit" class="w-full bg-blue-600 text-white font-bold py-3 rounded-xl text-sm hover:bg-blue-700 shadow-xs">Añadir al Almacén</button>
                         </form>
                     </div>
-                    <div class="bg-white p-5 sm:p-6 rounded-2xl border border-gray-200 shadow-xs flex flex-col min-h-[520px]">
+                    <div class="app-panel flex flex-col min-h-[520px]">
                         <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-3">
-                            <h3 class="text-sm font-bold text-gray-700 uppercase tracking-wider">Control de Existencias en Almacén</h3>
+                            <div>
+                                <p class="section-kicker">Revisar información</p>
+                                <h3 class="section-title">Control de Existencias</h3>
+                            </div>
                             <div class="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
                                 <input type="text" id="buscador-inventario" oninput="renderInventario()" placeholder="Buscar insumo..." class="px-3 py-1.5 border rounded-lg text-xs bg-white outline-none">
                                 <select id="filtro-inventario" onchange="filtrarInventario(this.value)" class="px-3 py-1.5 border rounded-lg text-xs bg-white">
@@ -737,14 +845,15 @@
                         <div class="flex-1 overflow-y-auto space-y-2.5 p-1 rounded-xl" id="lista-inventario"></div>
                     </div>
                 </div>
-                <div class="bg-white p-6 rounded-2xl border border-gray-200 shadow-xs">
-                    <h3 class="text-sm font-bold text-gray-700 mb-3 uppercase tracking-wider">Movimientos Recientes de Inventario</h3>
+                <div class="app-panel">
+                    <p class="section-kicker mb-1">Auditoría de stock</p>
+                    <h3 class="section-title mb-3">Movimientos Recientes</h3>
                     <div id="lista-movimientos-inventario" class="space-y-2 max-h-72 overflow-y-auto"></div>
                 </div>
             </section>
 
             <section id="view-servicios-externos" class="hidden space-y-6">
-                <div class="bg-white border border-slate-200 rounded-2xl p-5 sm:p-6 shadow-xs flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+                <div class="app-panel flex flex-col lg:flex-row lg:items-center justify-between gap-4">
                     <div class="flex items-start gap-3">
                         <div class="w-11 h-11 rounded-xl bg-blue-50 text-blue-700 border border-blue-100 flex items-center justify-center shrink-0">
                             <i data-lucide="briefcase-medical" class="w-5 h-5"></i>
@@ -759,7 +868,7 @@
                     </button>
                 </div>
                 <div class="grid grid-cols-1 xl:grid-cols-[minmax(430px,0.95fr)_minmax(0,1.35fr)] gap-6 items-start">
-                    <details open class="bg-white rounded-2xl border border-gray-200 shadow-xs h-fit overflow-hidden">
+                    <details open class="app-card h-fit overflow-hidden">
                         <summary class="cursor-pointer list-none bg-slate-900 text-white p-5 flex items-center justify-between gap-3">
                             <div class="flex items-center gap-3">
                                 <div class="w-10 h-10 rounded-xl bg-white/10 text-white flex items-center justify-center">
@@ -837,7 +946,7 @@
                             </div>
                         </form>
                     </details>
-                    <div class="bg-white p-5 sm:p-6 rounded-2xl border border-gray-200 shadow-xs flex flex-col min-h-[620px]">
+                    <div class="app-panel flex flex-col min-h-[620px]">
                         <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-3">
                             <div>
                                 <h3 class="text-sm font-black text-slate-900 uppercase tracking-wider">Servicios registrados</h3>
@@ -851,7 +960,7 @@
             </section>
 
             <section id="view-finanzas" class="hidden space-y-6">
-                <div class="bg-white p-6 rounded-2xl border border-gray-200 shadow-3xs space-y-4">
+                <div class="app-panel space-y-4">
                     <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
                         <div>
                             <h3 class="text-base font-bold text-slate-900">Tracking de Ingresos</h3>
@@ -913,7 +1022,7 @@
                     </div>
                 </div>
                 <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                    <details open class="bg-white p-6 rounded-2xl border border-gray-200 shadow-xs space-y-4 h-fit">
+                    <details open class="app-panel space-y-4 h-fit">
                         <summary class="text-md font-bold text-slate-900 flex items-center gap-2 cursor-pointer list-none">
                             <i data-lucide="fuel" class="text-amber-600 w-5 h-5"></i> Registrar Gasto
                         </summary>
@@ -948,13 +1057,14 @@
                             </div>
                         </form>
                     </details>
-                    <div class="lg:col-span-2 bg-white p-6 rounded-2xl border border-gray-200 shadow-xs">
-                        <h3 class="text-sm font-bold text-gray-700 mb-3 uppercase tracking-wider">Gastos Registrados</h3>
+                    <div class="lg:col-span-2 app-panel">
+                        <p class="section-kicker mb-1">Revisar información</p>
+                        <h3 class="section-title mb-3">Gastos Registrados</h3>
                         <div id="lista-gastos-financieros" class="space-y-2 max-h-72 overflow-y-auto"></div>
                     </div>
                 </div>
                 <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                    <details class="bg-white p-6 rounded-2xl border border-gray-200 shadow-xs space-y-4 h-fit">
+                    <details class="app-panel space-y-4 h-fit">
                         <summary class="text-md font-bold text-slate-900 flex items-center gap-2 cursor-pointer list-none">
                             <i data-lucide="tag" class="text-emerald-600 w-5 h-5"></i> Configuración de Servicios
                         </summary>
@@ -971,8 +1081,9 @@
                             <button type="submit" class="w-full bg-emerald-600 text-white font-bold py-2.5 rounded-xl text-sm hover:bg-emerald-700 shadow-xs">Guardar Servicio</button>
                         </form>
                     </details>
-                    <div class="lg:col-span-2 bg-white p-6 rounded-2xl border border-gray-200 shadow-xs flex flex-col h-[520px]">
-                        <h3 class="text-sm font-bold text-gray-700 mb-3 uppercase tracking-wider">Tarifario de Servicios Registrados</h3>
+                    <div class="lg:col-span-2 app-panel flex flex-col h-[520px]">
+                        <p class="section-kicker mb-1">Configuración</p>
+                        <h3 class="section-title mb-3">Tarifario de Servicios Registrados</h3>
                         <div class="flex-1 overflow-y-auto space-y-2.5 p-1 rounded-xl" id="lista-finanzas"></div>
                     </div>
                 </div>
@@ -1143,8 +1254,8 @@
         </div>
     </div>
 
-    <div id="modal-historial-clinico" class="fixed inset-0 bg-slate-950/70 z-50 flex items-center justify-center p-4 hidden backdrop-blur-xs">
-        <div class="modal-mobile-sheet bg-white rounded-2xl max-w-5xl w-full h-[88vh] flex flex-col shadow-2xl overflow-hidden border border-slate-200">
+    <div id="modal-historial-clinico" class="fixed inset-0 bg-slate-950/70 z-50 flex items-center justify-center p-3 sm:p-4 hidden backdrop-blur-xs">
+        <div class="modal-mobile-sheet clinical-sheet bg-white rounded-2xl max-w-6xl w-full h-[90vh] flex flex-col shadow-2xl overflow-hidden border border-slate-200">
             <div class="bg-slate-900 text-white p-5 flex justify-between items-center shrink-0">
                 <div class="flex items-center gap-3">
                     <div class="p-2 bg-amber-500 text-slate-950 rounded-xl shadow-xs">
@@ -1159,7 +1270,7 @@
                     <i data-lucide="x" class="w-5 h-5"></i>
                 </button>
             </div>
-            <div class="flex-1 overflow-y-auto p-6 bg-slate-50 space-y-4" id="historial-contenedor-consultas"></div>
+            <div class="flex-1 overflow-y-auto p-4 sm:p-6 bg-slate-50 space-y-4" id="historial-contenedor-consultas"></div>
             <div id="comprobante-historial-print-template" class="hidden"></div>
             <div class="p-4 border-t bg-white flex justify-end shrink-0">
                 <button onclick="cerrarModalHistorial()" class="px-5 py-2 bg-slate-900 text-white font-bold text-sm rounded-xl hover:bg-slate-800 shadow-sm">Cerrar Expediente</button>
@@ -1379,6 +1490,34 @@
             <div class="bg-slate-100 rounded-xl overflow-hidden border flex justify-center items-center p-1 min-h-[250px]">
                 <img id="img-visor-target" class="max-w-full max-h-[60vh] object-contain rounded-lg">
             </div>
+        </div>
+    </div>
+
+    <div id="modal-notificaciones" class="fixed inset-0 bg-slate-950/70 z-[70] flex items-center justify-center p-4 hidden backdrop-blur-xs">
+        <div class="modal-mobile-sheet bg-white rounded-2xl max-w-2xl w-full h-[82vh] flex flex-col shadow-2xl overflow-hidden border border-slate-200">
+            <div class="p-4 border-b bg-slate-900 text-white flex items-center justify-between shrink-0">
+                <div>
+                    <h3 class="text-base font-black flex items-center gap-2"><i data-lucide="bell" class="w-5 h-5 text-amber-300"></i> Notificaciones</h3>
+                    <p class="text-xs text-slate-300">Prioridades operativas de la app.</p>
+                </div>
+                <button type="button" onclick="cerrarPanelNotificaciones()" class="p-2 rounded-xl bg-white/10 hover:bg-white/20">
+                    <i data-lucide="x" class="w-5 h-5"></i>
+                </button>
+            </div>
+            <div id="lista-notificaciones" class="flex-1 overflow-y-auto p-4 space-y-2 bg-slate-50"></div>
+        </div>
+    </div>
+
+    <div id="modal-busqueda-global" class="fixed inset-0 bg-slate-950/70 z-[70] flex items-start justify-center p-4 hidden backdrop-blur-xs">
+        <div class="bg-white rounded-2xl max-w-lg w-full mt-[calc(env(safe-area-inset-top)+1rem)] shadow-2xl overflow-hidden border border-slate-200">
+            <div class="p-3 border-b flex items-center gap-2">
+                <i data-lucide="search" class="w-4 h-4 text-slate-400 shrink-0"></i>
+                <input type="search" id="buscador-global-movil" oninput="renderBusquedaGlobalMovil()" placeholder="Buscar cliente, mascota, cita..." class="flex-1 outline-none text-sm">
+                <button type="button" onclick="cerrarBusquedaGlobalMovil()" class="p-1 text-slate-400 hover:text-slate-700">
+                    <i data-lucide="x" class="w-5 h-5"></i>
+                </button>
+            </div>
+            <div id="resultados-busqueda-global-movil" class="max-h-[70vh] overflow-y-auto"></div>
         </div>
     </div>
 
