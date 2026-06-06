@@ -312,8 +312,8 @@ function renderEstudiosClinicos(owner, pet) {
                                         <p class="text-sm font-black text-slate-900 truncate">${escapeHTML(estudio.nombre || 'Estudio clínico')}</p>
                                         <p class="text-[11px] font-bold text-blue-700">${escapeHTML(estudio.tipo || 'Resultado')} · ${escapeHTML(fechaEstudioTexto(estudio))}</p>
                                     </div>
-                                    <button type="button" onclick="eliminarEstudioClinico(${owner.id}, ${pet.id}, ${estudio.id})" class="text-slate-400 hover:text-rose-600 p-1 shrink-0" title="Eliminar">
-                                        <i data-lucide="trash-2" class="w-4 h-4"></i>
+                                    <button type="button" onclick="eliminarEstudioClinico(${owner.id}, ${pet.id}, ${estudio.id})" class="btn-danger-soft shrink-0" title="Eliminar">
+                                        <i data-lucide="trash-2" class="w-4 h-4"></i> Eliminar
                                     </button>
                                 </div>
                                 ${estudio.notas ? `<p class="text-xs text-slate-500 mt-1 line-clamp-2">${escapeHTML(estudio.notas)}</p>` : ''}
@@ -425,7 +425,7 @@ function renderBotonesFiltroHistorial(historial) {
     ];
     return filtros.map(filtro => {
         const activo = historialActivo.filtro === filtro.id;
-        return `<button type="button" onclick="cambiarFiltroHistorial('${filtro.id}')" class="px-3 py-1.5 text-[11px] font-bold rounded-lg border transition-all ${activo ? 'bg-slate-900 text-white border-slate-900' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'}">${filtro.label}</button>`;
+        return `<button type="button" onclick="cambiarFiltroHistorial('${filtro.id}')" class="shrink-0 px-3 py-1.5 text-[11px] font-bold rounded-lg border transition-all ${activo ? 'bg-slate-900 text-white border-slate-900' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'}">${filtro.label}</button>`;
     }).join('');
 }
 
@@ -434,6 +434,10 @@ function renderCardConsultaHistorial(owner, pet, consulta) {
     const estadoPago = consulta.estadoPago || 'Pagado';
     const badgePago = claseBadgePago(estadoPago);
     const esVacuna = consulta.tipo === 'Vacunacion';
+    const fechaTexto = formatoFechaCorta(fechaObj);
+    const horaTexto = fechaObj ? fechaObj.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' }) : '';
+    const icono = esVacuna ? 'syringe' : consulta.tipo === 'Seguimiento' ? 'activity' : 'stethoscope';
+    const colorEvento = esVacuna ? 'blue' : consulta.tipo === 'Seguimiento' ? 'indigo' : 'amber';
     const tituloClinico = esVacuna
         ? `Vacunas: ${consulta.vacunas || 'Ninguna especificada'}`
         : (consulta.motivo || consulta.sintomas || 'Consulta sin motivo registrado');
@@ -447,66 +451,84 @@ function renderCardConsultaHistorial(owner, pet, consulta) {
             <p class="text-xs text-slate-800"><b>Signos reportados:</b> <span class="italic text-gray-600">"${consulta.sintomas || 'Asintomático'}"</span></p>
         `;
     return `
-        <details class="group bg-white rounded-xl border border-gray-200 shadow-xs overflow-hidden">
-            <summary class="list-none cursor-pointer p-4 flex flex-col lg:flex-row lg:items-center justify-between gap-3 hover:bg-slate-50">
-                <div class="flex items-start gap-3">
-                    <div class="w-10 h-10 rounded-xl ${esVacuna ? 'bg-blue-50 text-blue-700' : 'bg-amber-50 text-amber-700'} flex items-center justify-center shrink-0 border">
-                        <i data-lucide="${esVacuna ? 'syringe' : 'stethoscope'}" class="w-5 h-5"></i>
-                    </div>
-                    <div>
-                        <div class="flex flex-wrap items-center gap-2">
-                            <p class="text-sm font-black text-slate-900">${consulta.tipo || 'Consulta'}</p>
-                            <span class="text-[10px] font-bold px-2 py-0.5 rounded-full border ${badgePago}">${estadoPago}</span>
-                        </div>
-                        <p class="text-xs text-slate-500 mt-0.5">${formatoFechaCorta(fechaObj)} · ${tituloClinico}</p>
-                    </div>
-                </div>
-                <div class="flex items-center justify-between lg:justify-end gap-4">
-                    <div class="text-right">
-                        <p class="text-[10px] uppercase font-bold text-slate-400">Cobro</p>
-                        <p class="text-sm font-black ${estadoPago === 'Pagado' ? 'text-emerald-700' : 'text-rose-700'}">$${Number(consulta.costoTotal || 0).toFixed(2)}</p>
-                    </div>
-                    <i data-lucide="chevron-down" class="w-4 h-4 text-slate-400 group-open:rotate-180 transition-transform"></i>
-                </div>
-            </summary>
-            <div class="px-4 pb-4 space-y-3 border-t border-gray-100">
-                <div class="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs text-gray-600 bg-gray-50 p-3 rounded-lg mt-3">
-                    <p><b>Peso:</b> ${consulta.peso || '--'} kg</p>
-                    <p><b>Temp:</b> ${consulta.temp || '--'} °C</p>
-                    <p><b>Método:</b> ${consulta.metodoPago || 'Efectivo'}</p>
-                    <p><b>Servicio:</b> ${consulta.servicioCobrado || 'Sin servicio'}</p>
-                </div>
-                ${detalleHTML}
-                <p class="text-xs text-slate-900 bg-amber-50 p-2.5 rounded-lg border border-amber-200 text-justify"><b>Receta/Cuidados:</b> ${consulta.tratamiento || 'Sin indicaciones registradas'}</p>
-                ${consulta.notasRapidas ? `
-                    <div class="bg-indigo-50 p-3 rounded-lg border border-indigo-200 space-y-2">
-                        <p class="text-xs font-bold text-indigo-900">Notas rápidas de consulta</p>
-                        <img src="${consulta.notasRapidas}" class="w-full max-h-64 object-contain bg-white rounded-lg border border-indigo-100">
-                    </div>
-                ` : ''}
-                ${consulta.insumos?.length ? `<div class="bg-blue-50 p-2 rounded-lg text-[10px] border border-blue-100 text-blue-900"><b>Insumos:</b> ${consulta.insumos.map(i=>`${i.name} [x${i.qty}]`).join(', ')}</div>` : ''}
-                <details class="bg-slate-950 text-slate-300 text-[10px] p-3 rounded-lg font-mono leading-relaxed">
-                    <summary class="cursor-pointer text-amber-400 font-bold uppercase">Ver responsiva firmada y firmas</summary>
-                    <p class="mt-2">${consulta.disclaimer || 'Sin cláusula registrada.'}</p>
-                    <div class="flex justify-between items-center pt-2 mt-2 border-t border-slate-800">
-                        <img src="${consulta.firmaDueno}" class="h-9 object-contain mx-auto bg-white rounded px-1">
-                        <img src="${consulta.firmaVet}" class="h-9 object-contain mx-auto bg-white rounded px-1">
-                    </div>
-                </details>
-                <div class="flex flex-wrap gap-2 justify-end">
-                    ${estadoPago === 'Pendiente' ? `<button type="button" onclick="marcarConsultaPagada(${owner.id}, ${pet.id}, ${consulta.id})" class="bg-emerald-50 hover:bg-emerald-100 text-emerald-700 text-[10px] font-bold px-3 py-2 rounded-lg border border-emerald-200 flex items-center gap-1 transition-all"><i data-lucide="check-circle" class="w-3.5 h-3.5"></i> Marcar pagado</button>` : ''}
-                    <button type="button" onclick="abrirModalEditarConsulta(${owner.id}, ${pet.id}, ${consulta.id})" class="bg-amber-50 hover:bg-amber-100 text-amber-700 text-[10px] font-bold px-3 py-2 rounded-lg border border-amber-200 flex items-center gap-1 transition-all">
-                        <i data-lucide="file-pen-line" class="w-3.5 h-3.5"></i> Editar
-                    </button>
-                    <button type="button" onclick="eliminarConsultaHistorial(${owner.id}, ${pet.id}, ${consulta.id})" class="bg-rose-50 hover:bg-rose-100 text-rose-700 text-[10px] font-bold px-3 py-2 rounded-lg border border-rose-200 flex items-center gap-1 transition-all">
-                        <i data-lucide="trash-2" class="w-3.5 h-3.5"></i> Borrar
-                    </button>
-                    <button onclick="descargarResponsivaHistorialPDF(${owner.id}, ${pet.id}, ${consulta.id})" class="bg-blue-50 hover:bg-blue-100 text-blue-700 text-[10px] font-bold px-3 py-2 rounded-lg border border-blue-200 flex items-center gap-1 transition-all">
-                        <i data-lucide="download" class="w-3.5 h-3.5"></i> Descargar PDF
-                    </button>
-                </div>
+        <article class="clinical-timeline-item">
+            <div class="clinical-timeline-date">
+                <span>${fechaTexto}</span>
+                ${horaTexto ? `<small>${horaTexto}</small>` : ''}
             </div>
-        </details>
+            <div class="clinical-timeline-marker ${colorEvento}">
+                <i data-lucide="${icono}" class="w-4 h-4"></i>
+            </div>
+            <details class="clinical-event group">
+                <summary class="list-none cursor-pointer">
+                    <div class="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
+                        <div class="min-w-0">
+                            <div class="flex flex-wrap items-center gap-2">
+                                <p class="text-sm font-black text-slate-900">${consulta.tipo || 'Consulta'}</p>
+                                <span class="text-[10px] font-bold px-2 py-0.5 rounded-full border ${badgePago}">${estadoPago}</span>
+                                ${consulta.editadoEn ? `<span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-500 border border-slate-200">Editada</span>` : ''}
+                            </div>
+                            <p class="text-xs text-slate-600 mt-1 line-clamp-2">${tituloClinico}</p>
+                            <div class="flex flex-wrap gap-2 mt-2 text-[11px] text-slate-500">
+                                <span class="bg-slate-50 border border-slate-100 px-2 py-1 rounded-lg">Peso ${consulta.peso || '--'} kg</span>
+                                <span class="bg-slate-50 border border-slate-100 px-2 py-1 rounded-lg">Temp ${consulta.temp || '--'} C</span>
+                                <span class="bg-slate-50 border border-slate-100 px-2 py-1 rounded-lg">${consulta.servicioCobrado || 'Sin servicio'}</span>
+                            </div>
+                        </div>
+                        <div class="flex items-center justify-between sm:justify-end gap-3 shrink-0">
+                            <div class="text-right">
+                                <p class="text-[10px] uppercase font-bold text-slate-400">Cobro</p>
+                                <p class="text-sm font-black ${estadoPago === 'Pagado' ? 'text-emerald-700' : 'text-rose-700'}">$${Number(consulta.costoTotal || 0).toFixed(2)}</p>
+                            </div>
+                            <i data-lucide="chevron-down" class="w-4 h-4 text-slate-400 group-open:rotate-180 transition-transform"></i>
+                        </div>
+                    </div>
+                </summary>
+                <div class="clinical-event-body">
+                    <div class="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs text-gray-600">
+                        <p><b>Peso:</b> ${consulta.peso || '--'} kg</p>
+                        <p><b>Temp:</b> ${consulta.temp || '--'} C</p>
+                        <p><b>Método:</b> ${consulta.metodoPago || 'Efectivo'}</p>
+                        <p><b>Servicio:</b> ${consulta.servicioCobrado || 'Sin servicio'}</p>
+                    </div>
+                    <div class="space-y-1.5">${detalleHTML}</div>
+                    <p class="text-xs text-slate-900 bg-amber-50 p-2.5 rounded-lg border border-amber-200 text-justify"><b>Receta/Cuidados:</b> ${consulta.tratamiento || 'Sin indicaciones registradas'}</p>
+                    ${consulta.notasRapidas ? `
+                        <div class="bg-indigo-50 p-3 rounded-lg border border-indigo-200 space-y-2">
+                            <p class="text-xs font-bold text-indigo-900">Notas rápidas de consulta</p>
+                            <img src="${consulta.notasRapidas}" class="w-full max-h-64 object-contain bg-white rounded-lg border border-indigo-100">
+                        </div>
+                    ` : ''}
+                    ${consulta.seguimiento?.requerido ? `
+                        <div class="bg-indigo-50 p-3 rounded-lg border border-indigo-200">
+                            <p class="text-xs font-bold text-indigo-900">Seguimiento requerido</p>
+                            <p class="text-xs text-indigo-800">${consulta.seguimiento.nota || 'Sin nota específica'}${consulta.seguimiento.fecha ? ` · Sugerido: ${consulta.seguimiento.fecha}` : ''}</p>
+                        </div>
+                    ` : ''}
+                    ${consulta.insumos?.length ? `<div class="bg-blue-50 p-2 rounded-lg text-[10px] border border-blue-100 text-blue-900"><b>Insumos:</b> ${consulta.insumos.map(i=>`${i.name} [x${i.qty}]`).join(', ')}</div>` : ''}
+                    <details class="bg-slate-950 text-slate-300 text-[10px] p-3 rounded-lg font-mono leading-relaxed">
+                        <summary class="cursor-pointer text-amber-400 font-bold uppercase">Ver responsiva firmada y firmas</summary>
+                        <p class="mt-2">${consulta.disclaimer || 'Sin cláusula registrada.'}</p>
+                        <div class="flex justify-between items-center pt-2 mt-2 border-t border-slate-800">
+                            <img src="${consulta.firmaDueno}" class="h-9 object-contain mx-auto bg-white rounded px-1">
+                            <img src="${consulta.firmaVet}" class="h-9 object-contain mx-auto bg-white rounded px-1">
+                        </div>
+                    </details>
+                    <div class="clinical-event-actions">
+                        ${estadoPago === 'Pendiente' ? `<button type="button" onclick="marcarConsultaPagada(${owner.id}, ${pet.id}, ${consulta.id})" class="clinical-action success"><i data-lucide="check-circle" class="w-3.5 h-3.5"></i> Marcar pagado</button>` : ''}
+                        <button type="button" onclick="abrirModalEditarConsulta(${owner.id}, ${pet.id}, ${consulta.id})" class="clinical-action warning">
+                            <i data-lucide="file-pen-line" class="w-3.5 h-3.5"></i> Editar
+                        </button>
+                        <button type="button" onclick="eliminarConsultaHistorial(${owner.id}, ${pet.id}, ${consulta.id})" class="clinical-action danger">
+                            <i data-lucide="trash-2" class="w-3.5 h-3.5"></i> Borrar
+                        </button>
+                        <button onclick="descargarResponsivaHistorialPDF(${owner.id}, ${pet.id}, ${consulta.id})" class="clinical-action info">
+                            <i data-lucide="download" class="w-3.5 h-3.5"></i> PDF
+                        </button>
+                    </div>
+                </div>
+            </details>
+        </article>
     `;
 }
 
@@ -531,7 +553,7 @@ function renderHistorialClinicoActivo() {
         ? `<img src="${pet.photo}" class="w-16 h-16 rounded-xl object-cover border border-slate-200">`
         : `<div class="w-16 h-16 rounded-xl bg-blue-50 text-blue-500 flex items-center justify-center border border-blue-100"><i data-lucide="paw-print" class="w-7 h-7"></i></div>`;
     contenedor.innerHTML = `
-        <section class="bg-white border border-gray-200 rounded-2xl p-4 shadow-xs">
+        <section class="clinical-profile">
             <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
                 <div class="flex items-center gap-4">
                     ${avatar}
@@ -554,28 +576,28 @@ function renderHistorialClinicoActivo() {
                 </div>
             </div>
         </section>
-        <section class="grid grid-cols-2 lg:grid-cols-6 gap-3">
-            <div class="bg-white border rounded-xl p-3">
+        <section class="clinical-stats">
+            <div class="clinical-stat">
                 <p class="text-[10px] font-bold uppercase text-slate-400">Consultas</p>
                 <p class="text-xl font-black text-slate-900">${historial.length}</p>
             </div>
-            <div class="bg-white border rounded-xl p-3">
+            <div class="clinical-stat">
                 <p class="text-[10px] font-bold uppercase text-slate-400">Estudios</p>
                 <p class="text-xl font-black text-slate-900">${estudios.length}</p>
             </div>
-            <div class="bg-white border rounded-xl p-3">
+            <div class="clinical-stat">
                 <p class="text-[10px] font-bold uppercase text-slate-400">Último peso</p>
                 <p class="text-xl font-black text-slate-900">${ultimaConsulta?.peso || '--'} <span class="text-xs font-bold text-slate-400">kg</span></p>
             </div>
-            <div class="bg-white border rounded-xl p-3">
+            <div class="clinical-stat">
                 <p class="text-[10px] font-bold uppercase text-slate-400">Última visita</p>
                 <p class="text-sm font-black text-slate-900">${formatoFechaCorta(fechaConsultaObj(ultimaConsulta || {}))}</p>
             </div>
-            <div class="bg-white border rounded-xl p-3">
+            <div class="clinical-stat">
                 <p class="text-[10px] font-bold uppercase text-slate-400">Próxima cita</p>
                 <p class="text-sm font-black text-slate-900">${proxima ? `${proxima.fecha} · ${proxima.hora}` : 'Sin cita'}</p>
             </div>
-            <div class="bg-white border rounded-xl p-3 ${montoPendiente ? 'border-rose-200 bg-rose-50' : ''}">
+            <div class="clinical-stat ${montoPendiente ? 'debt' : ''}">
                 <p class="text-[10px] font-bold uppercase ${montoPendiente ? 'text-rose-600' : 'text-slate-400'}">Pendiente</p>
                 <p class="text-xl font-black ${montoPendiente ? 'text-rose-700' : 'text-slate-900'}">$${montoPendiente.toFixed(2)}</p>
             </div>
@@ -583,10 +605,10 @@ function renderHistorialClinicoActivo() {
         ${ultimaVacuna ? `<section class="bg-blue-50 border border-blue-100 rounded-xl p-3 text-xs text-blue-900"><b>Últimas vacunas:</b> ${ultimaVacuna.vacunas} · ${formatoFechaCorta(fechaConsultaObj(ultimaVacuna))}</section>` : ''}
         ${renderVacunasYRefuerzos(owner, pet)}
         ${renderEstudiosClinicos(owner, pet)}
-        <section class="flex flex-wrap gap-2">
+        <section class="clinical-tabs">
             ${renderBotonesFiltroHistorial(historial)}
         </section>
-        <section class="space-y-3">
+        <section class="clinical-timeline">
             ${filtradas.length
                 ? filtradas.map(consulta => renderCardConsultaHistorial(owner, pet, consulta)).join('')
                 : `<div class="bg-white border rounded-xl p-8 text-center text-xs text-gray-400">No hay registros para este filtro.</div>`
@@ -659,6 +681,7 @@ function guardarEdicionConsulta(event) {
     consulta.estadoPago = $('editar-consulta-estado')?.value || 'Pagado';
     consulta.notaPago = $('editar-consulta-nota-pago')?.value || '';
     consulta.editadoEn = new Date().toISOString();
+    registrarAuditoria('consultas', 'Editar', `Consulta editada: ${consulta.tipo || 'Consulta'} (${consulta.servicioCobrado || 'Sin servicio'})`, consulta.id);
     saveStore('clientes');
     cerrarModalEditarConsulta();
     renderHistorialClinicoActivo();
@@ -670,6 +693,7 @@ function eliminarConsultaHistorial(ownerId, petId, consultaId) {
     const { pet } = buscarConsultaHistorial(ownerId, petId, consultaId);
     if (!pet) return;
     pet.historial = (pet.historial || []).filter(consulta => consulta.id !== consultaId);
+    registrarAuditoria('consultas', 'Borrar', `Consulta borrada del expediente de ${pet.name}`, consultaId);
     saveStore('clientes');
     renderHistorialClinicoActivo();
     if (typeof renderGananciasConsultas === 'function') renderGananciasConsultas();
@@ -748,33 +772,34 @@ function renderClientes() {
         const proximaCita = tieneProximaCitaCliente(c);
         const tel = telefonoLimpio(c.phone);
         const div = document.createElement('div');
-        div.className = "p-4 bg-white rounded-xl border border-gray-200 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 hover:border-blue-200 hover:shadow-xs transition-all";
+        div.className = "app-list-card flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 hover:border-blue-200 transition-all";
         div.innerHTML = `
-            <div class="space-y-1">
+            <div class="space-y-1 min-w-0">
                 <div class="flex flex-wrap items-center gap-2">
-                    <h4 class="text-sm font-bold text-slate-900">${c.owner}</h4>
-                    ${c.ownerIdFile ? `<button type="button" onclick="abrirVisorID('${c.ownerIdFile}')" class="text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-100 px-2 py-0.5 rounded-full flex items-center gap-1"><i data-lucide="badge-check" class="w-3 h-3"></i> ID verificado</button>` : `<span class="text-[10px] font-bold text-amber-700 bg-amber-50 border border-amber-100 px-2 py-0.5 rounded-full">ID pendiente</span>`}
+                    <h4 class="text-sm font-black text-slate-900 truncate">${c.owner}</h4>
+                    ${c.ownerIdFile ? `<button type="button" onclick="abrirVisorID('${c.ownerIdFile}')" class="app-chip green"><i data-lucide="badge-check" class="w-3 h-3"></i> ID verificado</button>` : `<span class="app-chip amber">ID pendiente</span>`}
                 </div>
-                <p class="text-xs text-gray-500">📍 ${c.address} • 📱 ${c.phone}</p>
+                <p class="text-xs text-gray-500 truncate">${c.address || 'Sin dirección'} · ${c.phone || 'Sin teléfono'}</p>
                 <div class="flex flex-wrap gap-1.5">
-                    <span class="text-[11px] font-bold text-blue-700 bg-blue-50 border border-blue-100 px-2 py-0.5 rounded-full">${c.mascotas ? c.mascotas.length : 0} mascotas</span>
-                    <span class="text-[11px] font-bold text-slate-600 bg-slate-50 border px-2 py-0.5 rounded-full">Última visita: ${ultimaVisita ? formatoFechaCorta(ultimaVisita) : 'Sin visitas'}</span>
-                    ${pagosPendientes ? `<span class="text-[11px] font-bold text-rose-700 bg-rose-50 border border-rose-100 px-2 py-0.5 rounded-full">Pago pendiente</span>` : ''}
-                    ${proximaCita ? `<span class="text-[11px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-100 px-2 py-0.5 rounded-full">Próxima cita</span>` : ''}
+                    <span class="app-chip blue">${c.mascotas ? c.mascotas.length : 0} mascotas</span>
+                    <span class="app-chip">Última visita: ${ultimaVisita ? formatoFechaCorta(ultimaVisita) : 'Sin visitas'}</span>
+                    ${pagosPendientes ? `<span class="app-chip rose">Pago pendiente</span>` : ''}
+                    ${proximaCita ? `<span class="app-chip green">Próxima cita</span>` : ''}
                 </div>
                 ${c.ownerNotes ? `<p class="text-[11px] text-slate-500 italic">Nota: ${c.ownerNotes}</p>` : ''}
                 ${mascotasCoincidentes.length ? `<p class="text-[11px] font-semibold text-emerald-700">Mascota encontrada: ${mascotasCoincidentes.join(', ')}</p>` : ''}
             </div>
             <div class="flex items-center gap-2 w-full sm:w-auto justify-end">
-                ${tel ? `<a href="tel:${tel}" class="p-2 border bg-white hover:bg-blue-50 rounded-xl text-blue-600 transition-all shadow-xs" title="Llamar"><i data-lucide="phone" class="w-4 h-4"></i></a>` : ''}
-                ${tel ? `<a href="https://wa.me/52${tel}" target="_blank" rel="noopener" class="p-2 border bg-white hover:bg-emerald-50 rounded-xl text-emerald-600 transition-all shadow-xs" title="WhatsApp"><i data-lucide="message-circle" class="w-4 h-4"></i></a>` : ''}
-                <button onclick="verMascotasCliente(${c.id})" class="bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold px-3 py-2 rounded-lg shadow-2xs">Mascotas</button>
-                <button onclick="abrirModalCliente(${c.id})" class="p-2 border bg-white hover:bg-gray-50 rounded-xl text-gray-600 transition-all shadow-xs" title="Modificar">
-                    <i data-lucide="edit-3" class="w-4 h-4"></i>
-                </button>
-                <button onclick="eliminarClienteDefinitivo(${c.id})" class="p-2 border bg-white hover:bg-red-50 rounded-xl text-red-500 transition-all shadow-xs" title="Eliminar Permanente">
-                    <i data-lucide="trash-2" class="w-4 h-4"></i>
-                </button>
+                ${tel ? `<a href="https://wa.me/52${tel}" target="_blank" rel="noopener" class="icon-action text-emerald-700" title="WhatsApp"><i data-lucide="message-circle" class="w-4 h-4"></i> WhatsApp</a>` : ''}
+                <button onclick="verMascotasCliente(${c.id})" class="btn-primary">Mascotas</button>
+                <details class="action-menu">
+                    <summary class="icon-action cursor-pointer" title="Más acciones"><i data-lucide="more-horizontal" class="w-4 h-4"></i> Más</summary>
+                    <div class="action-menu-popover">
+                        ${tel ? `<a href="tel:${tel}"><i data-lucide="phone" class="w-4 h-4 text-blue-700"></i> Llamar</a>` : ''}
+                        <button type="button" onclick="abrirModalCliente(${c.id})"><i data-lucide="edit-3" class="w-4 h-4 text-amber-700"></i> Editar propietario</button>
+                        <button type="button" onclick="eliminarClienteDefinitivo(${c.id})" class="text-rose-700"><i data-lucide="trash-2" class="w-4 h-4"></i> Eliminar</button>
+                    </div>
+                </details>
             </div>
         `;
         lista.appendChild(div);
@@ -784,6 +809,7 @@ function renderClientes() {
 function eliminarClienteDefinitivo(id) {
     if(confirm("¿Eliminar expediente y mascotas irreversiblemente?")) {
         clientes = clientes.filter(c => c.id !== id);
+        registrarAuditoria('clientes', 'Borrar', 'Cliente eliminado definitivamente', id);
         saveStore('clientes');
         renderClientes(); 
         actualizarSelectAgenda();
@@ -810,39 +836,40 @@ function renderSubpaginaMascotas() {
     const c = clientes.find(item => item.id === clienteActivoSubpaginaId);
     if(!c) return;
     if(!c.mascotas || c.mascotas.length === 0) {
-        container.className = "bg-white p-6 rounded-2xl border flex flex-col justify-center items-center text-center text-gray-400 py-16 w-full col-span-2";
+        container.className = "app-panel flex flex-col justify-center items-center text-center text-gray-400 py-16 w-full col-span-2";
         container.innerHTML = `<i data-lucide="dog" class="w-12 h-12 text-gray-300 mb-2"></i><p class="text-sm font-semibold">Este cliente aún no tiene mascotas vinculadas.</p>`;
         renderIcons();
         return;
     }
-    container.className = "bg-white p-6 rounded-2xl border grid grid-cols-1 md:grid-cols-2 gap-4 h-fit";
+    container.className = "app-panel grid grid-cols-1 md:grid-cols-2 gap-4 h-fit";
     container.innerHTML = c.mascotas.map(m => {
         let avatar = m.photo ? 
-            `<img src="${m.photo}" class="w-16 h-16 rounded-xl object-cover border border-gray-200 shrink-0">` : 
+            `<img src="${m.photo}" class="w-16 h-16 rounded-xl object-cover border border-gray-200 shrink-0">` :
             `<div class="w-16 h-16 bg-blue-50 text-blue-400 rounded-xl flex items-center justify-center border border-dashed border-blue-200 shrink-0"><i data-lucide="dog" class="w-6 h-6"></i></div>`;
         let totalConsultas = m.historial ? m.historial.length : 0;
         return `
-            <section class="border rounded-2xl p-4 bg-slate-50 flex gap-4 shadow-2xs items-start">
+            <section class="app-list-card bg-slate-50 flex gap-4 items-start">
                 ${avatar}
                 <div class="flex-1 space-y-3">
                     <div>
-                        <span class="font-bold text-slate-900 text-base block">${m.name}</span>
+                        <span class="font-black text-slate-900 text-base block">${m.name}</span>
                         <span class="text-xs text-gray-500 font-medium">${m.species} • ${m.age}</span>
-                        ${m.spayed ? `<span class="text-[10px] ml-1 bg-emerald-100 text-emerald-800 font-bold px-2 py-0.5 rounded-md">✂️ Esterilizado</span>` : ''}
+                        ${m.spayed ? `<span class="app-chip green mt-1">Esterilizado</span>` : ''}
                     </div>
                     <div class="flex flex-wrap gap-1.5">
-                        <button onclick="cargarPacienteAConsulta(${c.id}, ${m.id})" class="px-3 py-1.5 bg-slate-900 text-white text-xs font-bold rounded-xl flex items-center gap-1 hover:bg-slate-800">
+                        <button onclick="cargarPacienteAConsulta(${c.id}, ${m.id})" class="btn-primary">
                             <i data-lucide="file-text" class="w-3.5 h-3.5"></i> Atender
                         </button>
-                        <button onclick="abrirModalHistorial(${c.id}, ${m.id})" class="px-3 py-1.5 bg-amber-500 text-slate-950 text-xs font-bold rounded-xl flex items-center gap-1 hover:bg-amber-600">
+                        <button onclick="abrirModalHistorial(${c.id}, ${m.id})" class="btn-soft text-amber-700">
                             <i data-lucide="folder-open" class="w-3.5 h-3.5"></i> Expediente (${totalConsultas})
                         </button>
-                        <button onclick="abrirModalMascota(${c.id}, ${m.id})" class="text-gray-400 hover:text-amber-600 p-1 bg-white rounded-lg border">
-                            <i data-lucide="edit" class="w-4 h-4"></i>
-                        </button>
-                        <button onclick="eliminarMascotaDefinitiva(${c.id}, ${m.id})" class="text-gray-400 hover:text-red-600 p-1 bg-white rounded-lg border">
-                            <i data-lucide="trash-2" class="w-4 h-4"></i>
-                        </button>
+                        <details class="action-menu">
+                            <summary class="icon-action cursor-pointer" title="Más acciones"><i data-lucide="more-horizontal" class="w-4 h-4"></i> Más</summary>
+                            <div class="action-menu-popover">
+                                <button type="button" onclick="abrirModalMascota(${c.id}, ${m.id})"><i data-lucide="edit" class="w-4 h-4 text-amber-700"></i> Editar paciente</button>
+                                <button type="button" onclick="eliminarMascotaDefinitiva(${c.id}, ${m.id})" class="text-rose-700"><i data-lucide="trash-2" class="w-4 h-4"></i> Eliminar</button>
+                            </div>
+                        </details>
                     </div>
                 </div>
             </section>`;
@@ -852,6 +879,7 @@ function renderSubpaginaMascotas() {
 function eliminarMascotaDefinitiva(oId, pId) {
     if(confirm("¿Dar de baja a este paciente?")) {
         clientes.find(c=>c.id===oId).mascotas = clientes.find(c=>c.id===oId).mascotas.filter(m=>m.id!==pId);
+        registrarAuditoria('mascotas', 'Borrar', 'Paciente dado de baja', pId);
         saveStore('clientes'); 
         renderSubpaginaMascotas(); 
         actualizarSelectAgenda();
@@ -996,8 +1024,11 @@ async function finalizarGuardadoCliente(ow, ph, ad, em, b64, notes, id) {
     }
     if(id) {
         clientes = clientes.map(c => c.id===parseInt(id) ? {...c, owner:ow, phone:ph, address:ad, email:em, ownerNotes: notes, ownerIdFile:b64||c.ownerIdFile} : c);
+        registrarAuditoria('clientes', 'Editar', `Propietario actualizado: ${ow}`, id);
     } else {
-        clientes.push({ id: Date.now(), owner:ow, phone:ph, address:ad, email:em, ownerNotes: notes, ownerIdFile:b64, mascotas: [] });
+        const nuevoId = Date.now();
+        clientes.push({ id: nuevoId, owner:ow, phone:ph, address:ad, email:em, ownerNotes: notes, ownerIdFile:b64, mascotas: [] });
+        registrarAuditoria('clientes', 'Crear', `Propietario registrado: ${ow}`, nuevoId);
     }
     saveStore('clientes'); 
     cerrarModalCliente(); 
@@ -1048,8 +1079,14 @@ document.addEventListener('DOMContentLoaded', () => {
 function salvarMascotaData(oId, pId, nm, sp, ag, spy, b64) {
     clientes = clientes.map(c => {
         if(c.id === oId) {
-            if(pId) c.mascotas = c.mascotas.map(m => m.id===parseInt(pId) ? {...m, name:nm, species:sp, age:ag, spayed:spy, photo:b64||m.photo, estudios: estudiosPaciente(m), vacunasManuales: vacunasManualesPaciente(m)} : m);
-            else c.mascotas.push({ id: Date.now(), name:nm, species:sp, age:ag, spayed:spy, photo:b64, estudios:[], vacunasManuales:[], historial:[] });
+            if(pId) {
+                c.mascotas = c.mascotas.map(m => m.id===parseInt(pId) ? {...m, name:nm, species:sp, age:ag, spayed:spy, photo:b64||m.photo, estudios: estudiosPaciente(m), vacunasManuales: vacunasManualesPaciente(m)} : m);
+                registrarAuditoria('mascotas', 'Editar', `Paciente actualizado: ${nm}`, pId);
+            } else {
+                const nuevoId = Date.now();
+                c.mascotas.push({ id: nuevoId, name:nm, species:sp, age:ag, spayed:spy, photo:b64, estudios:[], vacunasManuales:[], historial:[] });
+                registrarAuditoria('mascotas', 'Crear', `Paciente registrado: ${nm}`, nuevoId);
+            }
         }
         return c;
     });

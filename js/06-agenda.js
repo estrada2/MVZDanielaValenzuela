@@ -16,6 +16,7 @@ function autocompletarDireccionAgenda() {
     if(tgt) $('agenda-direccion').value = tgt.address;
 }
 let filtroAgendaActivo = 'todas';
+let modoAgendaActivo = 'lista';
 let citaActivaId = null;
 function fechaLocalISO(fecha = new Date()) {
     const offset = fecha.getTimezoneOffset() * 60000;
@@ -127,14 +128,50 @@ function citasAgendaFiltradas() {
 }
 function filtrarAgenda(filtro) {
     filtroAgendaActivo = filtro;
-    ['todas', 'hoy', 'semana', 'pendientes'].forEach(item => {
-        const boton = $(`btn-agenda-${item}`);
-        if (!boton) return;
-        boton.className = item === filtro
-            ? 'px-2 py-1 text-[10px] font-bold rounded bg-white shadow-xs'
-            : 'px-2 py-1 text-[10px] font-bold rounded text-slate-600';
-    });
+    if ($('filtro-agenda-select')) $('filtro-agenda-select').value = filtro;
     renderAgenda();
+}
+function cambiarModoAgenda(modo) {
+    modoAgendaActivo = modo;
+    if ($('btn-agenda-modo-lista')) {
+        $('btn-agenda-modo-lista').className = modo === 'lista'
+            ? 'px-3 py-1.5 text-[11px] font-bold rounded-lg bg-white shadow-xs'
+            : 'px-3 py-1.5 text-[11px] font-bold rounded-lg text-slate-600';
+    }
+    if ($('btn-agenda-modo-calendario')) {
+        $('btn-agenda-modo-calendario').className = modo === 'calendario'
+            ? 'px-3 py-1.5 text-[11px] font-bold rounded-lg bg-white shadow-xs'
+            : 'px-3 py-1.5 text-[11px] font-bold rounded-lg text-slate-600';
+    }
+    renderAgenda();
+}
+function renderAgendaCalendarioDia(citas) {
+    const hoy = fechaLocalISO();
+    const citasHoy = citas
+        .filter(cita => normalizarFechaCita(cita) === hoy)
+        .sort((a, b) => fechaHoraCita(a) - fechaHoraCita(b));
+    const horas = Array.from({ length: 12 }, (_, idx) => `${String(idx + 8).padStart(2, '0')}:00`);
+    return `
+        <div class="space-y-2">
+            ${horas.map(hora => {
+                const horaNum = parseInt(hora.slice(0, 2));
+                const items = citasHoy.filter(cita => parseInt(horaCita(cita).slice(0, 2)) === horaNum);
+                return `
+                    <div class="grid grid-cols-[4.5rem_1fr] gap-3 app-list-card">
+                        <div class="text-xs font-black text-slate-500">${hora}</div>
+                        <div class="space-y-2">
+                            ${items.length ? items.map(cita => `
+                                <button type="button" onclick="${cita.petId ? `atenderCita(${cita.id})` : `gestionarServicioExternoAgenda(${cita.id})`}" class="w-full text-left rounded-lg border ${cita.origen === 'Servicio externo' ? 'bg-blue-50 border-blue-100' : 'bg-amber-50 border-amber-100'} p-2">
+                                    <p class="text-xs font-black text-slate-900">${horaCita(cita)} · ${cita.petName || cita.clienteNombre || 'Cita'}</p>
+                                    <p class="text-[11px] text-slate-500">${cita.clienteNombre || ''} · ${cita.notas || 'Sin notas'}</p>
+                                </button>
+                            `).join('') : `<p class="text-[11px] text-slate-300 py-1">Libre</p>`}
+                        </div>
+                    </div>
+                `;
+            }).join('')}
+        </div>
+    `;
 }
 function renderAgenda() {
     const list = $('lista-agenda'); 
@@ -142,6 +179,11 @@ function renderAgenda() {
     list.innerHTML = "";
     const citas = citasAgendaFiltradas();
     if(citas.length === 0) { list.innerHTML = `<div class="text-center py-12 text-gray-400 text-xs italic">No hay visitas en este filtro.</div>`; return; }
+    if (modoAgendaActivo === 'calendario') {
+        list.innerHTML = renderAgendaCalendarioDia(citas);
+        renderIcons();
+        return;
+    }
     const ordenadas = citas.sort((a,b) => fechaHoraCita(a) - fechaHoraCita(b));
     const hoy = fechaLocalISO();
     const grupos = [
@@ -173,33 +215,38 @@ function renderAgenda() {
             Cancelada: 'bg-rose-100 text-rose-700'
         }[estado] || 'bg-gray-100 text-gray-700';
         return `
-            <div class="border rounded-xl px-3 py-3 shadow-3xs hover:shadow-md transition-all ${esHoy ? 'bg-amber-50 border-amber-300' : 'bg-white'}">
+            <div class="app-list-card transition-all ${esHoy ? 'bg-amber-50 border-amber-300' : 'bg-white'}">
                 <div class="grid grid-cols-1 xl:grid-cols-[6.75rem_1fr_auto] gap-3 items-center">
-                    <div class="rounded-lg bg-slate-900 text-white px-3 py-2">
+                    <div class="rounded-xl bg-slate-900 text-white px-3 py-2">
                         <span class="block text-[13px] font-black leading-tight">${horaCita(a)} hrs</span>
                         <span class="block text-[10px] font-bold text-slate-300 leading-tight">${fechaCitaBonita(a)}</span>
                     </div>
                     <div class="min-w-0 space-y-1">
                         <div class="flex flex-wrap items-center gap-1.5">
                             <span class="font-black text-sm text-slate-900">${nombre}${mascota}</span>
-                            ${esHoy ? '<span class="bg-amber-500 text-slate-950 font-bold px-2 py-0.5 rounded text-[10px]">HOY</span>' : ''}
-                            <span class="${badgeEstado} font-bold px-2 py-0.5 rounded text-[10px]">${estado}</span>
+                            ${esHoy ? '<span class="app-chip amber">Hoy</span>' : ''}
+                            <span class="app-chip ${estado === 'Confirmada' ? 'green' : estado === 'Cancelada' ? 'rose' : 'blue'}">${estado}</span>
                         </div>
                         <p class="text-[11px] text-gray-600 font-medium flex items-start gap-1"><i data-lucide="map-pin" class="w-3 h-3 mt-0.5 shrink-0 text-rose-500"></i><span class="truncate">${direccion || 'Sin dirección'}</span></p>
                         <p class="text-[11px] text-slate-500 italic flex items-start gap-1"><i data-lucide="notebook-pen" class="w-3 h-3 mt-0.5 shrink-0 text-slate-400"></i><span class="line-clamp-1">${notas}</span></p>
                     </div>
-                    <div class="grid grid-cols-4 sm:grid-cols-[repeat(7,2.25rem)] gap-1.5 w-full xl:w-auto justify-end">
-                        ${a.petId && estado !== 'Cancelada' ? `<button onclick="atenderCita(${a.id})" class="h-9 w-9 bg-slate-900 hover:bg-slate-800 text-white rounded-lg flex items-center justify-center" title="Atender"><i data-lucide="stethoscope" class="w-4 h-4"></i></button>` : ''}
-                        ${esServicioExterno && estado !== 'Cancelada' ? `<button onclick="gestionarServicioExternoAgenda(${a.id})" class="h-9 w-9 bg-slate-900 hover:bg-slate-800 text-white rounded-lg flex items-center justify-center" title="Gestionar servicio externo"><i data-lucide="briefcase-medical" class="w-4 h-4"></i></button>` : ''}
-                        ${estado === 'Programada' ? `<button onclick="cambiarEstadoCita(${a.id}, 'Confirmada')" class="h-9 w-9 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 rounded-lg flex items-center justify-center" title="Confirmar"><i data-lucide="check" class="w-4 h-4"></i></button>` : ''}
-                        ${tel ? `<a href="https://wa.me/52${tel}" target="_blank" rel="noopener" class="h-9 w-9 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg flex items-center justify-center shadow-xs transition-all" title="WhatsApp"><i data-lucide="message-circle" class="w-4 h-4"></i></a>` : ''}
-                        <button onclick="abrirNavegacionMaps('${direccion.replace(/'/g, "\\'")}')" class="h-9 w-9 bg-blue-600 hover:bg-blue-700 text-white rounded-lg flex items-center justify-center shadow-xs transition-all" title="Maps"><i data-lucide="map" class="w-4 h-4"></i></button>
-                        <button onclick="crearRecordatorioApple(${a.id})" class="h-9 w-9 bg-amber-50 hover:bg-amber-100 text-amber-700 border border-amber-200 rounded-lg flex items-center justify-center shadow-xs transition-all" title="Apple Reminders"><i data-lucide="list-todo" class="w-4 h-4"></i></button>
-                        <button onclick="iniciarEdicionAgenda(${a.id})" class="h-9 w-9 text-gray-500 hover:text-amber-600 bg-white border rounded-lg shadow-xs transition-all flex items-center justify-center" title="Editar"><i data-lucide="edit" class="w-4 h-4"></i></button>
-                        <button onclick="eliminarCita(${a.id})" class="h-9 w-9 text-gray-400 hover:text-red-500 border rounded-lg shadow-xs transition-all flex items-center justify-center" title="Eliminar"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
-                        <select onchange="cambiarEstadoCita(${a.id}, this.value)" class="col-span-4 sm:col-span-7 px-2 py-1.5 border rounded-lg text-[11px] bg-white font-semibold">
-                            ${['Programada', 'Confirmada', 'Atendida', 'Cancelada'].map(opcion => `<option value="${opcion}" ${estado === opcion ? 'selected' : ''}>${opcion}</option>`).join('')}
-                        </select>
+                    <div class="flex flex-wrap items-center gap-1.5 w-full xl:w-auto justify-end">
+                        ${a.petId && estado !== 'Cancelada' ? `<button onclick="atenderCita(${a.id})" class="btn-primary"><i data-lucide="stethoscope" class="w-4 h-4"></i> Atender</button>` : ''}
+                        ${esServicioExterno && estado !== 'Cancelada' ? `<button onclick="gestionarServicioExternoAgenda(${a.id})" class="btn-primary"><i data-lucide="briefcase-medical" class="w-4 h-4"></i> Gestionar</button>` : ''}
+                        ${tel ? `<a href="https://wa.me/52${tel}" target="_blank" rel="noopener" class="icon-action text-emerald-700" title="WhatsApp"><i data-lucide="message-circle" class="w-4 h-4"></i> WhatsApp</a>` : ''}
+                        <button onclick="abrirNavegacionMaps('${direccion.replace(/'/g, "\\'")}')" class="icon-action text-blue-700" title="Maps"><i data-lucide="map" class="w-4 h-4"></i> Maps</button>
+                        <details class="action-menu">
+                            <summary class="icon-action cursor-pointer" title="Más acciones"><i data-lucide="more-horizontal" class="w-4 h-4"></i> Más</summary>
+                            <div class="action-menu-popover">
+                                ${estado === 'Programada' ? `<button type="button" onclick="cambiarEstadoCita(${a.id}, 'Confirmada')"><i data-lucide="check" class="w-4 h-4 text-emerald-700"></i> Confirmar cita</button>` : ''}
+                                <button type="button" onclick="crearRecordatorioApple(${a.id})"><i data-lucide="list-todo" class="w-4 h-4 text-amber-700"></i> Enviar a Reminders</button>
+                                <button type="button" onclick="iniciarEdicionAgenda(${a.id})"><i data-lucide="edit" class="w-4 h-4 text-amber-700"></i> Editar visita</button>
+                                <label><i data-lucide="refresh-cw" class="w-4 h-4 text-slate-500"></i><select onchange="cambiarEstadoCita(${a.id}, this.value)" class="flex-1 bg-transparent outline-none text-[12px] font-bold">
+                                    ${['Programada', 'Confirmada', 'Atendida', 'Cancelada'].map(opcion => `<option value="${opcion}" ${estado === opcion ? 'selected' : ''}>${opcion}</option>`).join('')}
+                                </select></label>
+                                <button type="button" onclick="eliminarCita(${a.id})" class="text-rose-700"><i data-lucide="trash-2" class="w-4 h-4"></i> Eliminar</button>
+                            </div>
+                        </details>
                     </div>
                 </div>
             </div>`;
@@ -254,11 +301,18 @@ function guardarCita(e) {
             estado: $('agenda-estado').value
         };
         agenda.push(nuevaCita);
+        setTimeout(() => preguntarCrearReminderAutomatico(nuevaCita.id), 250);
     }
     saveStore('agenda'); 
     $('form-agenda').reset(); 
     renderAgenda();
     renderHorariosRecomendados();
+}
+function preguntarCrearReminderAutomatico(idCita) {
+    const cita = agenda.find(item => item.id === idCita);
+    if (!cita || cita.estado === 'Cancelada') return;
+    const quiere = confirm('Cita guardada. ¿Crear recordatorio en Apple Reminders ahora?');
+    if (quiere) crearRecordatorioApple(idCita);
 }
 function iniciarEdicionAgenda(id) {
     const target = agenda.find(item => item.id === id);

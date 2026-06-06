@@ -334,6 +334,14 @@ async function guardarConsulta(e) {
         metodoPago: $('consulta-metodo-pago')?.value || 'Efectivo',
         estadoPago: $('consulta-estado-pago')?.value || 'Pagado',
         notaPago: $('consulta-nota-pago')?.value || '',
+        abonos: $('consulta-estado-pago')?.value === 'Pagado'
+            ? [{ id: uid(), fechaISO: new Date().toISOString(), monto: parseFloat(costoSrv.toFixed(2)), metodo: $('consulta-metodo-pago')?.value || 'Efectivo' }]
+            : [],
+        seguimiento: {
+            requerido: Boolean($('consulta-requiere-seguimiento')?.checked),
+            nota: $('consulta-seguimiento-nota')?.value || '',
+            fecha: $('consulta-seguimiento-fecha')?.value || ''
+        },
         notasRapidas,
         vacunasControlStock: tipoConsulta === 'Vacunacion' ? controlVacunas : null,
         firmaDueno,
@@ -347,6 +355,7 @@ async function guardarConsulta(e) {
                 clientes[clientIdx].mascotas[petIdx].historial = [];
             }
             clientes[clientIdx].mascotas[petIdx].historial.unshift(nuevaConsultaObj);
+            registrarAuditoria('consultas', 'Crear', `Consulta ${tipoConsulta} guardada para ${consultaSeleccionada.petObj.name}`, nuevaConsultaObj.id);
             saveStore('clientes');
             if (typeof citaActivaId !== 'undefined' && citaActivaId) {
                 const cita = agenda.find(item => item.id === citaActivaId);
@@ -355,6 +364,24 @@ async function guardarConsulta(e) {
                     saveStore('agenda');
                 }
                 citaActivaId = null;
+            }
+            if (nuevaConsultaObj.seguimiento.requerido && nuevaConsultaObj.seguimiento.fecha) {
+                agenda.push({
+                    id: uid() + 2,
+                    fecha: nuevaConsultaObj.seguimiento.fecha,
+                    hora: '10:00',
+                    clienteId: consultaSeleccionada.ownerId,
+                    petId: consultaSeleccionada.petId,
+                    clienteNombre: consultaSeleccionada.ownerObj.owner,
+                    petName: consultaSeleccionada.petObj.name,
+                    direccion: consultaSeleccionada.ownerObj.address,
+                    notas: nuevaConsultaObj.seguimiento.nota || 'Seguimiento clínico',
+                    estado: 'Programada',
+                    origen: 'Seguimiento'
+                });
+                registrarAuditoria('agenda', 'Crear', `Seguimiento agendado para ${consultaSeleccionada.petObj.name}`, nuevaConsultaObj.id);
+                saveStore('agenda');
+                renderAgenda();
             }
             const avisosStock = [];
             if (controlVacunas.noEncontradas?.length) avisosStock.push(`Sin coincidencia en inventario: ${controlVacunas.noEncontradas.join(', ')}`);

@@ -4,7 +4,8 @@ const STORE_KEYS = {
     agenda: 'vet_pro_agenda',
     finanzas: 'vet_pro_finanzas',
     serviciosExternos: 'vet_pro_servicios_externos',
-    gastosFinancieros: 'vet_pro_gastos_financieros'
+    gastosFinancieros: 'vet_pro_gastos_financieros',
+    auditLogs: 'vet_pro_audit_logs'
 };
 const $ = id => document.getElementById(id);
 const $$ = selector => document.querySelectorAll(selector);
@@ -30,7 +31,7 @@ function loadStore(key, fallback) {
     }
 }
 function estadoCompleto() {
-    return { clientes, inventario, agenda, finanzas, movimientosInventario, serviciosExternos, gastosFinancieros };
+    return { clientes, inventario, agenda, finanzas, movimientosInventario, serviciosExternos, gastosFinancieros, auditLogs };
 }
 function aplicarEstado(data = {}) {
     clientes = data.clientes || [];
@@ -40,11 +41,28 @@ function aplicarEstado(data = {}) {
     movimientosInventario = data.movimientosInventario || [];
     serviciosExternos = data.serviciosExternos || [];
     gastosFinancieros = data.gastosFinancieros || [];
+    auditLogs = data.auditLogs || [];
 }
 function actualizarEstadoSync(texto, error = false) {
     if (!$('sync-status')) return;
     $('sync-status').innerText = texto;
     $('sync-status').className = error ? 'text-red-300' : '';
+}
+function mostrarToastSync(titulo = 'Datos actualizados', detalle = 'Se recibieron cambios de otro dispositivo.') {
+    const toast = $('sync-toast');
+    if (!toast) return;
+    if ($('sync-toast-title')) $('sync-toast-title').innerText = titulo;
+    if ($('sync-toast-detail')) $('sync-toast-detail').innerText = detalle;
+    toast.classList.remove('hidden');
+    renderIcons();
+    clearTimeout(mostrarToastSync.timer);
+    mostrarToastSync.timer = setTimeout(() => toast.classList.add('hidden'), 3500);
+}
+function aplicarEstadoRemoto(estado, detalle = 'Se recibieron cambios de otro dispositivo.') {
+    aplicarEstado(estado);
+    if (typeof refrescarInterfaz === 'function') refrescarInterfaz();
+    actualizarEstadoSync('Sincronizado');
+    mostrarToastSync('Datos actualizados', detalle);
 }
 function mostrarBannerActualizacion() {
     $('update-banner')?.classList.remove('hidden');
@@ -204,6 +222,33 @@ async function guardarEstadoRemoto() {
         programarGuardadoRemoto();
     }
 }
+function registrarAuditoria(tabla, accion, resumen, registroId = '') {
+    const item = {
+        id: uid(),
+        fechaISO: new Date().toISOString(),
+        usuario: usuarioActivo?.email || 'Usuario local',
+        tabla,
+        accion,
+        resumen,
+        registroId
+    };
+    auditLogs = [item, ...(auditLogs || [])].slice(0, 500);
+    try {
+        if (usuarioActivo && workspaceSoportado && workspaceActivoId) {
+            supabaseClient.from('audit_logs').insert({
+                ...scopeRemoto(),
+                tabla,
+                accion,
+                registro_id: String(registroId || ''),
+                resumen
+            }).then(resultado => {
+                if (resultado.error) console.warn('Auditoria remota no disponible.', resultado.error);
+            });
+        }
+    } catch (error) {
+        console.warn('No se pudo registrar auditoria remota.', error);
+    }
+}
 function programarGuardadoRemoto() {
     clearTimeout(syncTimer);
     syncTimer = setTimeout(guardarEstadoRemoto, 250);
@@ -222,7 +267,8 @@ function datosLocalesAnteriores() {
         finanzas: loadStore(STORE_KEYS.finanzas, []),
         movimientosInventario: [],
         serviciosExternos: loadStore(STORE_KEYS.serviciosExternos, []),
-        gastosFinancieros: loadStore(STORE_KEYS.gastosFinancieros, [])
+        gastosFinancieros: loadStore(STORE_KEYS.gastosFinancieros, []),
+        auditLogs: loadStore(STORE_KEYS.auditLogs, [])
     };
 }
 function tieneDatos(data) {
@@ -245,16 +291,14 @@ async function refrescarEstadoDesdeRemotoSilencioso() {
             estadoRemoto = data?.data || null;
         }
         if (!estadoRemoto) return;
-        aplicarEstado(estadoRemoto);
-        if (typeof refrescarInterfaz === 'function') refrescarInterfaz();
-        actualizarEstadoSync('Sincronizado');
+        aplicarEstadoRemoto(estadoRemoto, 'Se refrescó la información más reciente de Supabase.');
     } catch (error) {
         console.warn('No se pudo refrescar estado remoto en segundo plano.', error);
     }
 }
 function iniciarRefrescoRemotoAutomatico() {
     clearInterval(remotePollingTimer);
-    remotePollingTimer = setInterval(refrescarEstadoDesdeRemotoSilencioso, 15000);
+    remotePollingTimer = setInterval(refrescarEstadoDesdeRemotoSilencioso, 10000);
     document.addEventListener('visibilitychange', () => {
         if (document.visibilityState === 'visible') refrescarEstadoDesdeRemotoSilencioso();
     });
@@ -275,9 +319,7 @@ function escucharCambiosRemotos() {
             filter: filtroRealtimeScope()
         }, payload => {
             if (!payload.new?.data || guardandoRemoto) return;
-            aplicarEstado(payload.new.data);
-            if (typeof refrescarInterfaz === 'function') refrescarInterfaz();
-            actualizarEstadoSync('Sincronizado');
+            aplicarEstadoRemoto(payload.new.data);
         })
         .subscribe();
 }
@@ -410,6 +452,7 @@ let finanzas = loadStore(STORE_KEYS.finanzas, [
 let movimientosInventario = [];
 let serviciosExternos = loadStore(STORE_KEYS.serviciosExternos, []);
 let gastosFinancieros = loadStore(STORE_KEYS.gastosFinancieros, []);
+let auditLogs = loadStore(STORE_KEYS.auditLogs, []);
 let consultaSeleccionada = { ownerId: null, petId: null, ownerObj: null, petObj: null };
 let clienteActivoSubpaginaId = null;
 let firmaDuenoEstablecida = false;

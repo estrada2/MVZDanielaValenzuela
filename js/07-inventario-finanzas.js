@@ -76,24 +76,33 @@ function renderInventario() {
         const porVencer = caducidadProxima(m);
         const valorInventario = (parseFloat(m.costoUnitario || 0) * parseInt(m.stock || 0));
         return `
-            <div class="p-3 border rounded-xl flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 shadow-xs transition-all ${critico || vencido ? 'bg-rose-50 border-rose-200' : porVencer ? 'bg-amber-50 border-amber-200' : 'bg-white'}">
-                <div>
-                    <b class="text-sm text-slate-800">${m.name}</b><br>
-                    <span class="text-[10px] text-gray-500 uppercase tracking-wider">${m.categoria || 'Medicamento'} · ${m.unit} · mínimo ${stockMinimo(m)}</span>
+            <div class="app-list-card flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 transition-all ${critico || vencido ? 'bg-rose-50 border-rose-200' : porVencer ? 'bg-amber-50 border-amber-200' : 'bg-white'}">
+                <div class="flex items-start gap-3 min-w-0">
+                    <div class="app-icon ${critico || vencido ? 'bg-rose-100 text-rose-700 border-rose-200' : porVencer ? 'bg-amber-100 text-amber-700 border-amber-200' : 'bg-blue-50 text-blue-700 border-blue-100'}">
+                        <i data-lucide="${m.categoria === 'Vacuna' ? 'syringe' : 'package'}" class="w-4 h-4"></i>
+                    </div>
+                    <div class="min-w-0">
+                    <b class="text-sm text-slate-900 block truncate">${m.name}</b>
+                    <span class="section-kicker">${m.categoria || 'Medicamento'} · ${m.unit} · mínimo ${stockMinimo(m)}</span>
                     <div class="flex flex-wrap gap-1.5 mt-1">
-                        ${m.lote ? `<span class="text-[10px] bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full">Lote ${m.lote}</span>` : ''}
-                        ${m.proveedor ? `<span class="text-[10px] bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full">${m.proveedor}</span>` : ''}
-                        ${m.costoUnitario ? `<span class="text-[10px] bg-emerald-50 text-emerald-700 px-2 py-0.5 rounded-full">Costo $${formatoMoneda(m.costoUnitario)} · Valor $${formatoMoneda(valorInventario)}</span>` : ''}
-                        ${m.caducidad ? `<span class="text-[10px] ${vencido ? 'bg-rose-600 text-white' : porVencer ? 'bg-amber-500 text-slate-950' : 'bg-slate-100 text-slate-600'} px-2 py-0.5 rounded-full">Caduca ${m.caducidad}</span>` : ''}
+                        ${m.lote ? `<span class="app-chip">Lote ${m.lote}</span>` : ''}
+                        ${m.proveedor ? `<span class="app-chip">${m.proveedor}</span>` : ''}
+                        ${m.costoUnitario ? `<span class="app-chip green">Costo $${formatoMoneda(m.costoUnitario)} · Valor $${formatoMoneda(valorInventario)}</span>` : ''}
+                        ${m.caducidad ? `<span class="app-chip ${vencido ? 'rose' : porVencer ? 'amber' : ''}">Caduca ${m.caducidad}</span>` : ''}
+                    </div>
                     </div>
                 </div>
-                <div class="flex flex-wrap items-center gap-2 w-full sm:w-auto justify-end">
-                    <span class="font-bold border px-2 py-0.5 rounded-lg text-xs ${critico ? 'bg-rose-600 text-white border-rose-600' : 'bg-gray-100 text-gray-700'}">${m.stock} disp</span>
-                    <button onclick="registrarEntradaSalidaStock(${m.id}, 'Entrada')" title="Entrada rápida" class="text-emerald-600 hover:bg-emerald-50 p-1 bg-white border rounded-lg shadow-2xs transition-all"><i data-lucide="plus" class="w-3.5 h-3.5"></i></button>
-                    <button onclick="registrarEntradaSalidaStock(${m.id}, 'Salida')" title="Salida rápida" class="text-rose-600 hover:bg-rose-50 p-1 bg-white border rounded-lg shadow-2xs transition-all"><i data-lucide="minus" class="w-3.5 h-3.5"></i></button>
-                    <button onclick="ajustarStockManual(${m.id})" title="Ajustar existencia" class="text-gray-400 hover:text-blue-600 p-1 bg-white border rounded-lg shadow-2xs transition-all"><i data-lucide="plus-minus" class="w-3.5 h-3.5"></i></button>
-                    <button onclick="iniciarEdicionMedicamento(${m.id})" class="text-gray-400 hover:text-amber-600 p-1 bg-white border rounded-lg shadow-2xs transition-all"><i data-lucide="edit" class="w-3.5 h-3.5"></i></button>
-                    <button onclick="eliminarMedicamento(${m.id})" class="text-gray-300 hover:text-red-500 p-1 bg-white border rounded-lg shadow-2xs transition-all"><i data-lucide="trash-2" class="w-3.5 h-3.5"></i></button>
+                <div class="flex flex-wrap items-center gap-2 w-full sm:w-auto justify-between sm:justify-end">
+                    <span class="app-chip ${critico ? 'rose' : 'blue'}">${m.stock} disp</span>
+                    <button onclick="registrarEntradaSalidaStock(${m.id}, 'Salida')" class="btn-danger-soft"><i data-lucide="minus" class="w-4 h-4"></i> Salida</button>
+                    <button onclick="registrarEntradaSalidaStock(${m.id}, 'Entrada')" class="btn-soft text-emerald-700"><i data-lucide="plus" class="w-4 h-4"></i> Entrada</button>
+                    <details class="action-menu">
+                        <summary class="icon-action cursor-pointer" title="Más acciones"><i data-lucide="more-horizontal" class="w-4 h-4"></i> Más</summary>
+                        <div class="action-menu-popover">
+                            <button type="button" onclick="iniciarEdicionMedicamento(${m.id})"><i data-lucide="edit" class="w-4 h-4 text-amber-700"></i> Editar insumo</button>
+                            <button type="button" onclick="eliminarMedicamento(${m.id})" class="text-rose-700"><i data-lucide="trash-2" class="w-4 h-4"></i> Eliminar</button>
+                        </div>
+                    </details>
                 </div>
             </div>`;
     }).join('');
@@ -128,6 +137,7 @@ function guardarMedicamento(e) {
             motivo: editId ? 'Actualización de existencia' : 'Alta inicial de inventario'
         });
     }
+    registrarAuditoria('inventario', editId ? 'Editar' : 'Crear', `${editId ? 'Insumo actualizado' : 'Insumo registrado'}: ${item.name}`, item.id);
     saveStore('inventario');
     cancelarEdicionMedicamento();
     renderInventario(); 
@@ -162,6 +172,7 @@ function eliminarMedicamento(id) {
         const item = inventario.find(m => m.id === id);
         if (item) registrarMovimientoInventario({ item, tipo: 'Baja', cantidad: -item.stock, motivo: 'Eliminación de insumo' });
         inventario = inventario.filter(m=>m.id!==id); 
+        registrarAuditoria('inventario', 'Borrar', `Insumo eliminado: ${item?.name || id}`, id);
         saveStore('inventario'); 
         renderInventario(); 
         revisarAlertasStockGlobal(); 
@@ -192,6 +203,7 @@ function ajustarStockManual(id) {
     if (!diferencia) return;
     item.stock = nuevaExistencia;
     registrarMovimientoInventario({ item, tipo: diferencia > 0 ? 'Entrada' : 'Ajuste', cantidad: diferencia, motivo: 'Ajuste manual' });
+    registrarAuditoria('inventario', 'Ajustar', `Stock ajustado: ${item.name} (${item.stock})`, item.id);
     saveStore('inventario');
     renderInventario();
     revisarAlertasStockGlobal();
@@ -213,6 +225,30 @@ function registrarEntradaSalidaStock(id, tipo) {
     }
     item.stock += delta;
     registrarMovimientoInventario({ item, tipo, cantidad: delta, motivo: `${tipo} rápida` });
+    registrarAuditoria('inventario', tipo, `${tipo} de stock: ${item.name} (${cantidad})`, item.id);
+    saveStore('inventario');
+    renderInventario();
+    revisarAlertasStockGlobal();
+}
+function registrarCompraInventario(id) {
+    const item = inventario.find(m => m.id === id);
+    if (!item) return;
+    const cantidadTexto = prompt(`Compra de ${item.name}\nCantidad recibida:`, '1');
+    if (cantidadTexto === null) return;
+    const cantidad = parseInt(cantidadTexto);
+    if (!Number.isInteger(cantidad) || cantidad <= 0) {
+        alert('Ingresa una cantidad válida.');
+        return;
+    }
+    const costoTexto = prompt('Costo unitario de compra:', item.costoUnitario || '0');
+    if (costoTexto === null) return;
+    const costo = parseFloat(costoTexto || 0);
+    const proveedor = prompt('Proveedor / factura / nota:', item.proveedor || '') || item.proveedor || '';
+    item.stock += cantidad;
+    if (Number.isFinite(costo) && costo >= 0) item.costoUnitario = costo;
+    if (proveedor) item.proveedor = proveedor;
+    registrarMovimientoInventario({ item, tipo: 'Compra', cantidad, motivo: proveedor ? `Compra · ${proveedor}` : 'Compra registrada' });
+    registrarAuditoria('inventario', 'Compra', `Compra de ${item.name}: ${cantidad} ${item.unit || ''} · $${formatoMoneda(costo)}`, item.id);
     saveStore('inventario');
     renderInventario();
     revisarAlertasStockGlobal();
@@ -227,7 +263,7 @@ function renderMovimientosInventario() {
     lista.innerHTML = movimientosInventario.slice(0, 80).map(mov => {
         const positivo = mov.cantidad > 0;
         return `
-            <div class="border rounded-xl p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2 bg-slate-50">
+            <div class="app-list-card flex flex-col sm:flex-row sm:items-center justify-between gap-2 bg-slate-50">
                 <div>
                     <p class="text-xs font-bold text-slate-800">${mov.itemName}</p>
                     <p class="text-[11px] text-slate-500">${new Date(mov.fechaISO).toLocaleString('es-MX')} · ${mov.tipo} · ${mov.motivo}</p>
@@ -253,12 +289,20 @@ function renderFinanzas() {
     const lst = $('lista-finanzas'); 
     if(!lst) return;
     lst.innerHTML = finanzas.map(f => `
-        <div class="p-3 border border-emerald-200 bg-emerald-50/40 rounded-xl flex justify-between items-center shadow-3xs">
-            <div><b class="text-sm text-slate-800">${f.nombre}</b></div>
-            <div class="flex items-center gap-2">
-                <span class="font-bold text-emerald-800 text-sm">$${f.precio} MXN</span>
-                <button onclick="iniciarEdicionServicio(${f.id})" class="text-gray-400 hover:text-amber-600 p-1 bg-white border rounded-lg shadow-2xs transition-all"><i data-lucide="edit" class="w-3.5 h-3.5"></i></button>
-                <button onclick="eliminarServicio(${f.id})" class="text-emerald-400 hover:text-red-500 p-1 bg-white border rounded-lg shadow-2xs transition-all"><i data-lucide="trash-2" class="w-3.5 h-3.5"></i></button>
+        <div class="app-list-card bg-emerald-50/50 border-emerald-100 flex justify-between items-center gap-3">
+            <div class="min-w-0">
+                <b class="text-sm text-slate-900 block truncate">${f.nombre}</b>
+                <span class="section-kicker">Servicio del catálogo</span>
+            </div>
+            <div class="flex items-center gap-2 shrink-0">
+                <span class="app-chip green">$${f.precio} MXN</span>
+                <details class="action-menu">
+                    <summary class="icon-action cursor-pointer" title="Más acciones"><i data-lucide="more-horizontal" class="w-4 h-4"></i> Más</summary>
+                    <div class="action-menu-popover">
+                        <button type="button" onclick="iniciarEdicionServicio(${f.id})"><i data-lucide="edit" class="w-4 h-4 text-amber-700"></i> Editar precio</button>
+                        <button type="button" onclick="eliminarServicio(${f.id})" class="text-rose-700"><i data-lucide="trash-2" class="w-4 h-4"></i> Eliminar</button>
+                    </div>
+                </details>
             </div>
         </div>`).join('');
     renderServiciosExternos();
@@ -349,6 +393,16 @@ function estaEnFiltro(fechaConsulta, ahora = new Date()) {
 function costoInsumosConsulta(con) {
     return (con.insumos || []).reduce((acc, ins) => acc + (parseFloat(ins.costoSubtotal) || (parseFloat(ins.costoUnitario) || 0) * (parseInt(ins.qty) || 0)), 0);
 }
+function totalAbonos(item) {
+    return (item.abonos || []).reduce((acc, abono) => acc + (parseFloat(abono.monto) || 0), 0);
+}
+function saldoPendiente(item) {
+    return Math.max(0, (parseFloat(item.total ?? item.costoTotal) || 0) - totalAbonos(item));
+}
+function estadoPagoCalculado(item) {
+    if ((item.estadoPago || 'Pagado') === 'Pagado') return 'Pagado';
+    return saldoPendiente(item) <= 0 ? 'Pagado' : 'Pendiente';
+}
 function obtenerGastosFiltrados() {
     return (gastosFinancieros || [])
         .map(gasto => ({ ...gasto, fechaObj: parseFechaConsulta(gasto), monto: parseFloat(gasto.monto || 0) }))
@@ -366,7 +420,8 @@ function obtenerConsultasFinanzas() {
         fechaObj: parseFechaConsulta(con),
         total: parseFloat(con.costoTotal) || 0,
         costoInsumos: costoInsumosConsulta(con),
-        estadoPago: con.estadoPago || 'Pagado',
+        abonos: con.abonos || [],
+        estadoPago: estadoPagoCalculado({ ...con, total: parseFloat(con.costoTotal) || 0 }),
         metodoPago: con.metodoPago || 'Efectivo',
         notaPago: con.notaPago || ''
     }))));
@@ -377,7 +432,8 @@ function obtenerConsultasFinanzas() {
         mascotaNombre: 'Sin expediente',
         fechaObj: parseFechaConsulta(servicio),
         total: parseFloat(servicio.total) || 0,
-        estadoPago: servicio.estadoPago || 'Pagado',
+        abonos: servicio.abonos || [],
+        estadoPago: estadoPagoCalculado(servicio),
         metodoPago: servicio.metodoPago || 'Efectivo',
         notaPago: servicio.notaPago || '',
         tipo: servicio.tipo || 'Servicio externo'
@@ -390,12 +446,16 @@ function renderGananciasConsultas() {
     const consultasFiltradas = obtenerConsultasFinanzas().filter(con => estaEnFiltro(con.fechaObj));
     const cobradas = consultasFiltradas.filter(con => con.estadoPago === 'Pagado');
     const pendientes = consultasFiltradas.filter(con => con.estadoPago === 'Pendiente');
-    const totalAcumulado = cobradas.reduce((acc, con) => acc + con.total, 0);
+    const totalAcumulado = consultasFiltradas.reduce((acc, con) => {
+        const abonado = totalAbonos(con);
+        if (abonado) return acc + abonado;
+        return con.estadoPago === 'Pagado' ? acc + con.total : acc;
+    }, 0);
     const costoInsumos = cobradas.reduce((acc, con) => acc + (parseFloat(con.costoInsumos || 0)), 0);
     const gastos = obtenerGastosFiltrados();
     const totalGastos = gastos.reduce((acc, gasto) => acc + gasto.monto, 0);
     const utilidadNeta = totalAcumulado - costoInsumos - totalGastos;
-    const totalPendiente = pendientes.reduce((acc, con) => acc + con.total, 0);
+    const totalPendiente = pendientes.reduce((acc, con) => acc + saldoPendiente(con), 0);
     const ticketPromedio = cobradas.length ? totalAcumulado / cobradas.length : 0;
     txtMonto.innerText = formatoMoneda(totalAcumulado);
     if ($('total-consultas-filtrado')) $('total-consultas-filtrado').innerText = cobradas.length;
@@ -424,8 +484,10 @@ function renderListaIngresos(consultas) {
             : con.estadoPago === 'Pendiente'
                 ? 'bg-rose-100 text-rose-800'
                 : 'bg-slate-100 text-slate-700';
+        const abonado = totalAbonos(con);
+        const saldo = saldoPendiente(con);
         return `
-            <div class="bg-white border rounded-xl p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+            <div class="app-list-card flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                 <div>
                     <p class="text-xs font-bold text-slate-900">${con.clienteNombre} · ${con.mascotaNombre}</p>
                     <p class="text-[11px] text-slate-500">${fecha} · ${con.origenFinanciero || 'Consulta'} · ${con.metodoPago}</p>
@@ -433,12 +495,14 @@ function renderListaIngresos(consultas) {
                     ${con.notaPago ? `<p class="text-[10px] text-slate-400 italic">${con.notaPago}</p>` : ''}
                 </div>
                 <div class="text-right space-y-1">
-                    <span class="inline-block text-[10px] font-bold px-2 py-0.5 rounded-full ${badgePago}">${con.estadoPago}</span>
+                    <span class="app-chip ${con.estadoPago === 'Pagado' ? 'green' : con.estadoPago === 'Pendiente' ? 'rose' : ''}">${con.estadoPago}</span>
                     <p class="text-sm font-black ${con.estadoPago === 'Pagado' ? 'text-emerald-700' : 'text-slate-600'}">$${formatoMoneda(con.total)}</p>
+                    ${abonado ? `<p class="text-[10px] text-emerald-700 font-bold">Abonado: $${formatoMoneda(abonado)}</p>` : ''}
+                    ${saldo && con.estadoPago === 'Pendiente' ? `<p class="text-[10px] text-rose-700 font-bold">Saldo: $${formatoMoneda(saldo)}</p>` : ''}
                     ${con.costoInsumos ? `<p class="text-[10px] text-blue-600 font-bold">Costo insumos: $${formatoMoneda(con.costoInsumos)}</p>` : ''}
                     ${con.estadoPago === 'Pendiente' ? (con.origenFinanciero === 'Externo'
-                        ? `<button type="button" onclick="marcarServicioExternoPagado(${con.id})" class="text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-100 px-2 py-1 rounded-lg">Marcar pagado</button>`
-                        : `<button type="button" onclick="marcarConsultaPagada(${con.ownerId}, ${con.petId}, ${con.id})" class="text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-100 px-2 py-1 rounded-lg">Marcar pagado</button>`
+                        ? `<button type="button" onclick="marcarServicioExternoPagado(${con.id})" class="btn-soft text-emerald-700">Marcar pagado</button>`
+                        : `<button type="button" onclick="marcarConsultaPagada(${con.ownerId}, ${con.petId}, ${con.id})" class="btn-soft text-emerald-700">Marcar pagado</button>`
                     ) : ''}
                 </div>
             </div>`;
@@ -453,14 +517,19 @@ function renderGastosFinancieros(gastos = obtenerGastosFiltrados()) {
         return;
     }
     lista.innerHTML = gastos.map(gasto => `
-        <div class="bg-slate-50 border rounded-xl p-3 flex items-center justify-between gap-3">
+        <div class="app-list-card bg-slate-50 flex items-center justify-between gap-3">
             <div>
                 <p class="text-xs font-bold text-slate-900">${gasto.categoria || 'Gasto'} · $${formatoMoneda(gasto.monto)}</p>
                 <p class="text-[11px] text-slate-500">${gasto.fechaObj ? gasto.fechaObj.toLocaleDateString('es-MX') : gasto.fecha || 'Sin fecha'} · ${gasto.descripcion || 'Sin descripción'}</p>
             </div>
             <div class="flex items-center gap-1">
-                <button type="button" onclick="iniciarEdicionGastoFinanciero(${gasto.id})" class="text-gray-400 hover:text-amber-600 p-1 bg-white border rounded-lg"><i data-lucide="edit" class="w-3.5 h-3.5"></i></button>
-                <button type="button" onclick="eliminarGastoFinanciero(${gasto.id})" class="text-gray-300 hover:text-red-500 p-1 bg-white border rounded-lg"><i data-lucide="trash-2" class="w-3.5 h-3.5"></i></button>
+                <details class="action-menu">
+                    <summary class="icon-action cursor-pointer" title="Más acciones"><i data-lucide="more-horizontal" class="w-4 h-4"></i> Más</summary>
+                    <div class="action-menu-popover">
+                        <button type="button" onclick="iniciarEdicionGastoFinanciero(${gasto.id})"><i data-lucide="edit" class="w-4 h-4 text-amber-700"></i> Editar gasto</button>
+                        <button type="button" onclick="eliminarGastoFinanciero(${gasto.id})" class="text-rose-700"><i data-lucide="trash-2" class="w-4 h-4"></i> Eliminar</button>
+                    </div>
+                </details>
             </div>
         </div>
     `).join('');
@@ -479,6 +548,7 @@ function guardarGastoFinanciero(e) {
         monto: parseFloat($('gasto-monto')?.value || 0)
     };
     gastosFinancieros = editId ? gastosFinancieros.map(g => g.id === item.id ? item : g) : [item, ...gastosFinancieros];
+    registrarAuditoria('gastos', editId ? 'Editar' : 'Crear', `${item.categoria}: $${formatoMoneda(item.monto)}`, item.id);
     saveStore('gastosFinancieros');
     cancelarEdicionGastoFinanciero();
     renderGananciasConsultas();
@@ -504,6 +574,7 @@ function cancelarEdicionGastoFinanciero() {
 function eliminarGastoFinanciero(id) {
     if (!confirm('¿Eliminar este gasto?')) return;
     gastosFinancieros = gastosFinancieros.filter(g => g.id !== id);
+    registrarAuditoria('gastos', 'Borrar', `Gasto eliminado: ${id}`, id);
     saveStore('gastosFinancieros');
     renderGananciasConsultas();
 }
@@ -554,7 +625,7 @@ function renderServiciosExternos() {
                             ${item.agendaId ? `<button onclick="crearRecordatorioApple(${item.agendaId})" class="text-amber-700 hover:bg-amber-50 px-2.5 py-2 bg-white border rounded-lg shadow-2xs transition-all flex items-center gap-1 text-[11px] font-bold" title="Apple Reminders"><i data-lucide="list-todo" class="w-4 h-4"></i> Reminder</button>` : ''}
                             ${pendiente ? `<button onclick="marcarServicioExternoPagado(${item.id})" class="text-emerald-700 hover:bg-emerald-50 px-2.5 py-2 bg-white border border-emerald-200 rounded-lg shadow-2xs transition-all flex items-center gap-1 text-[11px] font-bold" title="Marcar pagado"><i data-lucide="check-circle" class="w-4 h-4"></i> Cobrar</button>` : ''}
                             <button onclick="iniciarEdicionServicioExterno(${item.id})" class="text-amber-700 hover:bg-amber-50 px-2.5 py-2 bg-white border rounded-lg shadow-2xs transition-all flex items-center gap-1 text-[11px] font-bold" title="Editar"><i data-lucide="edit" class="w-4 h-4"></i> Editar</button>
-                            <button onclick="eliminarServicioExterno(${item.id})" class="text-gray-400 hover:text-red-500 p-2 bg-white border rounded-lg shadow-2xs transition-all" title="Eliminar"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
+                            <button onclick="eliminarServicioExterno(${item.id})" class="btn-danger-soft" title="Eliminar"><i data-lucide="trash-2" class="w-4 h-4"></i> Eliminar</button>
                         </div>
                     </div>
                 </div>
@@ -620,12 +691,25 @@ function guardarServicioExterno(e) {
         metodoPago: $('externo-metodo')?.value || 'Efectivo',
         estadoPago: $('externo-estado')?.value || 'Pagado',
         notaPago: $('externo-nota')?.value.trim() || '',
+        abonos: editId
+            ? (serviciosExternos.find(s => s.id === parseInt(editId))?.abonos || [])
+            : (($('externo-estado')?.value || 'Pagado') === 'Pagado'
+                ? [{ id: uid(), fechaISO: new Date().toISOString(), monto: parseFloat($('externo-total')?.value || 0), metodo: $('externo-metodo')?.value || 'Efectivo' }]
+                : []),
         tipo: 'Servicio externo'
     };
     if (!sincronizarAgendaServicioExterno(item, $('externo-agendar')?.checked)) return;
     serviciosExternos = editId
         ? serviciosExternos.map(s => s.id === item.id ? item : s)
         : [item, ...serviciosExternos];
+    if (item.agendaId && $('externo-agendar')?.checked) {
+        setTimeout(() => {
+            if (confirm('Servicio externo guardado en agenda. ¿Crear recordatorio en Apple Reminders ahora?')) {
+                crearRecordatorioApple(item.agendaId);
+            }
+        }, 250);
+    }
+    registrarAuditoria('servicios_externos', editId ? 'Editar' : 'Crear', `${item.servicioCobrado} · $${formatoMoneda(item.total)}`, item.id);
     saveStore('serviciosExternos');
     cancelarEdicionServicioExterno();
     renderServiciosExternos();
@@ -668,6 +752,7 @@ function eliminarServicioExterno(id) {
         if (typeof renderAgenda === 'function') renderAgenda();
     }
     serviciosExternos = serviciosExternos.filter(s => s.id !== id);
+    registrarAuditoria('servicios_externos', 'Borrar', `Servicio externo eliminado: ${item?.servicioCobrado || id}`, id);
     saveStore('serviciosExternos');
     renderServiciosExternos();
     renderGananciasConsultas();
@@ -678,13 +763,23 @@ function marcarServicioExternoPagado(id) {
     if (!item) return;
     const metodo = prompt('Método de pago:', item.metodoPago || 'Efectivo');
     if (metodo === null) return;
-    item.estadoPago = 'Pagado';
+    const saldo = saldoPendiente(item);
+    const montoTexto = prompt(`Saldo pendiente: $${formatoMoneda(saldo)}\nMonto recibido:`, saldo.toFixed(2));
+    if (montoTexto === null) return;
+    const monto = parseFloat(montoTexto);
+    if (!Number.isFinite(monto) || monto <= 0) {
+        alert('Ingresa un monto válido.');
+        return;
+    }
+    item.abonos = [...(item.abonos || []), { id: uid(), fechaISO: new Date().toISOString(), monto, metodo: metodo || item.metodoPago || 'Efectivo' }];
+    item.estadoPago = saldoPendiente(item) <= 0 ? 'Pagado' : 'Pendiente';
     item.metodoPago = metodo || item.metodoPago || 'Efectivo';
-    item.notaPago = item.notaPago ? `${item.notaPago} | Pagado ${new Date().toLocaleString('es-MX')}` : `Pagado ${new Date().toLocaleString('es-MX')}`;
+    item.notaPago = item.notaPago ? `${item.notaPago} | Abono $${formatoMoneda(monto)} ${new Date().toLocaleString('es-MX')}` : `Abono $${formatoMoneda(monto)} ${new Date().toLocaleString('es-MX')}`;
+    registrarAuditoria('pagos', item.estadoPago === 'Pagado' ? 'Cobrar' : 'Abonar', `Servicio externo: ${item.servicioCobrado} · abono $${formatoMoneda(monto)} · saldo $${formatoMoneda(saldoPendiente(item))}`, id);
     if (item.agendaId) {
         const cita = agenda.find(agendaItem => agendaItem.id === item.agendaId);
         if (cita && !['Cancelada'].includes(cita.estado || 'Programada')) {
-            cita.estado = 'Atendida';
+            if (item.estadoPago === 'Pagado') cita.estado = 'Atendida';
             saveStore('agenda');
             if (typeof renderAgenda === 'function') renderAgenda();
         }
@@ -701,9 +796,19 @@ function marcarConsultaPagada(ownerId, petId, consultaId) {
     if (!consulta) return;
     const metodo = prompt("Método de pago:", consulta.metodoPago || "Efectivo");
     if (metodo === null) return;
-    consulta.estadoPago = 'Pagado';
+    const saldo = saldoPendiente(consulta);
+    const montoTexto = prompt(`Saldo pendiente: $${formatoMoneda(saldo)}\nMonto recibido:`, saldo.toFixed(2));
+    if (montoTexto === null) return;
+    const monto = parseFloat(montoTexto);
+    if (!Number.isFinite(monto) || monto <= 0) {
+        alert('Ingresa un monto válido.');
+        return;
+    }
+    consulta.abonos = [...(consulta.abonos || []), { id: uid(), fechaISO: new Date().toISOString(), monto, metodo: metodo || consulta.metodoPago || 'Efectivo' }];
+    consulta.estadoPago = saldoPendiente(consulta) <= 0 ? 'Pagado' : 'Pendiente';
     consulta.metodoPago = metodo || consulta.metodoPago || 'Efectivo';
-    consulta.notaPago = consulta.notaPago ? `${consulta.notaPago} | Pagado ${new Date().toLocaleString('es-MX')}` : `Pagado ${new Date().toLocaleString('es-MX')}`;
+    consulta.notaPago = consulta.notaPago ? `${consulta.notaPago} | Abono $${formatoMoneda(monto)} ${new Date().toLocaleString('es-MX')}` : `Abono $${formatoMoneda(monto)} ${new Date().toLocaleString('es-MX')}`;
+    registrarAuditoria('pagos', consulta.estadoPago === 'Pagado' ? 'Cobrar' : 'Abonar', `Consulta: ${consulta.servicioCobrado} · abono $${formatoMoneda(monto)} · saldo $${formatoMoneda(saldoPendiente(consulta))}`, consultaId);
     saveStore('clientes');
     renderGananciasConsultas();
     if (typeof renderDashboard === 'function') renderDashboard();
@@ -730,7 +835,7 @@ function renderResumenServicios(consultas) {
         return;
     }
     contenedor.innerHTML = items.slice(0, 6).map(([nombre, data]) => `
-        <div class="bg-white border rounded-xl p-3">
+        <div class="app-list-card">
             <div class="flex justify-between gap-2">
                 <span class="text-xs font-bold text-slate-800">${nombre}</span>
                 <span class="text-xs font-black text-emerald-700">$${formatoMoneda(data.total)}</span>
@@ -753,7 +858,7 @@ function renderResumenMetodosPago(consultas) {
         return;
     }
     contenedor.innerHTML = items.map(([metodo, total]) => `
-        <div class="bg-white border rounded-xl p-3">
+        <div class="app-list-card">
             <p class="text-[10px] font-bold uppercase text-slate-400">${metodo}</p>
             <p class="text-sm font-black text-slate-900">$${formatoMoneda(total)}</p>
         </div>

@@ -1,6 +1,7 @@
 let modoDatosRemotos = 'app_state';
 let normalizedReloadTimer = null;
 let tablaVacunasPacienteDisponible = false;
+let tablaAuditLogsDisponible = false;
 
 const TABLAS_NORMALIZADAS = [
     'clientes',
@@ -123,8 +124,10 @@ function mapearEstadoNormalizado(rows) {
             metodoPago: pago?.metodo_pago || 'Efectivo',
             estadoPago: pago?.estado_pago || 'Pagado',
             notaPago: pago?.nota_pago || '',
+            abonos: pago?.abonos || [],
             notasRapidas: row.notas_rapidas || '',
             vacunasControlStock: row.vacunas_control_stock,
+            seguimiento: row.seguimiento || {},
             firmaDueno: row.firma_dueno || '',
             firmaVet: row.firma_vet || ''
         };
@@ -219,6 +222,7 @@ function mapearEstadoNormalizado(rows) {
             metodoPago: row.metodo_pago || 'Efectivo',
             estadoPago: row.estado_pago || 'Pagado',
             notaPago: row.nota || '',
+            abonos: row.abonos || [],
             tipo: row.tipo || 'Servicio externo'
         })),
         gastosFinancieros: (rows.gastos || []).map(row => ({
@@ -238,7 +242,16 @@ function mapearEstadoNormalizado(rows) {
             cantidad: row.cantidad || 0,
             stockResultante: row.stock_resultante || 0,
             motivo: row.motivo || ''
-        }))
+        })),
+        auditLogs: rows.audit_logs ? rows.audit_logs.map(row => ({
+            id: row.id,
+            fechaISO: row.created_at,
+            usuario: row.user_id || '',
+            tabla: row.tabla || '',
+            accion: row.accion || '',
+            registroId: row.registro_id || '',
+            resumen: row.resumen || ''
+        })) : auditLogs
     };
 }
 
@@ -256,6 +269,14 @@ async function cargarEstadoBaseNormalizada() {
             if (!vacunas.error) rows.vacunas_paciente = vacunas.data || [];
         } catch (errorVacunas) {
             tablaVacunasPacienteDisponible = false;
+        }
+        try {
+            const auditoria = await aplicarFiltroScope(supabaseClient.from('audit_logs').select('*').order('created_at', { ascending: false }).limit(100));
+            tablaAuditLogsDisponible = !auditoria.error;
+            if (!auditoria.error) rows.audit_logs = auditoria.data || [];
+        } catch (errorAuditoria) {
+            tablaAuditLogsDisponible = false;
+            rows.audit_logs = null;
         }
         return { ok: true, estado: mapearEstadoNormalizado(rows) };
     } catch (error) {
@@ -365,6 +386,7 @@ async function guardarEstadoBaseNormalizada() {
                     notas_rapidas: consulta.notasRapidas || '',
                     insumos: consulta.insumos || [],
                     vacunas_control_stock: consulta.vacunasControlStock || null,
+                    seguimiento: consulta.seguimiento || {},
                     firma_dueno: consulta.firmaDueno || '',
                     firma_vet: consulta.firmaVet || '',
                     updated_at: new Date().toISOString()
@@ -417,7 +439,8 @@ async function guardarEstadoBaseNormalizada() {
                     total: parseFloat(consulta.costoTotal || 0),
                     metodo_pago: consulta.metodoPago || 'Efectivo',
                     estado_pago: consulta.estadoPago || 'Pagado',
-                    nota_pago: consulta.notaPago || '',
+                   nota_pago: consulta.notaPago || '',
+                    abonos: consulta.abonos || [],
                     fecha_iso: fechaISOConsulta(consulta),
                     updated_at: new Date().toISOString()
                 });
@@ -440,6 +463,7 @@ async function guardarEstadoBaseNormalizada() {
         metodo_pago: servicio.metodoPago || 'Efectivo',
         estado_pago: servicio.estadoPago || 'Pagado',
         nota: servicio.notaPago || '',
+        abonos: servicio.abonos || [],
         tipo: servicio.tipo || 'Servicio externo',
         updated_at: new Date().toISOString()
     }));
@@ -482,6 +506,32 @@ async function guardarEstadoBaseNormalizada() {
     await borrarFaltantes('servicios', idsLegacy(finanzas));
 }
 
+async function recargarEstadoNormalizadoPorRealtime(detalle = 'Se recibieron cambios de otro dispositivo.') {
+    if (guardandoRemoto) return;
+    actualizarEstadoSync('Actualizando...');
+    const remoto = await cargarEstadoBaseNormalizada();
+    if (!remoto.ok) {
+        actualizarEstadoSync('Error de sincronización', true);
+        console.warn('No se pudo aplicar cambio remoto normalizado.', remoto.error);
+        return;
+    }
+    if (typeof aplicarEstadoRemoto === 'function') {
+        aplicarEstadoRemoto(remoto.estado, detalle);
+    } else {
+        aplicarEstado(remoto.estado);
+        if (typeof refrescarInterfaz === 'function') refrescarInterfaz();
+        actualizarEstadoSync('Sincronizado');
+    }
+}
+
+function programarRecargaNormalizadaRealtime(tabla) {
+    if (guardandoRemoto) return;
+    clearTimeout(normalizedReloadTimer);
+    normalizedReloadTimer = setTimeout(() => {
+        recargarEstadoNormalizadoPorRealtime(`Cambio recibido en ${tabla}.`);
+    }, 500);
+}
+
 function escucharCambiosBaseNormalizada() {
     if (!usuarioActivo) return;
     if (realtimeChannel) supabaseClient.removeChannel(realtimeChannel);
@@ -493,15 +543,7 @@ function escucharCambiosBaseNormalizada() {
             table: tabla,
             filter: filtroRealtimeScope()
         }, () => {
-            if (guardandoRemoto) return;
-            clearTimeout(normalizedReloadTimer);
-            normalizedReloadTimer = setTimeout(async () => {
-                const remoto = await cargarEstadoBaseNormalizada();
-                if (!remoto.ok) return;
-                aplicarEstado(remoto.estado);
-                if (typeof refrescarInterfaz === 'function') refrescarInterfaz();
-                actualizarEstadoSync('Sincronizado');
-            }, 500);
+            programarRecargaNormalizadaRealtime(tabla);
         });
     });
     if (tablaVacunasPacienteDisponible) {
@@ -511,15 +553,17 @@ function escucharCambiosBaseNormalizada() {
             table: 'vacunas_paciente',
             filter: filtroRealtimeScope()
         }, () => {
-            if (guardandoRemoto) return;
-            clearTimeout(normalizedReloadTimer);
-            normalizedReloadTimer = setTimeout(async () => {
-                const remoto = await cargarEstadoBaseNormalizada();
-                if (!remoto.ok) return;
-                aplicarEstado(remoto.estado);
-                if (typeof refrescarInterfaz === 'function') refrescarInterfaz();
-                actualizarEstadoSync('Sincronizado');
-            }, 500);
+            programarRecargaNormalizadaRealtime('vacunas_paciente');
+        });
+    }
+    if (tablaAuditLogsDisponible) {
+        realtimeChannel.on('postgres_changes', {
+            event: 'INSERT',
+            schema: 'public',
+            table: 'audit_logs',
+            filter: filtroRealtimeScope()
+        }, () => {
+            programarRecargaNormalizadaRealtime('audit_logs');
         });
     }
     realtimeChannel.subscribe();
