@@ -513,30 +513,52 @@ function renderServiciosExternos() {
     if ($('externo-fecha') && !$('externo-fecha').value) $('externo-fecha').value = fechaLocalInputFinanzas();
     const ordenados = [...(serviciosExternos || [])].sort((a, b) => (parseFechaConsulta(b)?.getTime() || 0) - (parseFechaConsulta(a)?.getTime() || 0));
     if (!ordenados.length) {
-        lista.innerHTML = `<p class="text-xs text-gray-400 text-center py-10">Aún no hay servicios externos registrados.</p>`;
+        lista.innerHTML = `
+            <div class="border border-dashed border-slate-200 rounded-2xl bg-slate-50 p-8 text-center">
+                <i data-lucide="briefcase-medical" class="w-10 h-10 mx-auto text-slate-300 mb-2"></i>
+                <p class="text-sm font-black text-slate-600">Aún no hay servicios externos</p>
+                <p class="text-xs text-slate-400 mt-1">Cuando guardes ultrasonidos, toma de muestras u otros trabajos, aparecerán aquí.</p>
+            </div>`;
+        renderIcons();
         return;
     }
     lista.innerHTML = ordenados.map(item => {
         const pendiente = (item.estadoPago || 'Pagado') === 'Pendiente';
+        const agendado = Boolean(item.agendaId || item.hora);
+        const fecha = item.fecha || formatoFechaCorta(parseFechaConsulta(item));
         return `
-            <div class="p-3 border rounded-xl bg-white flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs">
-                <div>
-                    <div class="flex flex-wrap items-center gap-2">
-                        <b class="text-sm text-slate-800">${item.servicioCobrado || 'Servicio externo'}</b>
-                        <span class="text-[10px] font-bold px-2 py-0.5 rounded-full ${pendiente ? 'bg-rose-100 text-rose-700' : 'bg-emerald-100 text-emerald-700'}">${item.estadoPago || 'Pagado'}</span>
+            <article class="border rounded-2xl bg-white overflow-hidden shadow-xs ${pendiente ? 'border-rose-200' : agendado ? 'border-blue-200' : 'border-slate-200'}">
+                <div class="p-4 flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+                    <div class="flex items-start gap-3 min-w-0">
+                        <div class="w-11 h-11 rounded-xl ${pendiente ? 'bg-rose-50 text-rose-700 border-rose-100' : 'bg-blue-50 text-blue-700 border-blue-100'} border flex items-center justify-center shrink-0">
+                            <i data-lucide="${agendado ? 'calendar-check' : 'briefcase-medical'}" class="w-5 h-5"></i>
+                        </div>
+                        <div class="min-w-0">
+                            <div class="flex flex-wrap items-center gap-2">
+                                <h4 class="text-sm font-black text-slate-900">${item.servicioCobrado || 'Servicio externo'}</h4>
+                                <span class="text-[10px] font-bold px-2 py-0.5 rounded-full ${pendiente ? 'bg-rose-100 text-rose-700' : 'bg-emerald-100 text-emerald-700'}">${item.estadoPago || 'Pagado'}</span>
+                                ${agendado ? `<span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-100">Agendado</span>` : ''}
+                            </div>
+                            <p class="text-xs text-slate-600 mt-1"><b>${item.clienteNombre || 'Sin contacto'}</b> · ${fecha}</p>
+                            ${item.hora ? `<p class="text-[11px] text-blue-700 font-bold mt-0.5">${item.hora} hrs ${item.direccion ? `· ${item.direccion}` : ''}</p>` : item.direccion ? `<p class="text-[11px] text-slate-500 mt-0.5">${item.direccion}</p>` : ''}
+                            ${item.notaPago ? `<p class="text-[11px] text-slate-400 italic mt-1 line-clamp-2">${item.notaPago}</p>` : ''}
+                        </div>
                     </div>
-                    <p class="text-[11px] text-slate-500">${item.clienteNombre || 'Sin contacto'} · ${item.fecha || formatoFechaCorta(parseFechaConsulta(item))}</p>
-                    ${item.notaPago ? `<p class="text-[10px] text-slate-400 italic">${item.notaPago}</p>` : ''}
-                    ${item.hora ? `<p class="text-[10px] text-blue-600 font-bold mt-1">Agenda: ${item.fecha || ''} · ${item.hora} hrs</p>` : ''}
+                    <div class="flex flex-row lg:flex-col items-end justify-between gap-3">
+                        <div class="text-right">
+                            <p class="text-[10px] uppercase font-bold text-slate-400">Ingreso</p>
+                            <p class="font-black text-lg ${pendiente ? 'text-rose-700' : 'text-emerald-700'}">$${formatoMoneda(item.total)}</p>
+                            <p class="text-[10px] text-slate-400">${item.metodoPago || 'Efectivo'}</p>
+                        </div>
+                        <div class="flex items-center gap-1.5">
+                            ${item.agendaId ? `<button onclick="crearRecordatorioApple(${item.agendaId})" class="text-amber-600 hover:bg-amber-50 p-2 bg-white border rounded-lg shadow-2xs transition-all" title="Apple Reminders"><i data-lucide="list-todo" class="w-4 h-4"></i></button>` : ''}
+                            ${pendiente ? `<button onclick="marcarServicioExternoPagado(${item.id})" class="text-emerald-600 hover:bg-emerald-50 p-2 bg-white border rounded-lg shadow-2xs transition-all" title="Marcar pagado"><i data-lucide="check-circle" class="w-4 h-4"></i></button>` : ''}
+                            <button onclick="iniciarEdicionServicioExterno(${item.id})" class="text-gray-500 hover:text-amber-600 p-2 bg-white border rounded-lg shadow-2xs transition-all" title="Editar"><i data-lucide="edit" class="w-4 h-4"></i></button>
+                            <button onclick="eliminarServicioExterno(${item.id})" class="text-gray-400 hover:text-red-500 p-2 bg-white border rounded-lg shadow-2xs transition-all" title="Eliminar"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
+                        </div>
+                    </div>
                 </div>
-                <div class="flex items-center gap-2 justify-end">
-                    <span class="font-black text-sm ${pendiente ? 'text-rose-700' : 'text-emerald-700'}">$${formatoMoneda(item.total)}</span>
-                    ${item.agendaId ? `<button onclick="crearRecordatorioApple(${item.agendaId})" class="text-amber-600 hover:bg-amber-50 p-1 bg-white border rounded-lg shadow-2xs transition-all" title="Apple Reminders"><i data-lucide="list-todo" class="w-3.5 h-3.5"></i></button>` : ''}
-                    ${pendiente ? `<button onclick="marcarServicioExternoPagado(${item.id})" class="text-emerald-600 hover:bg-emerald-50 p-1 bg-white border rounded-lg shadow-2xs transition-all" title="Marcar pagado"><i data-lucide="check-circle" class="w-3.5 h-3.5"></i></button>` : ''}
-                    <button onclick="iniciarEdicionServicioExterno(${item.id})" class="text-gray-400 hover:text-amber-600 p-1 bg-white border rounded-lg shadow-2xs transition-all" title="Editar"><i data-lucide="edit" class="w-3.5 h-3.5"></i></button>
-                    <button onclick="eliminarServicioExterno(${item.id})" class="text-gray-300 hover:text-red-500 p-1 bg-white border rounded-lg shadow-2xs transition-all" title="Eliminar"><i data-lucide="trash-2" class="w-3.5 h-3.5"></i></button>
-                </div>
-            </div>`;
+            </article>`;
     }).join('');
     renderIcons();
 }

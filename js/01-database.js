@@ -1,5 +1,6 @@
 let modoDatosRemotos = 'app_state';
 let normalizedReloadTimer = null;
+let tablaVacunasPacienteDisponible = false;
 
 const TABLAS_NORMALIZADAS = [
     'clientes',
@@ -45,14 +46,15 @@ async function upsertTabla(nombre, registros, columnas = '*') {
     if (!registros.length) return [];
     const { data, error } = await supabaseClient
         .from(nombre)
-        .upsert(registros, { onConflict: 'user_id,legacy_id' })
+        .upsert(registros, { onConflict: workspaceSoportado && workspaceActivoId ? 'workspace_id,legacy_id' : 'user_id,legacy_id' })
         .select(columnas);
     if (error) throw error;
     return data || [];
 }
 
 async function borrarFaltantes(nombre, legacyIds) {
-    let query = supabaseClient.from(nombre).delete().eq('user_id', usuarioActivo.id);
+    let query = supabaseClient.from(nombre).delete();
+    query = aplicarFiltroScope(query);
     if (legacyIds.length) query = query.not('legacy_id', 'in', `(${legacyIds.join(',')})`);
     const { error } = await query;
     if (error) throw error;
@@ -89,7 +91,7 @@ function mapearEstadoNormalizado(rows) {
             spayed: row.esterilizado || '',
             photo: row.foto || '',
             estudios: row.estudios || [],
-            vacunasManuales: row.vacunas_manuales || [],
+            vacunasManuales: rows.vacunas_paciente ? [] : (row.vacunas_manuales || []),
             historial: []
         };
         mascotasPorId.set(row.id, mascota);
@@ -129,8 +131,29 @@ function mapearEstadoNormalizado(rows) {
         mascotasPorId.get(row.mascota_id)?.historial.push(consulta);
     });
 
+    (rows.vacunas_paciente || []).forEach(row => {
+        const mascota = mascotasPorId.get(row.mascota_id);
+        if (!mascota) return;
+        mascota.vacunasManuales = mascota.vacunasManuales || [];
+        mascota.vacunasManuales.push({
+            id: row.legacy_id || row.id,
+            nombre: row.nombre || 'Vacuna manual',
+            fecha: row.fecha_aplicacion || '',
+            fechaRefuerzo: row.fecha_refuerzo || '',
+            lote: row.lote || '',
+            laboratorio: row.laboratorio || '',
+            desparasitante: row.desparasitante || '',
+            nota: row.nota || '',
+            origen: row.origen || 'Manual',
+            fechaISO: row.created_at || new Date().toISOString()
+        });
+    });
+
     mascotasPorId.forEach(mascota => {
         mascota.historial.sort((a, b) => new Date(b.fechaISO).getTime() - new Date(a.fechaISO).getTime());
+        mascota.vacunasManuales = (mascota.vacunasManuales || []).sort((a, b) =>
+            new Date(`${b.fecha || ''}T12:00:00`).getTime() - new Date(`${a.fecha || ''}T12:00:00`).getTime()
+        );
         delete mascota.dbId;
     });
 
@@ -222,11 +245,18 @@ function mapearEstadoNormalizado(rows) {
 async function cargarEstadoBaseNormalizada() {
     try {
         const consultas = await Promise.all(TABLAS_NORMALIZADAS.map(tabla =>
-            supabaseClient.from(tabla).select('*').eq('user_id', usuarioActivo.id)
+            aplicarFiltroScope(supabaseClient.from(tabla).select('*'))
         ));
         const error = consultas.find(resultado => resultado.error)?.error;
         if (error) return { ok: false, error };
         const rows = Object.fromEntries(TABLAS_NORMALIZADAS.map((tabla, index) => [tabla, consultas[index].data || []]));
+        try {
+            const vacunas = await aplicarFiltroScope(supabaseClient.from('vacunas_paciente').select('*'));
+            tablaVacunasPacienteDisponible = !vacunas.error;
+            if (!vacunas.error) rows.vacunas_paciente = vacunas.data || [];
+        } catch (errorVacunas) {
+            tablaVacunasPacienteDisponible = false;
+        }
         return { ok: true, estado: mapearEstadoNormalizado(rows) };
     } catch (error) {
         return { ok: false, error };
@@ -235,8 +265,9 @@ async function cargarEstadoBaseNormalizada() {
 
 async function guardarEstadoBaseNormalizada() {
     const userId = usuarioActivo.id;
+    const scope = scopeRemoto();
     const clientesRows = clientes.map(cliente => ({
-        user_id: userId,
+        ...scope,
         legacy_id: cliente.id,
         nombre: cliente.owner || '',
         telefono: cliente.phone || '',
@@ -250,7 +281,7 @@ async function guardarEstadoBaseNormalizada() {
     const clienteDbPorLegacy = new Map(clientesGuardados.map(row => [row.legacy_id, row.id]));
 
     const mascotasRows = clientes.flatMap(cliente => (cliente.mascotas || []).map(mascota => ({
-        user_id: userId,
+        ...scope,
         legacy_id: mascota.id,
         cliente_id: clienteDbPorLegacy.get(cliente.id),
         nombre: mascota.name || '',
@@ -268,7 +299,7 @@ async function guardarEstadoBaseNormalizada() {
     const mascotaDbPorLegacy = new Map(mascotasGuardadas.map(row => [row.legacy_id, row.id]));
 
     const serviciosRows = finanzas.map(servicio => ({
-        user_id: userId,
+        ...scope,
         legacy_id: servicio.id,
         nombre: servicio.nombre || '',
         precio: parseFloat(servicio.precio || 0),
@@ -278,7 +309,7 @@ async function guardarEstadoBaseNormalizada() {
     await upsertTabla('servicios', serviciosRows, 'id, legacy_id');
 
     const inventarioRows = inventario.map(item => ({
-        user_id: userId,
+        ...scope,
         legacy_id: item.id,
         nombre: item.name || '',
         stock: parseInt(item.stock || 0),
@@ -295,7 +326,7 @@ async function guardarEstadoBaseNormalizada() {
     const inventarioDbPorLegacy = new Map(inventarioGuardado.map(row => [row.legacy_id, row.id]));
 
     const agendaRows = agenda.map(cita => ({
-        user_id: userId,
+        ...scope,
         legacy_id: cita.id,
         cliente_id: clienteDbPorLegacy.get(cita.clienteId || cita.ownerId) || null,
         mascota_id: mascotaDbPorLegacy.get(cita.petId) || null,
@@ -316,7 +347,7 @@ async function guardarEstadoBaseNormalizada() {
         (cliente.mascotas || []).forEach(mascota => {
             (mascota.historial || []).forEach(consulta => {
                 consultasRows.push({
-                    user_id: userId,
+                    ...scope,
                     legacy_id: consulta.id,
                     cliente_id: clienteDbPorLegacy.get(cliente.id) || null,
                     mascota_id: mascotaDbPorLegacy.get(mascota.id) || null,
@@ -344,12 +375,40 @@ async function guardarEstadoBaseNormalizada() {
     const consultasGuardadas = await upsertTabla('consultas', consultasRows.filter(row => row.mascota_id), 'id, legacy_id');
     const consultaDbPorLegacy = new Map(consultasGuardadas.map(row => [row.legacy_id, row.id]));
 
+    if (tablaVacunasPacienteDisponible) {
+        const vacunasRows = [];
+        clientes.forEach(cliente => {
+            (cliente.mascotas || []).forEach(mascota => {
+                (mascota.vacunasManuales || []).forEach(vacuna => {
+                    vacunasRows.push({
+                        ...scope,
+                        legacy_id: vacuna.id,
+                        cliente_id: clienteDbPorLegacy.get(cliente.id) || null,
+                        mascota_id: mascotaDbPorLegacy.get(mascota.id) || null,
+                        consulta_id: vacuna.consultaId ? consultaDbPorLegacy.get(vacuna.consultaId) || null : null,
+                        nombre: vacuna.nombre || 'Vacuna manual',
+                        fecha_aplicacion: vacuna.fecha || null,
+                        fecha_refuerzo: vacuna.fechaRefuerzo || null,
+                        lote: vacuna.lote || '',
+                        laboratorio: vacuna.laboratorio || '',
+                        desparasitante: vacuna.desparasitante || '',
+                        nota: vacuna.nota || '',
+                        origen: vacuna.origen || 'Manual',
+                        updated_at: new Date().toISOString()
+                    });
+                });
+            });
+        });
+        await upsertTabla('vacunas_paciente', vacunasRows.filter(row => row.mascota_id), 'id, legacy_id');
+        await borrarFaltantes('vacunas_paciente', idsLegacy(vacunasRows));
+    }
+
     const pagosRows = [];
     clientes.forEach(cliente => {
         (cliente.mascotas || []).forEach(mascota => {
             (mascota.historial || []).forEach(consulta => {
                 pagosRows.push({
-                    user_id: userId,
+                    ...scope,
                     legacy_id: consulta.id,
                     consulta_id: consultaDbPorLegacy.get(consulta.id) || null,
                     cliente_id: clienteDbPorLegacy.get(cliente.id) || null,
@@ -368,7 +427,7 @@ async function guardarEstadoBaseNormalizada() {
     await upsertTabla('pagos', pagosRows.filter(row => row.consulta_id), 'id, legacy_id');
 
     const serviciosExternosRows = serviciosExternos.map(servicio => ({
-        user_id: userId,
+        ...scope,
         legacy_id: servicio.id,
         fecha_iso: servicio.fechaISO || new Date().toISOString(),
         fecha_texto: servicio.fecha || '',
@@ -387,7 +446,7 @@ async function guardarEstadoBaseNormalizada() {
     await upsertTabla('servicios_externos', serviciosExternosRows, 'id, legacy_id');
 
     const gastosRows = gastosFinancieros.map(gasto => ({
-        user_id: userId,
+        ...scope,
         legacy_id: gasto.id,
         fecha_iso: gasto.fechaISO || new Date().toISOString(),
         fecha_texto: gasto.fecha || '',
@@ -399,7 +458,7 @@ async function guardarEstadoBaseNormalizada() {
     await upsertTabla('gastos', gastosRows, 'id, legacy_id');
 
     const movimientosRows = movimientosInventario.map(mov => ({
-        user_id: userId,
+        ...scope,
         legacy_id: mov.id,
         inventario_id: inventarioDbPorLegacy.get(mov.itemId) || null,
         item_nombre: mov.itemName || '',
@@ -432,7 +491,7 @@ function escucharCambiosBaseNormalizada() {
             event: '*',
             schema: 'public',
             table: tabla,
-            filter: `user_id=eq.${usuarioActivo.id}`
+            filter: filtroRealtimeScope()
         }, () => {
             if (guardandoRemoto) return;
             clearTimeout(normalizedReloadTimer);
@@ -445,5 +504,23 @@ function escucharCambiosBaseNormalizada() {
             }, 500);
         });
     });
+    if (tablaVacunasPacienteDisponible) {
+        realtimeChannel.on('postgres_changes', {
+            event: '*',
+            schema: 'public',
+            table: 'vacunas_paciente',
+            filter: filtroRealtimeScope()
+        }, () => {
+            if (guardandoRemoto) return;
+            clearTimeout(normalizedReloadTimer);
+            normalizedReloadTimer = setTimeout(async () => {
+                const remoto = await cargarEstadoBaseNormalizada();
+                if (!remoto.ok) return;
+                aplicarEstado(remoto.estado);
+                if (typeof refrescarInterfaz === 'function') refrescarInterfaz();
+                actualizarEstadoSync('Sincronizado');
+            }, 500);
+        });
+    }
     realtimeChannel.subscribe();
 }

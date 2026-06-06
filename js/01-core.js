@@ -12,6 +12,9 @@ const renderIcons = () => window.lucide?.createIcons();
 const uid = () => Date.now();
 const setHidden = (id, hidden = true) => $(id)?.classList.toggle('hidden', hidden);
 let usuarioActivo = null;
+let workspaceActivoId = null;
+let workspaceActivoNombre = 'Workspace personal';
+let workspaceSoportado = false;
 let realtimeChannel = null;
 let syncTimer = null;
 let remotePollingTimer = null;
@@ -50,6 +53,58 @@ function mostrarBannerActualizacion() {
 window.addEventListener('vethome-update-ready', mostrarBannerActualizacion);
 function limpiarDatosLocalesAnteriores() {
     Object.values(STORE_KEYS).forEach(key => localStorage.removeItem(key));
+}
+function scopeRemoto() {
+    const scope = { user_id: usuarioActivo?.id };
+    if (workspaceSoportado && workspaceActivoId) scope.workspace_id = workspaceActivoId;
+    return scope;
+}
+function aplicarFiltroScope(query) {
+    if (workspaceSoportado && workspaceActivoId) return query.eq('workspace_id', workspaceActivoId);
+    return query.eq('user_id', usuarioActivo.id);
+}
+function filtroRealtimeScope() {
+    if (workspaceSoportado && workspaceActivoId) return `workspace_id=eq.${workspaceActivoId}`;
+    return `user_id=eq.${usuarioActivo.id}`;
+}
+async function cargarWorkspaceActivo() {
+    workspaceSoportado = false;
+    workspaceActivoId = null;
+    workspaceActivoNombre = 'Workspace personal';
+    try {
+        let { data, error } = await supabaseClient
+            .from('app_workspace_members')
+            .select('workspace_id, role')
+            .eq('user_id', usuarioActivo.id)
+            .order('created_at', { ascending: true })
+            .limit(1);
+        if (error) throw error;
+        if (!data?.length) {
+            const rpc = await supabaseClient.rpc('ensure_personal_workspace');
+            if (rpc.error) throw rpc.error;
+            ({ data, error } = await supabaseClient
+                .from('app_workspace_members')
+                .select('workspace_id, role')
+                .eq('user_id', usuarioActivo.id)
+                .order('created_at', { ascending: true })
+                .limit(1));
+            if (error) throw error;
+        }
+        const membership = data?.[0];
+        if (!membership?.workspace_id) return;
+        workspaceSoportado = true;
+        workspaceActivoId = membership.workspace_id;
+        const workspace = await supabaseClient
+            .from('app_workspaces')
+            .select('nombre')
+            .eq('id', workspaceActivoId)
+            .maybeSingle();
+        workspaceActivoNombre = workspace.data?.nombre || 'VetHome';
+        if ($('sync-workspace')) $('sync-workspace').innerText = workspaceActivoNombre;
+    } catch (error) {
+        console.warn('Workspace multiusuario no disponible. Se usará el modo por usuario.', error);
+        if ($('sync-workspace')) $('sync-workspace').innerText = 'Datos por usuario';
+    }
 }
 function dataUrlToBlob(dataUrl) {
     const [metadata, base64] = String(dataUrl || '').split(',');
@@ -127,10 +182,10 @@ async function guardarEstadoRemoto() {
             await guardarEstadoBaseNormalizada();
         } else {
             const resultado = await supabaseClient.from('app_state').upsert({
-                user_id: usuarioActivo.id,
+                ...scopeRemoto(),
                 data: estadoCompleto(),
                 updated_at: new Date().toISOString()
-            }, { onConflict: 'user_id' });
+            }, { onConflict: workspaceSoportado && workspaceActivoId ? 'workspace_id' : 'user_id' });
             error = resultado.error;
         }
     } catch (err) {
@@ -182,11 +237,10 @@ async function refrescarEstadoDesdeRemotoSilencioso() {
             if (!remoto.ok) throw remoto.error;
             estadoRemoto = remoto.estado;
         } else {
-            const { data, error } = await supabaseClient
+            let query = supabaseClient
                 .from('app_state')
-                .select('data')
-                .eq('user_id', usuarioActivo.id)
-                .maybeSingle();
+                .select('data');
+            const { data, error } = await aplicarFiltroScope(query).maybeSingle();
             if (error) throw error;
             estadoRemoto = data?.data || null;
         }
@@ -218,7 +272,7 @@ function escucharCambiosRemotos() {
             event: 'UPDATE',
             schema: 'public',
             table: 'app_state',
-            filter: `user_id=eq.${usuarioActivo.id}`
+            filter: filtroRealtimeScope()
         }, payload => {
             if (!payload.new?.data || guardandoRemoto) return;
             aplicarEstado(payload.new.data);
@@ -236,6 +290,7 @@ async function initRemoteStorage() {
     }
     ocultarLogin();
     if ($('sync-user')) $('sync-user').innerText = usuarioActivo.email || '';
+    await cargarWorkspaceActivo();
     actualizarEstadoSync('Cargando...');
     if (typeof cargarEstadoBaseNormalizada === 'function') {
         const normalizado = await cargarEstadoBaseNormalizada();
@@ -244,11 +299,10 @@ async function initRemoteStorage() {
             if (tieneDatos(normalizado.estado)) {
                 aplicarEstado(normalizado.estado);
             } else {
-                const { data: estadoLegacy } = await supabaseClient
+                let legacyQuery = supabaseClient
                     .from('app_state')
                     .select('data')
-                    .eq('user_id', usuarioActivo.id)
-                    .maybeSingle();
+                const { data: estadoLegacy } = await aplicarFiltroScope(legacyQuery).maybeSingle();
                 if (estadoLegacy?.data) {
                     aplicarEstado(estadoLegacy.data);
                 } else {
@@ -265,11 +319,10 @@ async function initRemoteStorage() {
         console.warn('Base normalizada no disponible. Se usará app_state temporalmente.', normalizado.error);
         modoDatosRemotos = 'app_state';
     }
-    const { data, error } = await supabaseClient
+    let query = supabaseClient
         .from('app_state')
-        .select('data')
-        .eq('user_id', usuarioActivo.id)
-        .maybeSingle();
+        .select('data');
+    const { data, error } = await aplicarFiltroScope(query).maybeSingle();
     if (error) {
         console.error('No se pudo cargar app_state.', error);
         actualizarEstadoSync('Error de conexión', true);

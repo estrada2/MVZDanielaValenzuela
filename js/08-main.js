@@ -8,6 +8,11 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (wrapper && !wrapper.contains(e.target)) {
             panel?.classList.add('hidden');
         }
+        const buscadorGlobal = $('buscador-global');
+        const resultadosGlobales = $('resultados-busqueda-global');
+        if (buscadorGlobal && resultadosGlobales && !buscadorGlobal.contains(e.target) && !resultadosGlobales.contains(e.target)) {
+            resultadosGlobales.classList.add('hidden');
+        }
     });
     refrescarInterfaz();
     setupSignatureCanvas('canvas-firma'); 
@@ -56,6 +61,71 @@ function dashboardConsultas() {
 }
 function dashboardFormatoMoneda(valor) {
     return (parseFloat(valor) || 0).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+function itemBusquedaGlobal(tipo, titulo, detalle, accion, icono) {
+    return { tipo, titulo, detalle, accion, icono };
+}
+function resultadosBusquedaGlobal(termino) {
+    const q = String(termino || '').trim().toLowerCase();
+    if (q.length < 2) return [];
+    const coincide = valor => String(valor || '').toLowerCase().includes(q);
+    const resultados = [];
+    clientes.forEach(cliente => {
+        if (coincide(cliente.owner) || coincide(cliente.phone) || coincide(cliente.address)) {
+            resultados.push(itemBusquedaGlobal('Cliente', cliente.owner, `${cliente.phone || 'Sin teléfono'} · ${cliente.address || 'Sin dirección'}`, `switchTab('clientes'); verMascotasCliente(${cliente.id})`, 'users'));
+        }
+        (cliente.mascotas || []).forEach(mascota => {
+            if (coincide(mascota.name) || coincide(mascota.species) || coincide(mascota.raza)) {
+                resultados.push(itemBusquedaGlobal('Mascota', mascota.name, `${cliente.owner} · ${mascota.species || 'Paciente'}`, `abrirModalHistorial(${cliente.id}, ${mascota.id})`, 'paw-print'));
+            }
+        });
+    });
+    agenda.forEach(cita => {
+        if ([cita.clienteNombre, cita.petName, cita.notas, cita.direccion, cita.fecha, cita.hora].some(coincide)) {
+            resultados.push(itemBusquedaGlobal('Agenda', `${cita.hora || '--:--'} · ${cita.petName || cita.clienteNombre || 'Cita'}`, `${cita.fecha || 'Sin fecha'} · ${cita.estado || 'Programada'}`, `switchTab('agenda')`, 'calendar'));
+        }
+    });
+    inventario.forEach(item => {
+        if ([item.name, item.categoria, item.lote, item.proveedor].some(coincide)) {
+            resultados.push(itemBusquedaGlobal('Stock', item.name, `${item.stock} ${item.unit || ''} · ${item.categoria || 'Insumo'}`, `switchTab('inventario')`, 'package'));
+        }
+    });
+    serviciosExternos.forEach(servicio => {
+        if ([servicio.clienteNombre, servicio.servicioCobrado, servicio.notaPago, servicio.direccion].some(coincide)) {
+            resultados.push(itemBusquedaGlobal('Externo', servicio.servicioCobrado || 'Servicio externo', `${servicio.clienteNombre || 'Sin contacto'} · $${dashboardFormatoMoneda(servicio.total)}`, `switchTab('servicios-externos')`, 'briefcase-medical'));
+        }
+    });
+    return resultados.slice(0, 8);
+}
+function ejecutarBusquedaGlobal(accion) {
+    $('resultados-busqueda-global')?.classList.add('hidden');
+    if ($('buscador-global')) $('buscador-global').value = '';
+    Function(accion)();
+}
+function renderBusquedaGlobal() {
+    const panel = $('resultados-busqueda-global');
+    const input = $('buscador-global');
+    if (!panel || !input) return;
+    const resultados = resultadosBusquedaGlobal(input.value);
+    if (!resultados.length) {
+        panel.innerHTML = input.value.trim().length >= 2
+            ? `<div class="p-4 text-xs text-slate-400 text-center">Sin resultados.</div>`
+            : '';
+        panel.classList.toggle('hidden', !input.value.trim());
+        return;
+    }
+    panel.innerHTML = resultados.map(item => `
+        <button type="button" onclick="ejecutarBusquedaGlobal('${item.accion.replace(/'/g, "\\'")}')" class="w-full text-left px-3 py-2.5 hover:bg-slate-50 flex items-start gap-2 border-b border-slate-100 last:border-b-0">
+            <i data-lucide="${item.icono}" class="w-4 h-4 text-blue-600 mt-0.5 shrink-0"></i>
+            <span class="min-w-0">
+                <span class="block text-xs font-black text-slate-900 truncate">${item.titulo}</span>
+                <span class="block text-[10px] font-bold text-blue-700 uppercase">${item.tipo}</span>
+                <span class="block text-[11px] text-slate-500 truncate">${item.detalle}</span>
+            </span>
+        </button>
+    `).join('');
+    panel.classList.remove('hidden');
+    renderIcons();
 }
 function fechaLocalInput(fecha) {
     const year = fecha.getFullYear();
