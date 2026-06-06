@@ -645,6 +645,38 @@
             min-width: 0;
         }
 
+        .client-actions {
+            display: flex;
+            align-items: center;
+            justify-content: flex-end;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+            width: 100%;
+        }
+
+        .client-actions .row-action-menu,
+        .pet-more-menu {
+            width: 100%;
+        }
+
+        .client-actions .row-action-menu > summary,
+        .pet-more-menu > summary {
+            width: max-content;
+            margin-left: auto;
+        }
+
+        .client-actions .row-action-panel,
+        .pet-more-menu .row-action-panel {
+            position: static;
+            width: 100%;
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));
+            gap: 0.35rem;
+            margin-top: 0.45rem;
+            background: #f8fafc !important;
+            box-shadow: none;
+        }
+
         @media (min-width: 640px) {
             .inventory-actions {
                 width: auto;
@@ -1207,9 +1239,15 @@
             }
 
             .inventory-actions,
-            .expense-actions {
+            .expense-actions,
+            .client-actions {
                 width: 100%;
                 justify-content: flex-start;
+            }
+
+            .client-actions .row-action-menu > summary,
+            .pet-more-menu > summary {
+                margin-left: 0;
             }
 
             .dashboard-quick-grid {
