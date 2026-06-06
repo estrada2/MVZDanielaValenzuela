@@ -649,17 +649,17 @@
             </section>
 
             <section id="view-inventario" class="hidden space-y-6">
-                <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                    <div class="bg-white p-6 rounded-2xl border border-gray-200 shadow-xs space-y-4 h-fit">
-                        <h3 class="text-md font-bold text-slate-900 flex items-center gap-2">
-                            <i data-lucide="package-plus" class="text-blue-600 w-5 h-5"></i> Registrar Medicamento
+                <div class="grid grid-cols-1 xl:grid-cols-[minmax(420px,0.95fr)_minmax(0,1.35fr)] gap-6 items-start">
+                    <div class="bg-white p-5 sm:p-6 rounded-2xl border border-gray-200 shadow-xs space-y-4 h-fit">
+                        <h3 class="text-base font-black text-slate-900 flex items-center gap-2" id="titulo-form-inventario">
+                            <i data-lucide="package-plus" class="text-blue-600 w-5 h-5"></i> Registrar Insumo
                         </h3>
                         <form id="form-inventario" class="space-y-3" onsubmit="guardarMedicamento(event)">
                             <div>
                                 <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Nombre Comercial / Genérico</label>
                                 <input type="text" id="medName" required class="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm outline-none">
                             </div>
-                            <div class="grid grid-cols-2 gap-2">
+                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
                                 <div>
                                     <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Stock Inicial</label>
                                     <input type="number" id="medStock" required min="0" class="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm outline-none">
@@ -673,7 +673,7 @@
                                     </select>
                                 </div>
                             </div>
-                            <div class="grid grid-cols-2 gap-2">
+                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
                                 <div>
                                     <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Categoría</label>
                                     <select id="medCategoria" class="w-full px-3 py-2 border rounded-xl text-sm bg-white">
@@ -688,7 +688,7 @@
                                     <input type="number" id="medMinStock" value="3" required min="0" class="w-full px-3 py-2 border rounded-xl text-sm outline-none">
                                 </div>
                             </div>
-                            <div class="grid grid-cols-1 sm:grid-cols-4 gap-2">
+                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
                                 <div>
                                     <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Lote</label>
                                     <input type="text" id="medLote" placeholder="Opcional" class="w-full px-3 py-2 border rounded-xl text-sm outline-none">
@@ -706,10 +706,10 @@
                                     <input type="number" id="medCostoUnitario" placeholder="0.00" min="0" step="0.01" class="w-full px-3 py-2 border rounded-xl text-sm outline-none">
                                 </div>
                             </div>
-                            <button type="submit" class="w-full bg-blue-600 text-white font-bold py-2.5 rounded-xl text-sm hover:bg-blue-700 shadow-xs">Añadir al Almacén</button>
+                            <button type="submit" class="w-full bg-blue-600 text-white font-bold py-3 rounded-xl text-sm hover:bg-blue-700 shadow-xs">Añadir al Almacén</button>
                         </form>
                     </div>
-                    <div class="lg:col-span-2 bg-white p-6 rounded-2xl border border-gray-200 shadow-xs flex flex-col h-[520px]">
+                    <div class="bg-white p-5 sm:p-6 rounded-2xl border border-gray-200 shadow-xs flex flex-col min-h-[520px]">
                         <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-3">
                             <h3 class="text-sm font-bold text-gray-700 uppercase tracking-wider">Control de Existencias en Almacén</h3>
                             <div class="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
