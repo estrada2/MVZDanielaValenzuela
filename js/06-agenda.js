@@ -161,6 +161,7 @@ function renderAgenda() {
         const direccion = a.direccion || a.address || '';
         const notas = a.notas || a.notes || 'Sin notas';
         const estado = a.estado || 'Programada';
+        const esServicioExterno = (a.origen || '') === 'Servicio externo' || (!a.petId && (a.petName || '').toLowerCase().includes('extern'));
         const fechaNormalizada = normalizarFechaCita(a);
         const esHoy = fechaNormalizada === hoy;
         const owner = clientes.find(c => c.id === (a.clienteId || a.ownerId));
@@ -189,6 +190,7 @@ function renderAgenda() {
                     </div>
                     <div class="grid grid-cols-4 sm:grid-cols-[repeat(7,2.25rem)] gap-1.5 w-full xl:w-auto justify-end">
                         ${a.petId && estado !== 'Cancelada' ? `<button onclick="atenderCita(${a.id})" class="h-9 w-9 bg-slate-900 hover:bg-slate-800 text-white rounded-lg flex items-center justify-center" title="Atender"><i data-lucide="stethoscope" class="w-4 h-4"></i></button>` : ''}
+                        ${esServicioExterno && estado !== 'Cancelada' ? `<button onclick="gestionarServicioExternoAgenda(${a.id})" class="h-9 w-9 bg-slate-900 hover:bg-slate-800 text-white rounded-lg flex items-center justify-center" title="Gestionar servicio externo"><i data-lucide="briefcase-medical" class="w-4 h-4"></i></button>` : ''}
                         ${estado === 'Programada' ? `<button onclick="cambiarEstadoCita(${a.id}, 'Confirmada')" class="h-9 w-9 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 rounded-lg flex items-center justify-center" title="Confirmar"><i data-lucide="check" class="w-4 h-4"></i></button>` : ''}
                         ${tel ? `<a href="https://wa.me/52${tel}" target="_blank" rel="noopener" class="h-9 w-9 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg flex items-center justify-center shadow-xs transition-all" title="WhatsApp"><i data-lucide="message-circle" class="w-4 h-4"></i></a>` : ''}
                         <button onclick="abrirNavegacionMaps('${direccion.replace(/'/g, "\\'")}')" class="h-9 w-9 bg-blue-600 hover:bg-blue-700 text-white rounded-lg flex items-center justify-center shadow-xs transition-all" title="Maps"><i data-lucide="map" class="w-4 h-4"></i></button>
@@ -291,6 +293,22 @@ function atenderCita(id) {
     citaActivaId = id;
     saveStore('agenda');
     cargarPacienteAConsulta(clienteId, cita.petId);
+}
+function gestionarServicioExternoAgenda(agendaId) {
+    const cita = agenda.find(item => item.id === agendaId);
+    const servicio = serviciosExternos.find(item => item.agendaId === agendaId);
+    if (!servicio) {
+        switchTab('servicios-externos');
+        alert('No encontré el servicio externo vinculado a esta cita. Puedes revisarlo en Servicios Externos.');
+        return;
+    }
+    if (cita && cita.estado === 'Programada') {
+        cita.estado = 'Confirmada';
+        saveStore('agenda');
+    }
+    switchTab('servicios-externos');
+    iniciarEdicionServicioExterno(servicio.id);
+    document.getElementById('form-servicio-externo')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 function cancelarEdicionAgenda() {
     $('edit-agenda-id').value = ''; 

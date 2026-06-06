@@ -550,10 +550,10 @@ function renderServiciosExternos() {
                             <p class="font-black text-lg ${pendiente ? 'text-rose-700' : 'text-emerald-700'}">$${formatoMoneda(item.total)}</p>
                             <p class="text-[10px] text-slate-400">${item.metodoPago || 'Efectivo'}</p>
                         </div>
-                        <div class="flex items-center gap-1.5">
-                            ${item.agendaId ? `<button onclick="crearRecordatorioApple(${item.agendaId})" class="text-amber-600 hover:bg-amber-50 p-2 bg-white border rounded-lg shadow-2xs transition-all" title="Apple Reminders"><i data-lucide="list-todo" class="w-4 h-4"></i></button>` : ''}
-                            ${pendiente ? `<button onclick="marcarServicioExternoPagado(${item.id})" class="text-emerald-600 hover:bg-emerald-50 p-2 bg-white border rounded-lg shadow-2xs transition-all" title="Marcar pagado"><i data-lucide="check-circle" class="w-4 h-4"></i></button>` : ''}
-                            <button onclick="iniciarEdicionServicioExterno(${item.id})" class="text-gray-500 hover:text-amber-600 p-2 bg-white border rounded-lg shadow-2xs transition-all" title="Editar"><i data-lucide="edit" class="w-4 h-4"></i></button>
+                        <div class="flex flex-wrap items-center justify-end gap-1.5">
+                            ${item.agendaId ? `<button onclick="crearRecordatorioApple(${item.agendaId})" class="text-amber-700 hover:bg-amber-50 px-2.5 py-2 bg-white border rounded-lg shadow-2xs transition-all flex items-center gap-1 text-[11px] font-bold" title="Apple Reminders"><i data-lucide="list-todo" class="w-4 h-4"></i> Reminder</button>` : ''}
+                            ${pendiente ? `<button onclick="marcarServicioExternoPagado(${item.id})" class="text-emerald-700 hover:bg-emerald-50 px-2.5 py-2 bg-white border border-emerald-200 rounded-lg shadow-2xs transition-all flex items-center gap-1 text-[11px] font-bold" title="Marcar pagado"><i data-lucide="check-circle" class="w-4 h-4"></i> Cobrar</button>` : ''}
+                            <button onclick="iniciarEdicionServicioExterno(${item.id})" class="text-amber-700 hover:bg-amber-50 px-2.5 py-2 bg-white border rounded-lg shadow-2xs transition-all flex items-center gap-1 text-[11px] font-bold" title="Editar"><i data-lucide="edit" class="w-4 h-4"></i> Editar</button>
                             <button onclick="eliminarServicioExterno(${item.id})" class="text-gray-400 hover:text-red-500 p-2 bg-white border rounded-lg shadow-2xs transition-all" title="Eliminar"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
                         </div>
                     </div>
@@ -563,7 +563,15 @@ function renderServiciosExternos() {
     renderIcons();
 }
 function sincronizarAgendaServicioExterno(item, agendar) {
-    if (!agendar) return true;
+    if (!agendar) {
+        if (item.agendaId) {
+            agenda = agenda.filter(cita => cita.id !== item.agendaId);
+            item.agendaId = null;
+            saveStore('agenda');
+            if (typeof renderAgenda === 'function') renderAgenda();
+        }
+        return true;
+    }
     if (!item.fecha || !item.hora) {
         alert('Para agendar un servicio externo necesitas fecha y hora.');
         return false;
@@ -640,6 +648,7 @@ function iniciarEdicionServicioExterno(id) {
     if ($('externo-agendar')) $('externo-agendar').checked = Boolean(item.agendaId || item.hora);
     $('btn-servicio-externo').innerText = 'Actualizar Servicio Externo';
     $('btn-cancelar-servicio-externo')?.classList.remove('hidden');
+    document.getElementById('form-servicio-externo')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 function cancelarEdicionServicioExterno() {
     $('form-servicio-externo')?.reset();
@@ -672,6 +681,14 @@ function marcarServicioExternoPagado(id) {
     item.estadoPago = 'Pagado';
     item.metodoPago = metodo || item.metodoPago || 'Efectivo';
     item.notaPago = item.notaPago ? `${item.notaPago} | Pagado ${new Date().toLocaleString('es-MX')}` : `Pagado ${new Date().toLocaleString('es-MX')}`;
+    if (item.agendaId) {
+        const cita = agenda.find(agendaItem => agendaItem.id === item.agendaId);
+        if (cita && !['Cancelada'].includes(cita.estado || 'Programada')) {
+            cita.estado = 'Atendida';
+            saveStore('agenda');
+            if (typeof renderAgenda === 'function') renderAgenda();
+        }
+    }
     saveStore('serviciosExternos');
     renderServiciosExternos();
     renderGananciasConsultas();

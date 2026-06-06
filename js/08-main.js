@@ -161,7 +161,10 @@ function renderDashboard() {
                 <p class="text-sm font-bold text-slate-900">${cita.hora || '--:--'} · ${cita.petName || 'Paciente'} </p>
                 <p class="text-xs text-slate-500">${cita.clienteNombre || 'Cliente'} · ${cita.notas || 'Sin notas'}</p>
             </div>
-            ${cita.petId ? `<button type="button" onclick="atenderCita(${cita.id})" class="bg-slate-900 text-white text-xs font-bold px-3 py-2 rounded-lg flex items-center justify-center gap-1"><i data-lucide="stethoscope" class="w-3.5 h-3.5"></i> Atender</button>` : ''}
+            ${cita.petId
+                ? `<button type="button" onclick="atenderCita(${cita.id})" class="bg-slate-900 text-white text-xs font-bold px-3 py-2 rounded-lg flex items-center justify-center gap-1"><i data-lucide="stethoscope" class="w-3.5 h-3.5"></i> Atender</button>`
+                : `<button type="button" onclick="gestionarServicioExternoAgenda(${cita.id})" class="bg-slate-900 text-white text-xs font-bold px-3 py-2 rounded-lg flex items-center justify-center gap-1"><i data-lucide="briefcase-medical" class="w-3.5 h-3.5"></i> Gestionar</button>`
+            }
         </div>
     `).join(''), 'No hay citas activas para hoy.');
 
