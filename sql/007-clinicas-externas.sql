@@ -15,6 +15,9 @@ create table if not exists public.clinicas_externas (
     updated_at timestamp without time zone default now()
 );
 
+alter table public.clinicas_externas
+    add column if not exists workspace_id uuid;
+
 alter table public.servicios_externos
     add column if not exists clinica_legacy_id bigint;
 
