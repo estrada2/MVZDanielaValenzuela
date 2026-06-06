@@ -27,6 +27,7 @@ function refrescarInterfaz() {
     renderInventario(); 
     renderFinanzas(); 
     renderGananciasConsultas();
+    if (typeof renderServiciosExternos === 'function') renderServiciosExternos();
     actualizarSelectAgenda(); 
     revisarAlertasStockGlobal(); 
     renderIcons();
@@ -46,7 +47,10 @@ function dashboardConsultas() {
         petId: mascota.id,
         fechaObj: dashboardFechaConsulta(consulta),
         total: parseFloat(consulta.costoTotal) || 0,
-        estadoPago: consulta.estadoPago || 'Pagado'
+        estadoPago: typeof estadoPagoCalculado === 'function'
+            ? estadoPagoCalculado({ ...consulta, total: parseFloat(consulta.costoTotal) || 0 })
+            : (consulta.estadoPago || 'Pagado'),
+        abonos: consulta.abonos || []
     }))));
     const externos = (serviciosExternos || []).map(servicio => ({
         ...servicio,
@@ -55,9 +59,22 @@ function dashboardConsultas() {
         mascotaNombre: 'Sin expediente',
         fechaObj: dashboardFechaConsulta(servicio),
         total: parseFloat(servicio.total) || 0,
-        estadoPago: servicio.estadoPago || 'Pagado'
+        estadoPago: typeof estadoPagoCalculado === 'function' ? estadoPagoCalculado(servicio) : (servicio.estadoPago || 'Pagado'),
+        abonos: servicio.abonos || []
     }));
     return [...consultas, ...externos];
+}
+function dashboardIngresadoEnDia(item, fechaObjetivo) {
+    const abonos = item.abonos || [];
+    const totalAbonadoDia = abonos
+        .filter(abono => {
+            const fecha = abono.fechaISO ? new Date(abono.fechaISO) : null;
+            return fecha && !Number.isNaN(fecha.getTime()) && fecha.toDateString() === fechaObjetivo.toDateString();
+        })
+        .reduce((acc, abono) => acc + (parseFloat(abono.monto) || 0), 0);
+    if (totalAbonadoDia) return totalAbonadoDia;
+    if (item.estadoPago === 'Pagado' && !abonos.length && item.fechaObj?.toDateString() === fechaObjetivo.toDateString()) return item.total;
+    return 0;
 }
 function dashboardFormatoMoneda(valor) {
     return (parseFloat(valor) || 0).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -181,6 +198,16 @@ function notificacionesOperativas() {
     return [...citas, ...notificacionesVacunas(), ...notificacionesSeguimientos(), ...stock, ...pagos]
         .sort((a, b) => (a.prioridad === 'alta' ? -1 : 0) - (b.prioridad === 'alta' ? -1 : 0));
 }
+function idsNotificacionesVistas() {
+    try {
+        return JSON.parse(sessionStorage.getItem('vethome_notificaciones_vistas') || '[]');
+    } catch {
+        return [];
+    }
+}
+function guardarNotificacionesVistas(ids) {
+    sessionStorage.setItem('vethome_notificaciones_vistas', JSON.stringify(Array.from(new Set(ids))));
+}
 function ejecutarAccionNotificacion(accion) {
     cerrarPanelNotificaciones();
     Function(accion)();
@@ -205,14 +232,16 @@ function ocultarBannerNotificacion() {
 }
 function renderNotificacionesOperativas() {
     const notificaciones = notificacionesOperativas();
+    const vistas = new Set(idsNotificacionesVistas());
+    const noVistas = notificaciones.filter(item => !vistas.has(item.id));
     const badge = $('badge-notificaciones');
     if (badge) {
-        badge.classList.toggle('hidden', !notificaciones.length);
-        badge.innerText = notificaciones.length > 9 ? '9+' : String(notificaciones.length);
+        badge.classList.toggle('hidden', !noVistas.length);
+        badge.innerText = noVistas.length > 9 ? '9+' : String(noVistas.length);
     }
     dashboardSetLista('dash-notificaciones', notificaciones.slice(0, 4).map(item => renderCardNotificacion(item, true)).join(''), 'No hay alertas importantes por ahora.');
     const banner = $('banner-notificacion-principal');
-    const primera = notificaciones[0];
+    const primera = noVistas[0];
     if (!banner || !primera || sessionStorage.getItem('vethome_banner_notificacion_oculta') === primera.id) {
         banner?.classList.add('hidden');
     } else {
@@ -234,7 +263,9 @@ function renderListaNotificaciones() {
     renderIcons();
 }
 function abrirPanelNotificaciones() {
+    guardarNotificacionesVistas([...idsNotificacionesVistas(), ...notificacionesOperativas().map(item => item.id)]);
     renderListaNotificaciones();
+    renderNotificacionesOperativas();
     setHidden('modal-notificaciones', false);
     renderIcons();
 }
@@ -377,14 +408,13 @@ function renderDashboard() {
     const hoy = new Date();
     const hoyStr = fechaLocalInput(hoy);
     const citasHoy = agenda
-        .filter(cita => cita.fecha === hoyStr && !['Atendida', 'Cancelada'].includes(cita.estado || 'Programada'))
+        .filter(cita => (typeof normalizarFechaCita === 'function' ? normalizarFechaCita(cita) : cita.fecha) === hoyStr && !['Atendida', 'Cancelada'].includes(cita.estado || 'Programada'))
         .sort((a, b) => String(a.hora || '').localeCompare(String(b.hora || '')));
     const consultas = dashboardConsultas();
     const ingresosHoy = consultas
-        .filter(con => con.estadoPago === 'Pagado' && con.fechaObj?.toDateString() === hoy.toDateString())
-        .reduce((acc, con) => acc + con.total, 0);
+        .reduce((acc, con) => acc + dashboardIngresadoEnDia(con, hoy), 0);
     const pendientes = consultas.filter(con => con.estadoPago === 'Pendiente');
-    const montoPendiente = pendientes.reduce((acc, con) => acc + con.total, 0);
+    const montoPendiente = pendientes.reduce((acc, con) => acc + (typeof saldoPendiente === 'function' ? saldoPendiente(con) : con.total), 0);
     const stockCritico = inventario.filter(item => item.stock <= stockMinimo(item));
 
     if ($('dash-citas-hoy')) $('dash-citas-hoy').innerText = citasHoy.length;
@@ -414,20 +444,6 @@ function renderDashboard() {
         </article>
     `).join(''), 'No hay citas activas para hoy.');
 
-    const recientes = consultas
-        .filter(con => con.fechaObj && con.origenFinanciero !== 'Externo')
-        .sort((a, b) => b.fechaObj - a.fechaObj)
-        .slice(0, 4);
-    dashboardSetLista('dash-pacientes-recientes', recientes.map(con => `
-        <button type="button" onclick="abrirModalHistorial(${con.ownerId}, ${con.petId})" class="dash-list-item">
-            <span class="dash-list-icon bg-blue-50 text-blue-700"><i data-lucide="paw-print" class="w-4 h-4"></i></span>
-            <span class="min-w-0">
-                <span class="block text-xs font-black text-slate-900 truncate">${con.mascotaNombre}</span>
-                <span class="block text-[11px] text-slate-500 truncate">${con.clienteNombre} · ${con.tipo || 'Consulta'} · ${con.fechaObj.toLocaleDateString('es-MX')}</span>
-            </span>
-        </button>
-    `).join(''), 'Aún no hay consultas registradas.');
-
     dashboardSetLista('dash-stock-lista', stockCritico.slice(0, 5).map(item => `
         <div class="dash-list-item bg-amber-50 border-amber-100">
             <span class="dash-list-icon bg-white text-amber-700"><i data-lucide="package-search" class="w-4 h-4"></i></span>
@@ -449,7 +465,6 @@ function renderDashboard() {
             <span class="text-xs font-black text-rose-700 shrink-0">$${dashboardFormatoMoneda(typeof saldoPendiente === 'function' ? saldoPendiente(con) : con.total)}</span>
         </div>
     `).join(''), 'No hay pagos pendientes.');
-    renderAuditoriaDashboard();
     renderNotificacionesOperativas();
     renderIcons();
 }

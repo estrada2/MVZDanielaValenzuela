@@ -275,23 +275,6 @@ async function guardarConsulta(e) {
         sintomasTxt = recolectarSintomas();
         if (tipoConsulta === 'Seguimiento') {
             moduloSeguimiento = `| Evolución: ${$('seg-memoria')?.value || ''} | Trat. Actual: ${$('seg-tratamiento-actual')?.value || ''}`;
-            if ($('seg-proxima-visita')?.checked && $('seg-fecha-sugerida')?.value) {
-                agenda.push({
-                    id: Date.now() + 1,
-                    fecha: $('seg-fecha-sugerida').value,
-                    hora: '10:00',
-                    clienteId: consultaSeleccionada.ownerId,
-                    petId: consultaSeleccionada.petId,
-                    clienteNombre: consultaSeleccionada.ownerObj.owner,
-                    petName: consultaSeleccionada.petObj.name,
-                    direccion: consultaSeleccionada.ownerObj.address,
-                    notas: 'Visita de Seguimiento Programada',
-                    estado: 'Programada'
-                });
-                saveStore('agenda');
-                renderAgenda();
-                actualizarSelectAgenda();
-            }
         }
         textoDisclaimerIndividual = `${TEXTO_DECLARACION_RESPONSIVA} ${TEXTO_CONSENTIMIENTO_RESPONSIVA} Servicio: ${tipoConsulta}. Sintomatología: "${sintomasTxt}". Anamnesis: Especie: ${$('consulta-especie-drop')?.value || 'Otro'}, Ánimo: ${$('consulta-animo-drop')?.value || 'Normal'}, Garrapatas: ${$('consulta-garrapatas')?.value || 'No'}, Dieta: ${$('consulta-alimentacion')?.value || 'Croquetas'} ${moduloSeguimiento}.`;
     }
@@ -340,7 +323,8 @@ async function guardarConsulta(e) {
         seguimiento: {
             requerido: Boolean($('consulta-requiere-seguimiento')?.checked),
             nota: $('consulta-seguimiento-nota')?.value || '',
-            fecha: $('consulta-seguimiento-fecha')?.value || ''
+            fecha: $('consulta-seguimiento-fecha')?.value || '',
+            hora: $('consulta-seguimiento-hora')?.value || ''
         },
         notasRapidas,
         vacunasControlStock: tipoConsulta === 'Vacunacion' ? controlVacunas : null,
@@ -362,14 +346,15 @@ async function guardarConsulta(e) {
                 if (cita) {
                     cita.estado = 'Atendida';
                     saveStore('agenda');
+                    if (typeof renderDashboard === 'function') renderDashboard();
                 }
                 citaActivaId = null;
             }
             if (nuevaConsultaObj.seguimiento.requerido && nuevaConsultaObj.seguimiento.fecha) {
-                agenda.push({
+                const citaSeguimiento = {
                     id: uid() + 2,
                     fecha: nuevaConsultaObj.seguimiento.fecha,
-                    hora: '10:00',
+                    hora: nuevaConsultaObj.seguimiento.hora || '10:00',
                     clienteId: consultaSeleccionada.ownerId,
                     petId: consultaSeleccionada.petId,
                     clienteNombre: consultaSeleccionada.ownerObj.owner,
@@ -378,10 +363,15 @@ async function guardarConsulta(e) {
                     notas: nuevaConsultaObj.seguimiento.nota || 'Seguimiento clínico',
                     estado: 'Programada',
                     origen: 'Seguimiento'
-                });
+                };
+                agenda.push(citaSeguimiento);
                 registrarAuditoria('agenda', 'Crear', `Seguimiento agendado para ${consultaSeleccionada.petObj.name}`, nuevaConsultaObj.id);
                 saveStore('agenda');
                 renderAgenda();
+                if (typeof renderDashboard === 'function') renderDashboard();
+                if (typeof crearRecordatorioApple === 'function' && confirm('Seguimiento agendado. ¿Crear recordatorio en Apple Reminders ahora?')) {
+                    crearRecordatorioApple(citaSeguimiento.id);
+                }
             }
             const avisosStock = [];
             if (controlVacunas.noEncontradas?.length) avisosStock.push(`Sin coincidencia en inventario: ${controlVacunas.noEncontradas.join(', ')}`);

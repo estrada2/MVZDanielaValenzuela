@@ -2,6 +2,7 @@ let modoDatosRemotos = 'app_state';
 let normalizedReloadTimer = null;
 let tablaVacunasPacienteDisponible = false;
 let tablaAuditLogsDisponible = false;
+let tablaClinicasExternasDisponible = false;
 
 const TABLAS_NORMALIZADAS = [
     'clientes',
@@ -174,12 +175,14 @@ function mapearEstadoNormalizado(rows) {
     const agendaMapeada = (rows.agenda || []).map(row => {
         const cliente = clientesPorLegacy.get((rows.clientes || []).find(c => c.id === row.cliente_id)?.legacy_id || row.cliente_id);
         const mascota = mascotasPorLegacy.get((rows.mascotas || []).find(m => m.id === row.mascota_id)?.legacy_id || row.mascota_id);
+        const servicioExternoAgenda = (rows.servicios_externos || []).find(servicio => Number(servicio.agenda_id) === Number(row.legacy_id || row.id));
         return {
             id: row.legacy_id || row.id,
             fecha: row.fecha || '',
             hora: row.hora ? String(row.hora).slice(0, 5) : '',
             clienteId: cliente?.id || row.cliente_id,
             petId: mascota?.id || row.mascota_id,
+            clinicaId: servicioExternoAgenda?.clinica_legacy_id || null,
             clienteNombre: cliente?.owner || row.cliente_nombre || '',
             petName: mascota?.name || row.pet_name || '',
             direccion: row.direccion || '',
@@ -223,8 +226,19 @@ function mapearEstadoNormalizado(rows) {
             estadoPago: row.estado_pago || 'Pagado',
             notaPago: row.nota || '',
             abonos: row.abonos || [],
+            clinicaId: row.clinica_legacy_id || row.clinica_id || null,
             tipo: row.tipo || 'Servicio externo'
         })),
+        clinicasExternas: rows.clinicas_externas ? rows.clinicas_externas.map(row => ({
+            id: row.legacy_id || row.id,
+            nombre: row.nombre || '',
+            contacto: row.contacto || '',
+            telefono: row.telefono || '',
+            direccion: row.direccion || '',
+            servicioHabitual: '',
+            costoSugerido: 0,
+            notas: ''
+        })) : clinicasExternas,
         gastosFinancieros: (rows.gastos || []).map(row => ({
             id: row.legacy_id || row.id,
             fechaISO: row.fecha_iso,
@@ -269,6 +283,14 @@ async function cargarEstadoBaseNormalizada() {
             if (!vacunas.error) rows.vacunas_paciente = vacunas.data || [];
         } catch (errorVacunas) {
             tablaVacunasPacienteDisponible = false;
+        }
+        try {
+            const clinicas = await aplicarFiltroScope(supabaseClient.from('clinicas_externas').select('*'));
+            tablaClinicasExternasDisponible = !clinicas.error;
+            if (!clinicas.error) rows.clinicas_externas = clinicas.data || [];
+        } catch (errorClinicas) {
+            tablaClinicasExternasDisponible = false;
+            rows.clinicas_externas = null;
         }
         try {
             const auditoria = await aplicarFiltroScope(supabaseClient.from('audit_logs').select('*').order('created_at', { ascending: false }).limit(100));
@@ -464,10 +486,25 @@ async function guardarEstadoBaseNormalizada() {
         estado_pago: servicio.estadoPago || 'Pagado',
         nota: servicio.notaPago || '',
         abonos: servicio.abonos || [],
+        ...(tablaClinicasExternasDisponible ? { clinica_legacy_id: servicio.clinicaId || null } : {}),
         tipo: servicio.tipo || 'Servicio externo',
         updated_at: new Date().toISOString()
     }));
     await upsertTabla('servicios_externos', serviciosExternosRows, 'id, legacy_id');
+
+    if (tablaClinicasExternasDisponible) {
+        const clinicasRows = (clinicasExternas || []).map(clinica => ({
+            ...scope,
+            legacy_id: clinica.id,
+            nombre: clinica.nombre || '',
+            contacto: clinica.contacto || '',
+            telefono: clinica.telefono || '',
+            direccion: clinica.direccion || '',
+            updated_at: new Date().toISOString()
+        }));
+        await upsertTabla('clinicas_externas', clinicasRows, 'id, legacy_id');
+        await borrarFaltantes('clinicas_externas', idsLegacy(clinicasRows));
+    }
 
     const gastosRows = gastosFinancieros.map(gasto => ({
         ...scope,
@@ -508,6 +545,10 @@ async function guardarEstadoBaseNormalizada() {
 
 async function recargarEstadoNormalizadoPorRealtime(detalle = 'Se recibieron cambios de otro dispositivo.') {
     if (guardandoRemoto) return;
+    if (typeof debePausarAplicacionRemota === 'function' && debePausarAplicacionRemota()) {
+        actualizarEstadoSync('Edición local activa');
+        return;
+    }
     actualizarEstadoSync('Actualizando...');
     const remoto = await cargarEstadoBaseNormalizada();
     if (!remoto.ok) {
@@ -526,6 +567,7 @@ async function recargarEstadoNormalizadoPorRealtime(detalle = 'Se recibieron cam
 
 function programarRecargaNormalizadaRealtime(tabla) {
     if (guardandoRemoto) return;
+    if (typeof debePausarAplicacionRemota === 'function' && debePausarAplicacionRemota()) return;
     clearTimeout(normalizedReloadTimer);
     normalizedReloadTimer = setTimeout(() => {
         recargarEstadoNormalizadoPorRealtime(`Cambio recibido en ${tabla}.`);
@@ -554,6 +596,16 @@ function escucharCambiosBaseNormalizada() {
             filter: filtroRealtimeScope()
         }, () => {
             programarRecargaNormalizadaRealtime('vacunas_paciente');
+        });
+    }
+    if (tablaClinicasExternasDisponible) {
+        realtimeChannel.on('postgres_changes', {
+            event: '*',
+            schema: 'public',
+            table: 'clinicas_externas',
+            filter: filtroRealtimeScope()
+        }, () => {
+            programarRecargaNormalizadaRealtime('clinicas_externas');
         });
     }
     if (tablaAuditLogsDisponible) {

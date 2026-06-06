@@ -76,35 +76,37 @@ function renderInventario() {
         const porVencer = caducidadProxima(m);
         const valorInventario = (parseFloat(m.costoUnitario || 0) * parseInt(m.stock || 0));
         return `
-            <div class="app-list-card flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 transition-all ${critico || vencido ? 'bg-rose-50 border-rose-200' : porVencer ? 'bg-amber-50 border-amber-200' : 'bg-white'}">
-                <div class="flex items-start gap-3 min-w-0">
-                    <div class="app-icon ${critico || vencido ? 'bg-rose-100 text-rose-700 border-rose-200' : porVencer ? 'bg-amber-100 text-amber-700 border-amber-200' : 'bg-blue-50 text-blue-700 border-blue-100'}">
-                        <i data-lucide="${m.categoria === 'Vacuna' ? 'syringe' : 'package'}" class="w-4 h-4"></i>
-                    </div>
-                    <div class="min-w-0">
-                    <b class="text-sm text-slate-900 block truncate">${m.name}</b>
-                    <span class="section-kicker">${m.categoria || 'Medicamento'} · ${m.unit} · mínimo ${stockMinimo(m)}</span>
-                    <div class="flex flex-wrap gap-1.5 mt-1">
-                        ${m.lote ? `<span class="app-chip">Lote ${m.lote}</span>` : ''}
-                        ${m.proveedor ? `<span class="app-chip">${m.proveedor}</span>` : ''}
-                        ${m.costoUnitario ? `<span class="app-chip green">Costo $${formatoMoneda(m.costoUnitario)} · Valor $${formatoMoneda(valorInventario)}</span>` : ''}
-                        ${m.caducidad ? `<span class="app-chip ${vencido ? 'rose' : porVencer ? 'amber' : ''}">Caduca ${m.caducidad}</span>` : ''}
-                    </div>
-                    </div>
-                </div>
-                <div class="flex flex-wrap items-center gap-2 w-full sm:w-auto justify-between sm:justify-end">
-                    <span class="app-chip ${critico ? 'rose' : 'blue'}">${m.stock} disp</span>
-                    <button onclick="registrarEntradaSalidaStock(${m.id}, 'Salida')" class="btn-danger-soft"><i data-lucide="minus" class="w-4 h-4"></i> Salida</button>
-                    <button onclick="registrarEntradaSalidaStock(${m.id}, 'Entrada')" class="btn-soft text-emerald-700"><i data-lucide="plus" class="w-4 h-4"></i> Entrada</button>
-                    <details class="action-menu">
-                        <summary class="icon-action cursor-pointer" title="Más acciones"><i data-lucide="more-horizontal" class="w-4 h-4"></i> Más</summary>
-                        <div class="action-menu-popover">
-                            <button type="button" onclick="iniciarEdicionMedicamento(${m.id})"><i data-lucide="edit" class="w-4 h-4 text-amber-700"></i> Editar insumo</button>
-                            <button type="button" onclick="eliminarMedicamento(${m.id})" class="text-rose-700"><i data-lucide="trash-2" class="w-4 h-4"></i> Eliminar</button>
+            <article class="stock-row ${critico || vencido ? 'danger' : porVencer ? 'warning' : ''}">
+                <div class="stock-row-main">
+                    <div class="stock-info">
+                        <div class="app-icon ${critico || vencido ? 'bg-rose-100 text-rose-700 border-rose-200' : porVencer ? 'bg-amber-100 text-amber-700 border-amber-200' : 'bg-blue-50 text-blue-700 border-blue-100'}">
+                            <i data-lucide="${m.categoria === 'Vacuna' ? 'syringe' : 'package'}" class="w-4 h-4"></i>
                         </div>
-                    </details>
+                        <div class="min-w-0">
+                            <b class="stock-title">${m.name}</b>
+                            <span class="section-kicker">${m.categoria || 'Medicamento'} · ${m.unit} · mínimo ${stockMinimo(m)}</span>
+                            <div class="stock-chips">
+                                ${m.lote ? `<span class="app-chip">Lote ${m.lote}</span>` : ''}
+                                ${m.proveedor ? `<span class="app-chip">${m.proveedor}</span>` : ''}
+                                ${m.costoUnitario ? `<span class="app-chip green">Costo $${formatoMoneda(m.costoUnitario)} · Valor $${formatoMoneda(valorInventario)}</span>` : ''}
+                                ${m.caducidad ? `<span class="app-chip ${vencido ? 'rose' : porVencer ? 'amber' : ''}">Caduca ${m.caducidad}</span>` : ''}
+                            </div>
+                        </div>
+                    </div>
+                    <div class="inventory-actions">
+                        <span class="app-chip ${critico ? 'rose' : 'blue'}">${m.stock} disp</span>
+                        <button onclick="registrarEntradaSalidaStock(${m.id}, 'Salida')" class="btn-danger-soft"><i data-lucide="minus" class="w-4 h-4"></i> Salida</button>
+                        <button onclick="registrarEntradaSalidaStock(${m.id}, 'Entrada')" class="btn-soft text-emerald-700"><i data-lucide="plus" class="w-4 h-4"></i> Entrada</button>
+                    </div>
                 </div>
-            </div>`;
+                <details class="action-menu row-action-menu">
+                    <summary class="stock-more-button cursor-pointer" title="Más acciones">Más</summary>
+                    <div class="action-menu-popover row-action-panel">
+                        <button type="button" onclick="iniciarEdicionMedicamento(${m.id})"><i data-lucide="edit" class="w-4 h-4 text-amber-700"></i> Editar insumo</button>
+                        <button type="button" onclick="eliminarMedicamento(${m.id})" class="text-rose-700"><i data-lucide="trash-2" class="w-4 h-4"></i> Eliminar</button>
+                    </div>
+                </details>
+            </article>`;
     }).join('');
     renderIcons();
     renderMovimientosInventario();
@@ -517,21 +519,21 @@ function renderGastosFinancieros(gastos = obtenerGastosFiltrados()) {
         return;
     }
     lista.innerHTML = gastos.map(gasto => `
-        <div class="app-list-card bg-slate-50 flex items-center justify-between gap-3">
-            <div>
-                <p class="text-xs font-bold text-slate-900">${gasto.categoria || 'Gasto'} · $${formatoMoneda(gasto.monto)}</p>
-                <p class="text-[11px] text-slate-500">${gasto.fechaObj ? gasto.fechaObj.toLocaleDateString('es-MX') : gasto.fecha || 'Sin fecha'} · ${gasto.descripcion || 'Sin descripción'}</p>
+        <article class="expense-row">
+            <div class="min-w-0">
+                <p class="expense-title">${gasto.categoria || 'Gasto'} · $${formatoMoneda(gasto.monto)}</p>
+                <p class="expense-meta">${gasto.fechaObj ? gasto.fechaObj.toLocaleDateString('es-MX') : gasto.fecha || 'Sin fecha'} · ${gasto.descripcion || 'Sin descripción'}</p>
             </div>
-            <div class="flex items-center gap-1">
+            <div class="expense-actions">
                 <details class="action-menu">
-                    <summary class="icon-action cursor-pointer" title="Más acciones"><i data-lucide="more-horizontal" class="w-4 h-4"></i> Más</summary>
+                    <summary class="stock-more-button cursor-pointer" title="Más acciones">Más</summary>
                     <div class="action-menu-popover">
                         <button type="button" onclick="iniciarEdicionGastoFinanciero(${gasto.id})"><i data-lucide="edit" class="w-4 h-4 text-amber-700"></i> Editar gasto</button>
                         <button type="button" onclick="eliminarGastoFinanciero(${gasto.id})" class="text-rose-700"><i data-lucide="trash-2" class="w-4 h-4"></i> Eliminar</button>
                     </div>
                 </details>
             </div>
-        </div>
+        </article>
     `).join('');
     renderIcons();
 }
@@ -578,7 +580,115 @@ function eliminarGastoFinanciero(id) {
     saveStore('gastosFinancieros');
     renderGananciasConsultas();
 }
+function clinicaExternaPorId(id) {
+    const numericId = parseInt(id);
+    return (clinicasExternas || []).find(clinica => clinica.id === numericId);
+}
+function actualizarSelectClinicasExternas() {
+    const selects = ['externo-clinica-select'];
+    selects.forEach(id => {
+        const select = $(id);
+        if (!select) return;
+        const valorActual = select.value;
+        select.innerHTML = '<option value="">-- Clínica manual / sin catálogo --</option>';
+        (clinicasExternas || [])
+            .slice()
+            .sort((a, b) => String(a.nombre || '').localeCompare(String(b.nombre || ''), 'es'))
+            .forEach(clinica => {
+                select.innerHTML += `<option value="${clinica.id}">${clinica.nombre}</option>`;
+            });
+        if ([...select.options].some(option => option.value === valorActual)) select.value = valorActual;
+    });
+    if (typeof actualizarSelectAgenda === 'function') actualizarSelectAgenda();
+}
+function aplicarClinicaServicioExterno() {
+    const clinica = clinicaExternaPorId($('externo-clinica-select')?.value);
+    if (!clinica) return;
+    if ($('externo-cliente')) $('externo-cliente').value = clinica.nombre || '';
+    if ($('externo-direccion')) $('externo-direccion').value = clinica.direccion || '';
+}
+function renderClinicasExternas() {
+    actualizarSelectClinicasExternas();
+    const lista = $('lista-clinicas-externas');
+    if (!lista) return;
+    const ordenadas = [...(clinicasExternas || [])].sort((a, b) => String(a.nombre || '').localeCompare(String(b.nombre || ''), 'es'));
+    if (!ordenadas.length) {
+        lista.innerHTML = `
+            <div class="border border-dashed border-slate-200 rounded-2xl bg-slate-50 p-8 text-center">
+                <i data-lucide="building-2" class="w-10 h-10 mx-auto text-slate-300 mb-2"></i>
+                <p class="text-sm font-black text-slate-600">Aún no hay clínicas</p>
+                <p class="text-xs text-slate-400 mt-1">Agrega veterinarias frecuentes para usar sus datos en agenda y cobros.</p>
+            </div>`;
+        renderIcons();
+        return;
+    }
+    lista.innerHTML = ordenadas.map(clinica => `
+        <article class="border border-slate-200 rounded-2xl bg-white p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div class="min-w-0">
+                <h5 class="text-sm font-black text-slate-900 truncate">${clinica.nombre || 'Clínica sin nombre'}</h5>
+                <p class="text-xs text-slate-500 mt-1">${clinica.contacto || 'Sin contacto'}${clinica.telefono ? ` · ${clinica.telefono}` : ''}</p>
+                <div class="flex flex-wrap gap-1.5 mt-2">
+                    ${clinica.direccion ? `<span class="app-chip">${clinica.direccion}</span>` : ''}
+                </div>
+            </div>
+            <div class="flex items-center gap-1.5 shrink-0">
+                <button type="button" onclick="iniciarEdicionClinicaExterna(${clinica.id})" class="btn-soft text-amber-700">Editar</button>
+                <button type="button" onclick="eliminarClinicaExterna(${clinica.id})" class="btn-danger-soft">Eliminar</button>
+            </div>
+        </article>
+    `).join('');
+    renderIcons();
+}
+function guardarClinicaExterna(e) {
+    e.preventDefault();
+    const editId = $('edit-clinica-id')?.value;
+    const item = {
+        id: editId ? parseInt(editId) : uid(),
+        nombre: $('clinica-nombre')?.value.trim() || '',
+        contacto: $('clinica-contacto')?.value.trim() || '',
+        telefono: $('clinica-telefono')?.value.trim() || '',
+        direccion: $('clinica-direccion')?.value.trim() || '',
+        servicioHabitual: '',
+        costoSugerido: 0,
+        notas: ''
+    };
+    clinicasExternas = editId
+        ? clinicasExternas.map(clinica => clinica.id === item.id ? item : clinica)
+        : [item, ...(clinicasExternas || [])];
+    registrarAuditoria('clinicas_externas', editId ? 'Editar' : 'Crear', `Clínica externa: ${item.nombre}`, item.id);
+    saveStore('clinicasExternas');
+    cancelarEdicionClinicaExterna();
+    renderClinicasExternas();
+}
+function iniciarEdicionClinicaExterna(id) {
+    const item = clinicaExternaPorId(id);
+    if (!item) return;
+    $('edit-clinica-id').value = item.id;
+    $('clinica-nombre').value = item.nombre || '';
+    $('clinica-contacto').value = item.contacto || '';
+    $('clinica-telefono').value = item.telefono || '';
+    $('clinica-direccion').value = item.direccion || '';
+    $('btn-clinica-externa').innerText = 'Actualizar clínica';
+    $('btn-cancelar-clinica')?.classList.remove('hidden');
+    $('form-clinica-externa')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+function cancelarEdicionClinicaExterna() {
+    $('form-clinica-externa')?.reset();
+    if ($('edit-clinica-id')) $('edit-clinica-id').value = '';
+    if ($('btn-clinica-externa')) $('btn-clinica-externa').innerText = 'Guardar clínica';
+    $('btn-cancelar-clinica')?.classList.add('hidden');
+}
+function eliminarClinicaExterna(id) {
+    const item = clinicaExternaPorId(id);
+    if (!item) return;
+    if (!confirm(`¿Eliminar la clínica ${item.nombre}? Los servicios ya guardados conservarán el nombre.`)) return;
+    clinicasExternas = clinicasExternas.filter(clinica => clinica.id !== id);
+    registrarAuditoria('clinicas_externas', 'Borrar', `Clínica externa eliminada: ${item.nombre}`, id);
+    saveStore('clinicasExternas');
+    renderClinicasExternas();
+}
 function renderServiciosExternos() {
+    renderClinicasExternas();
     const lista = $('lista-servicios-externos');
     if (!lista) return;
     if ($('externo-fecha') && !$('externo-fecha').value) $('externo-fecha').value = fechaLocalInputFinanzas();
@@ -597,6 +707,7 @@ function renderServiciosExternos() {
         const pendiente = (item.estadoPago || 'Pagado') === 'Pendiente';
         const agendado = Boolean(item.agendaId || item.hora);
         const fecha = item.fecha || formatoFechaCorta(parseFechaConsulta(item));
+        const clinica = clinicaExternaPorId(item.clinicaId);
         return `
             <article class="border rounded-2xl bg-white overflow-hidden shadow-xs ${pendiente ? 'border-rose-200' : agendado ? 'border-blue-200' : 'border-slate-200'}">
                 <div class="p-4 flex flex-col lg:flex-row lg:items-center justify-between gap-4">
@@ -610,7 +721,7 @@ function renderServiciosExternos() {
                                 <span class="text-[10px] font-bold px-2 py-0.5 rounded-full ${pendiente ? 'bg-rose-100 text-rose-700' : 'bg-emerald-100 text-emerald-700'}">${item.estadoPago || 'Pagado'}</span>
                                 ${agendado ? `<span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-100">Agendado</span>` : ''}
                             </div>
-                            <p class="text-xs text-slate-600 mt-1"><b>${item.clienteNombre || 'Sin contacto'}</b> · ${fecha}</p>
+                            <p class="text-xs text-slate-600 mt-1"><b>${item.clienteNombre || clinica?.nombre || 'Sin contacto'}</b> · ${fecha}</p>
                             ${item.hora ? `<p class="text-[11px] text-blue-700 font-bold mt-0.5">${item.hora} hrs ${item.direccion ? `· ${item.direccion}` : ''}</p>` : item.direccion ? `<p class="text-[11px] text-slate-500 mt-0.5">${item.direccion}</p>` : ''}
                             ${item.notaPago ? `<p class="text-[11px] text-slate-400 italic mt-1 line-clamp-2">${item.notaPago}</p>` : ''}
                         </div>
@@ -624,7 +735,7 @@ function renderServiciosExternos() {
                         <div class="flex flex-wrap items-center justify-end gap-1.5">
                             ${item.agendaId ? `<button onclick="crearRecordatorioApple(${item.agendaId})" class="text-amber-700 hover:bg-amber-50 px-2.5 py-2 bg-white border rounded-lg shadow-2xs transition-all flex items-center gap-1 text-[11px] font-bold" title="Apple Reminders"><i data-lucide="list-todo" class="w-4 h-4"></i> Reminder</button>` : ''}
                             ${pendiente ? `<button onclick="marcarServicioExternoPagado(${item.id})" class="text-emerald-700 hover:bg-emerald-50 px-2.5 py-2 bg-white border border-emerald-200 rounded-lg shadow-2xs transition-all flex items-center gap-1 text-[11px] font-bold" title="Marcar pagado"><i data-lucide="check-circle" class="w-4 h-4"></i> Cobrar</button>` : ''}
-                            <button onclick="iniciarEdicionServicioExterno(${item.id})" class="text-amber-700 hover:bg-amber-50 px-2.5 py-2 bg-white border rounded-lg shadow-2xs transition-all flex items-center gap-1 text-[11px] font-bold" title="Editar"><i data-lucide="edit" class="w-4 h-4"></i> Editar</button>
+                            ${item.agendaId ? `<button onclick="switchTab('agenda'); iniciarEdicionAgenda(${item.agendaId})" class="text-amber-700 hover:bg-amber-50 px-2.5 py-2 bg-white border rounded-lg shadow-2xs transition-all flex items-center gap-1 text-[11px] font-bold" title="Reagendar"><i data-lucide="calendar-range" class="w-4 h-4"></i> Reagendar</button>` : ''}
                             <button onclick="eliminarServicioExterno(${item.id})" class="btn-danger-soft" title="Eliminar"><i data-lucide="trash-2" class="w-4 h-4"></i> Eliminar</button>
                         </div>
                     </div>
@@ -662,6 +773,7 @@ function sincronizarAgendaServicioExterno(item, agendar) {
         petId: null,
         clienteNombre: item.clienteNombre || 'Servicio externo',
         petName: item.servicioCobrado || 'Externo',
+        clinicaId: item.clinicaId || null,
         direccion: item.direccion || '',
         notas: item.servicioCobrado || 'Servicio externo',
         estado: 'Programada',
@@ -678,19 +790,21 @@ function guardarServicioExterno(e) {
     e.preventDefault();
     const editId = $('edit-servicio-externo-id')?.value;
     const fecha = $('externo-fecha')?.value || fechaLocalInputFinanzas();
+    const clinica = clinicaExternaPorId($('externo-clinica-select')?.value);
     const item = {
         id: editId ? parseInt(editId) : uid(),
         fecha,
         hora: $('externo-hora')?.value || '',
         fechaISO: editId ? (serviciosExternos.find(s => s.id === parseInt(editId))?.fechaISO || new Date(`${fecha}T12:00:00`).toISOString()) : new Date(`${fecha}T12:00:00`).toISOString(),
-        clienteNombre: $('externo-cliente')?.value.trim() || '',
-        servicioCobrado: $('externo-servicio')?.value.trim() || '',
-        direccion: $('externo-direccion')?.value.trim() || '',
+        clienteNombre: $('externo-cliente')?.value.trim() || clinica?.nombre || '',
+        servicioCobrado: $('externo-servicio')?.value.trim() || clinica?.servicioHabitual || '',
+        direccion: $('externo-direccion')?.value.trim() || clinica?.direccion || '',
         agendaId: editId ? (serviciosExternos.find(s => s.id === parseInt(editId))?.agendaId || null) : null,
         total: parseFloat($('externo-total')?.value || 0),
         metodoPago: $('externo-metodo')?.value || 'Efectivo',
         estadoPago: $('externo-estado')?.value || 'Pagado',
         notaPago: $('externo-nota')?.value.trim() || '',
+        clinicaId: clinica?.id || null,
         abonos: editId
             ? (serviciosExternos.find(s => s.id === parseInt(editId))?.abonos || [])
             : (($('externo-estado')?.value || 'Pagado') === 'Pagado'
@@ -719,9 +833,17 @@ function guardarServicioExterno(e) {
 function iniciarEdicionServicioExterno(id) {
     const item = serviciosExternos.find(s => s.id === id);
     if (!item) return;
+    if (!$('form-servicio-externo')) {
+        if (item.agendaId && typeof iniciarEdicionAgenda === 'function') {
+            switchTab('agenda');
+            iniciarEdicionAgenda(item.agendaId);
+        }
+        return;
+    }
     $('edit-servicio-externo-id').value = item.id;
     $('externo-fecha').value = item.fecha || fechaLocalInputFinanzas(parseFechaConsulta(item) || new Date());
     $('externo-hora').value = item.hora || '';
+    if ($('externo-clinica-select')) $('externo-clinica-select').value = item.clinicaId || '';
     $('externo-cliente').value = item.clienteNombre || '';
     $('externo-servicio').value = item.servicioCobrado || '';
     $('externo-direccion').value = item.direccion || '';
@@ -739,6 +861,7 @@ function cancelarEdicionServicioExterno() {
     if ($('edit-servicio-externo-id')) $('edit-servicio-externo-id').value = '';
     if ($('externo-fecha')) $('externo-fecha').value = fechaLocalInputFinanzas();
     if ($('externo-hora')) $('externo-hora').value = '';
+    if ($('externo-clinica-select')) $('externo-clinica-select').value = '';
     if ($('externo-agendar')) $('externo-agendar').checked = false;
     if ($('btn-servicio-externo')) $('btn-servicio-externo').innerText = 'Guardar Servicio Externo';
     $('btn-cancelar-servicio-externo')?.classList.add('hidden');

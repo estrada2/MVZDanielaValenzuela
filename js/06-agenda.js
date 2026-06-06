@@ -7,17 +7,104 @@ function actualizarSelectAgenda() {
             c.mascotas.forEach(m => { sel.innerHTML += `<option value="${c.id}|${m.id}">${c.owner} (${m.name})</option>`; });
         } else { sel.innerHTML += `<option value="${c.id}|">${c.owner} (Sin mascotas)</option>`; }
     });
+    if ((clinicasExternas || []).length) {
+        sel.innerHTML += '<option disabled>──────── Clínicas externas ────────</option>';
+        (clinicasExternas || [])
+            .slice()
+            .sort((a, b) => String(a.nombre || '').localeCompare(String(b.nombre || ''), 'es'))
+            .forEach(clinica => {
+                sel.innerHTML += `<option value="clinic|${clinica.id}">${clinica.nombre}</option>`;
+            });
+    }
 }
 function autocompletarDireccionAgenda() {
     const selectVal = $('agenda-cliente-select').value;
-    if(!selectVal) return;
+    if(!selectVal) {
+        $('agenda-clinica-detalle')?.classList.add('hidden');
+        return;
+    }
+    if (selectVal.startsWith('clinic|')) {
+        const clinica = typeof clinicaExternaPorId === 'function' ? clinicaExternaPorId(selectVal.split('|')[1]) : null;
+        $('agenda-clinica-detalle')?.classList.remove('hidden');
+        if ($('agenda-direccion')) $('agenda-direccion').value = clinica?.direccion || '';
+        if ($('agenda-clinica-servicio')) $('agenda-clinica-servicio').value = '';
+        if ($('agenda-clinica-costo')) $('agenda-clinica-costo').value = '';
+        renderIcons();
+        return;
+    }
+    $('agenda-clinica-detalle')?.classList.add('hidden');
+    if ($('agenda-clinica-servicio')) $('agenda-clinica-servicio').value = '';
+    if ($('agenda-clinica-costo')) $('agenda-clinica-costo').value = '';
     const ownerId = parseInt(selectVal.split('|')[0]);
     const tgt = clientes.find(c => c.id === ownerId);
     if(tgt) $('agenda-direccion').value = tgt.address;
 }
+function sincronizarServicioExternoDesdeAgenda(cita, clinica, servicio, total) {
+    if (!cita || !clinica) return;
+    const existente = (serviciosExternos || []).find(item => item.agendaId === cita.id);
+    const item = {
+        id: existente?.id || uid(),
+        fecha: cita.fecha,
+        hora: cita.hora,
+        fechaISO: existente?.fechaISO || new Date(`${cita.fecha}T12:00:00`).toISOString(),
+        clienteNombre: clinica.nombre || cita.clienteNombre || 'Servicio externo',
+        servicioCobrado: servicio || cita.notas || 'Servicio externo',
+        direccion: cita.direccion || clinica.direccion || '',
+        agendaId: cita.id,
+        total: parseFloat(total || 0),
+        metodoPago: existente?.metodoPago || 'Efectivo',
+        estadoPago: existente?.estadoPago || 'Pendiente',
+        notaPago: existente?.notaPago || '',
+        abonos: existente?.abonos || [],
+        clinicaId: clinica.id,
+        tipo: 'Servicio externo'
+    };
+    serviciosExternos = existente
+        ? serviciosExternos.map(servicioExterno => servicioExterno.id === item.id ? item : servicioExterno)
+        : [item, ...(serviciosExternos || [])];
+    saveStore('serviciosExternos');
+    if (typeof renderServiciosExternos === 'function') renderServiciosExternos();
+    if (typeof renderGananciasConsultas === 'function') renderGananciasConsultas();
+}
 let filtroAgendaActivo = 'todas';
 let modoAgendaActivo = 'lista';
 let citaActivaId = null;
+function capturarFormularioAgendaActivo() {
+    const form = $('form-agenda');
+    if (!form) return null;
+    const tieneDatos = ['edit-agenda-id', 'agenda-fecha', 'agenda-hora', 'agenda-cliente-select', 'agenda-direccion', 'agenda-notes', 'agenda-clinica-servicio', 'agenda-clinica-costo']
+        .some(id => String($(id)?.value || '').trim());
+    if (!tieneDatos) return null;
+    return {
+        editId: $('edit-agenda-id')?.value || '',
+        fecha: $('agenda-fecha')?.value || '',
+        hora: $('agenda-hora')?.value || '',
+        cliente: $('agenda-cliente-select')?.value || '',
+        direccion: $('agenda-direccion')?.value || '',
+        notas: $('agenda-notes')?.value || '',
+        clinicaServicio: $('agenda-clinica-servicio')?.value || '',
+        clinicaCosto: $('agenda-clinica-costo')?.value || ''
+    };
+}
+function restaurarFormularioAgendaActivo(snapshot) {
+    if (!snapshot || !$('form-agenda')) return;
+    if ($('edit-agenda-id')) $('edit-agenda-id').value = snapshot.editId;
+    if ($('agenda-fecha')) $('agenda-fecha').value = snapshot.fecha;
+    if ($('agenda-hora')) $('agenda-hora').value = snapshot.hora;
+    if ($('agenda-cliente-select')) $('agenda-cliente-select').value = snapshot.cliente;
+    if ($('agenda-direccion')) $('agenda-direccion').value = snapshot.direccion;
+    if ($('agenda-notes')) $('agenda-notes').value = snapshot.notas;
+    if ($('agenda-clinica-servicio')) $('agenda-clinica-servicio').value = snapshot.clinicaServicio;
+    if ($('agenda-clinica-costo')) $('agenda-clinica-costo').value = snapshot.clinicaCosto;
+    if (snapshot.cliente?.startsWith('clinic|')) $('agenda-clinica-detalle')?.classList.remove('hidden');
+    if (snapshot.editId && $('btn-cancelar-agenda')) {
+        $('titulo-form-agenda').innerHTML = `<i data-lucide="calendar-range" class="text-amber-600 w-5 h-5"></i> Reagendar Visita`;
+        $('btn-guardar-agenda').innerText = "Actualizar Cita";
+        $('btn-cancelar-agenda').classList.remove('hidden');
+    }
+    renderHorariosRecomendados();
+    renderIcons();
+}
 function fechaLocalISO(fecha = new Date()) {
     const offset = fecha.getTimezoneOffset() * 60000;
     return new Date(fecha.getTime() - offset).toISOString().split('T')[0];
@@ -112,6 +199,11 @@ function fechaCitaBonita(cita) {
     if (Number.isNaN(fecha.getTime())) return normalizarFechaCita(cita) || 'Sin fecha';
     return fecha.toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' });
 }
+function fechaCitaCompacta(cita) {
+    const fecha = fechaHoraCita(cita);
+    if (Number.isNaN(fecha.getTime())) return normalizarFechaCita(cita) || '';
+    return fecha.toLocaleDateString('es-MX', { day: '2-digit', month: 'short' });
+}
 function citasAgendaFiltradas() {
     const hoy = fechaLocalISO();
     const finSemana = new Date();
@@ -192,8 +284,8 @@ function renderAgenda() {
         { titulo: 'Pasadas', items: ordenadas.filter(cita => normalizarFechaCita(cita) < hoy) }
     ].filter(grupo => grupo.items.length);
     list.innerHTML = grupos.map(grupo => `
-        <div class="space-y-2">
-            <div class="sticky top-0 z-10 bg-slate-50/95 backdrop-blur-sm py-1 flex items-center justify-between">
+            <div class="agenda-group">
+            <div class="agenda-group-header">
                 <h4 class="text-[11px] font-black text-slate-500 uppercase tracking-wider">${grupo.titulo}</h4>
                 <span class="text-[10px] font-bold text-slate-400">${grupo.items.length} visita${grupo.items.length === 1 ? '' : 's'}</span>
             </div>
@@ -215,41 +307,43 @@ function renderAgenda() {
             Cancelada: 'bg-rose-100 text-rose-700'
         }[estado] || 'bg-gray-100 text-gray-700';
         return `
-            <div class="app-list-card transition-all ${esHoy ? 'bg-amber-50 border-amber-300' : 'bg-white'}">
-                <div class="grid grid-cols-1 xl:grid-cols-[6.75rem_1fr_auto] gap-3 items-center">
-                    <div class="rounded-xl bg-slate-900 text-white px-3 py-2">
-                        <span class="block text-[13px] font-black leading-tight">${horaCita(a)} hrs</span>
-                        <span class="block text-[10px] font-bold text-slate-300 leading-tight">${fechaCitaBonita(a)}</span>
+            <article class="agenda-row ${esHoy ? 'today' : ''}">
+                <div class="agenda-row-main">
+                    <div class="agenda-time">
+                        <span>${horaCita(a)}</span>
+                        <small>${fechaCitaCompacta(a)}</small>
                     </div>
-                    <div class="min-w-0 space-y-1">
-                        <div class="flex flex-wrap items-center gap-1.5">
-                            <span class="font-black text-sm text-slate-900">${nombre}${mascota}</span>
-                            ${esHoy ? '<span class="app-chip amber">Hoy</span>' : ''}
-                            <span class="app-chip ${estado === 'Confirmada' ? 'green' : estado === 'Cancelada' ? 'rose' : 'blue'}">${estado}</span>
+                    <div class="agenda-main">
+                        <div class="agenda-title-line">
+                            <span class="agenda-title">${nombre}${mascota}</span>
+                            ${esHoy ? '<span class="agenda-badge amber">Hoy</span>' : ''}
+                            <span class="agenda-badge ${estado === 'Confirmada' ? 'green' : estado === 'Cancelada' ? 'rose' : 'blue'}">${estado}</span>
                         </div>
-                        <p class="text-[11px] text-gray-600 font-medium flex items-start gap-1"><i data-lucide="map-pin" class="w-3 h-3 mt-0.5 shrink-0 text-rose-500"></i><span class="truncate">${direccion || 'Sin dirección'}</span></p>
-                        <p class="text-[11px] text-slate-500 italic flex items-start gap-1"><i data-lucide="notebook-pen" class="w-3 h-3 mt-0.5 shrink-0 text-slate-400"></i><span class="line-clamp-1">${notas}</span></p>
+                        <div class="agenda-meta">
+                            <span>${direccion || 'Sin dirección'}</span>
+                            <span>${notas}</span>
+                        </div>
                     </div>
-                    <div class="flex flex-wrap items-center gap-1.5 w-full xl:w-auto justify-end">
-                        ${a.petId && estado !== 'Cancelada' ? `<button onclick="atenderCita(${a.id})" class="btn-primary"><i data-lucide="stethoscope" class="w-4 h-4"></i> Atender</button>` : ''}
-                        ${esServicioExterno && estado !== 'Cancelada' ? `<button onclick="gestionarServicioExternoAgenda(${a.id})" class="btn-primary"><i data-lucide="briefcase-medical" class="w-4 h-4"></i> Gestionar</button>` : ''}
-                        ${tel ? `<a href="https://wa.me/52${tel}" target="_blank" rel="noopener" class="icon-action text-emerald-700" title="WhatsApp"><i data-lucide="message-circle" class="w-4 h-4"></i> WhatsApp</a>` : ''}
-                        <button onclick="abrirNavegacionMaps('${direccion.replace(/'/g, "\\'")}')" class="icon-action text-blue-700" title="Maps"><i data-lucide="map" class="w-4 h-4"></i> Maps</button>
-                        <details class="action-menu">
-                            <summary class="icon-action cursor-pointer" title="Más acciones"><i data-lucide="more-horizontal" class="w-4 h-4"></i> Más</summary>
-                            <div class="action-menu-popover">
-                                ${estado === 'Programada' ? `<button type="button" onclick="cambiarEstadoCita(${a.id}, 'Confirmada')"><i data-lucide="check" class="w-4 h-4 text-emerald-700"></i> Confirmar cita</button>` : ''}
-                                <button type="button" onclick="crearRecordatorioApple(${a.id})"><i data-lucide="list-todo" class="w-4 h-4 text-amber-700"></i> Enviar a Reminders</button>
-                                <button type="button" onclick="iniciarEdicionAgenda(${a.id})"><i data-lucide="edit" class="w-4 h-4 text-amber-700"></i> Editar visita</button>
-                                <label><i data-lucide="refresh-cw" class="w-4 h-4 text-slate-500"></i><select onchange="cambiarEstadoCita(${a.id}, this.value)" class="flex-1 bg-transparent outline-none text-[12px] font-bold">
-                                    ${['Programada', 'Confirmada', 'Atendida', 'Cancelada'].map(opcion => `<option value="${opcion}" ${estado === opcion ? 'selected' : ''}>${opcion}</option>`).join('')}
-                                </select></label>
-                                <button type="button" onclick="eliminarCita(${a.id})" class="text-rose-700"><i data-lucide="trash-2" class="w-4 h-4"></i> Eliminar</button>
-                            </div>
-                        </details>
+                    <div class="agenda-actions">
+                            ${a.petId && estado !== 'Cancelada' ? `<button onclick="atenderCita(${a.id})" class="agenda-action primary">Atender</button>` : ''}
+                            ${esServicioExterno && estado !== 'Cancelada' ? `<button onclick="gestionarServicioExternoAgenda(${a.id})" class="agenda-action primary">Gestionar</button>` : ''}
+                            ${tel ? `<a href="https://wa.me/52${tel}" target="_blank" rel="noopener" class="agenda-action green" title="WhatsApp">WhatsApp</a>` : ''}
+                            <button onclick="abrirNavegacionMaps('${direccion.replace(/'/g, "\\'")}')" class="agenda-action blue" title="Maps">Maps</button>
                     </div>
                 </div>
-            </div>`;
+                <details class="action-menu row-action-menu">
+                    <summary class="agenda-action more cursor-pointer" title="Más acciones">Más</summary>
+                    <div class="action-menu-popover row-action-panel">
+                        ${estado === 'Programada' ? `<button type="button" onclick="cambiarEstadoCita(${a.id}, 'Confirmada')"><i data-lucide="check" class="w-4 h-4 text-emerald-700"></i> Confirmar cita</button>` : ''}
+                        <button type="button" onclick="iniciarEdicionAgenda(${a.id})"><i data-lucide="calendar-range" class="w-4 h-4 text-blue-700"></i> Reagendar</button>
+                        <button type="button" onclick="crearRecordatorioApple(${a.id})"><i data-lucide="list-todo" class="w-4 h-4 text-amber-700"></i> Enviar a Reminders</button>
+                        <label><i data-lucide="refresh-cw" class="w-4 h-4 text-slate-500"></i><select onchange="cambiarEstadoCita(${a.id}, this.value)" class="flex-1 bg-transparent outline-none text-[12px] font-bold">
+                            ${['Programada', 'Confirmada', 'Atendida', 'Cancelada'].map(opcion => `<option value="${opcion}" ${estado === opcion ? 'selected' : ''}>${opcion}</option>`).join('')}
+                        </select></label>
+                        <button type="button" onclick="eliminarCita(${a.id})" class="text-rose-700"><i data-lucide="trash-2" class="w-4 h-4"></i> Eliminar</button>
+                    </div>
+                </details>
+            </article>`;
             }).join('')}
         </div>
     `).join('');
@@ -259,10 +353,6 @@ function guardarCita(e) {
     e.preventDefault();
     const selectVal = $('agenda-cliente-select').value;
     if(!selectVal) return;
-    const ownerId = parseInt(selectVal.split('|')[0]);
-    const petId = selectVal.split('|')[1] ? parseInt(selectVal.split('|')[1]) : null;
-    const ownerObj = clientes.find(item => item.id === ownerId);
-    const petObj = ownerObj && petId ? ownerObj.mascotas.find(m => m.id === petId) : null;
     const editId = $('edit-agenda-id').value;
     const fecha = $('agenda-fecha').value;
     const hora = $('agenda-hora').value;
@@ -271,6 +361,46 @@ function guardarCita(e) {
         alert(`Ya hay una visita activa muy cerca de ese horario.\n\nCita existente: ${horaCita(conflicto)} hrs · ${conflicto.clienteNombre || 'Cliente'} ${conflicto.petName ? `(${conflicto.petName})` : ''}\n\nAgenda la siguiente visita al menos 45 minutos después.`);
         return;
     }
+    if (selectVal.startsWith('clinic|')) {
+        const clinica = typeof clinicaExternaPorId === 'function' ? clinicaExternaPorId(selectVal.split('|')[1]) : null;
+        if (!clinica) {
+            alert('No encontré la clínica seleccionada. Revisa el catálogo de servicios externos.');
+            return;
+        }
+        const servicio = $('agenda-clinica-servicio')?.value.trim() || $('agenda-notes')?.value.trim() || 'Servicio externo';
+        const total = parseFloat($('agenda-clinica-costo')?.value || 0);
+        const citaBase = {
+            id: editId ? parseInt(editId) : Date.now(),
+            clienteId: null,
+            petId: null,
+            clinicaId: clinica.id,
+            fecha,
+            hora,
+            clienteNombre: clinica.nombre || 'Servicio externo',
+            petName: servicio,
+            direccion: $('agenda-direccion').value || clinica.direccion || '',
+            notas: servicio,
+            estado: editId ? (agenda.find(item => item.id === parseInt(editId))?.estado || 'Programada') : 'Programada',
+            origen: 'Servicio externo'
+        };
+        agenda = editId
+            ? agenda.map(item => item.id === citaBase.id ? { ...item, ...citaBase } : item)
+            : [...agenda, citaBase];
+        sincronizarServicioExternoDesdeAgenda(citaBase, clinica, servicio, total);
+        if (!editId) setTimeout(() => preguntarCrearReminderAutomatico(citaBase.id), 250);
+        cancelarEdicionAgenda();
+        saveStore('agenda');
+        $('form-agenda').reset();
+        $('agenda-clinica-detalle')?.classList.add('hidden');
+        renderAgenda();
+        renderHorariosRecomendados();
+        if (typeof renderDashboard === 'function') renderDashboard();
+        return;
+    }
+    const ownerId = parseInt(selectVal.split('|')[0]);
+    const petId = selectVal.split('|')[1] ? parseInt(selectVal.split('|')[1]) : null;
+    const ownerObj = clientes.find(item => item.id === ownerId);
+    const petObj = ownerObj && petId ? ownerObj.mascotas.find(m => m.id === petId) : null;
     if (editId) {
         agenda = agenda.map(item => {
             if (item.id === parseInt(editId)) {
@@ -282,7 +412,6 @@ function guardarCita(e) {
                 item.petName = petObj ? petObj.name : 'N/A';
                 item.direccion = $('agenda-direccion').value;
                 item.notas = $('agenda-notes').value || 'Sin notas';
-                item.estado = $('agenda-estado').value;
             }
             return item;
         });
@@ -298,7 +427,7 @@ function guardarCita(e) {
             petName: petObj ? petObj.name : 'N/A',
             direccion: $('agenda-direccion').value,
             notas: $('agenda-notes').value || 'Sin notas',
-            estado: $('agenda-estado').value
+            estado: 'Programada'
         };
         agenda.push(nuevaCita);
         setTimeout(() => preguntarCrearReminderAutomatico(nuevaCita.id), 250);
@@ -307,6 +436,7 @@ function guardarCita(e) {
     $('form-agenda').reset(); 
     renderAgenda();
     renderHorariosRecomendados();
+    if (typeof renderDashboard === 'function') renderDashboard();
 }
 function preguntarCrearReminderAutomatico(idCita) {
     const cita = agenda.find(item => item.id === idCita);
@@ -320,11 +450,19 @@ function iniciarEdicionAgenda(id) {
     $('edit-agenda-id').value = target.id;
     $('agenda-fecha').value = target.fecha;
     $('agenda-hora').value = target.hora;
-    const clientVal = target.clienteId || target.ownerId;
-    $('agenda-cliente-select').value = target.petId ? `${clientVal}|${target.petId}` : `${clientVal}|`;
+    if ((target.origen || '') === 'Servicio externo' && target.clinicaId) {
+        $('agenda-cliente-select').value = `clinic|${target.clinicaId}`;
+        $('agenda-clinica-detalle')?.classList.remove('hidden');
+        const servicioExterno = (serviciosExternos || []).find(item => item.agendaId === target.id);
+        if ($('agenda-clinica-servicio')) $('agenda-clinica-servicio').value = servicioExterno?.servicioCobrado || target.notas || target.petName || '';
+        if ($('agenda-clinica-costo')) $('agenda-clinica-costo').value = servicioExterno?.total || '';
+    } else {
+        const clientVal = target.clienteId || target.ownerId;
+        $('agenda-cliente-select').value = target.petId ? `${clientVal}|${target.petId}` : `${clientVal}|`;
+        $('agenda-clinica-detalle')?.classList.add('hidden');
+    }
     $('agenda-direccion').value = target.direccion || target.address || '';
     $('agenda-notes').value = (target.notas || target.notes) === 'Sin notas' ? '' : (target.notas || target.notes);
-    $('agenda-estado').value = target.estado || 'Programada';
     $('titulo-form-agenda').innerHTML = `<i data-lucide="calendar-range" class="text-amber-600 w-5 h-5"></i> Reagendar Visita`;
     $('btn-guardar-agenda').innerText = "Actualizar Cita";
     $('btn-cancelar-agenda').classList.remove('hidden');
@@ -338,6 +476,7 @@ function cambiarEstadoCita(id, estado) {
     saveStore('agenda');
     renderAgenda();
     renderHorariosRecomendados();
+    if (typeof renderDashboard === 'function') renderDashboard();
 }
 function atenderCita(id) {
     const cita = agenda.find(item => item.id === id);
@@ -346,6 +485,7 @@ function atenderCita(id) {
     cita.estado = 'Confirmada';
     citaActivaId = id;
     saveStore('agenda');
+    if (typeof renderDashboard === 'function') renderDashboard();
     cargarPacienteAConsulta(clienteId, cita.petId);
 }
 function gestionarServicioExternoAgenda(agendaId) {
@@ -359,10 +499,10 @@ function gestionarServicioExternoAgenda(agendaId) {
     if (cita && cita.estado === 'Programada') {
         cita.estado = 'Confirmada';
         saveStore('agenda');
+        if (typeof renderDashboard === 'function') renderDashboard();
     }
     switchTab('servicios-externos');
-    iniciarEdicionServicioExterno(servicio.id);
-    document.getElementById('form-servicio-externo')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    renderServiciosExternos();
 }
 function cancelarEdicionAgenda() {
     $('edit-agenda-id').value = ''; 
@@ -370,6 +510,9 @@ function cancelarEdicionAgenda() {
     $('titulo-form-agenda').innerHTML = `<i data-lucide="calendar-plus" class="text-blue-600 w-5 h-5"></i> Agendar Nueva Visita`;
     $('btn-guardar-agenda').innerText = "Agregar a la Agenda";
     $('btn-cancelar-agenda').classList.add('hidden');
+    $('agenda-clinica-detalle')?.classList.add('hidden');
+    if ($('agenda-clinica-servicio')) $('agenda-clinica-servicio').value = '';
+    if ($('agenda-clinica-costo')) $('agenda-clinica-costo').value = '';
     renderHorariosRecomendados();
     renderIcons();
 }

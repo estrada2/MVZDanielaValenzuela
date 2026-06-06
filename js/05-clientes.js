@@ -502,7 +502,7 @@ function renderCardConsultaHistorial(owner, pet, consulta) {
                     ${consulta.seguimiento?.requerido ? `
                         <div class="bg-indigo-50 p-3 rounded-lg border border-indigo-200">
                             <p class="text-xs font-bold text-indigo-900">Seguimiento requerido</p>
-                            <p class="text-xs text-indigo-800">${consulta.seguimiento.nota || 'Sin nota específica'}${consulta.seguimiento.fecha ? ` · Sugerido: ${consulta.seguimiento.fecha}` : ''}</p>
+                            <p class="text-xs text-indigo-800">${consulta.seguimiento.nota || 'Sin nota específica'}${consulta.seguimiento.fecha ? ` · Sugerido: ${consulta.seguimiento.fecha}${consulta.seguimiento.hora ? ` ${consulta.seguimiento.hora} hrs` : ''}` : ''}</p>
                         </div>
                     ` : ''}
                     ${consulta.insumos?.length ? `<div class="bg-blue-50 p-2 rounded-lg text-[10px] border border-blue-100 text-blue-900"><b>Insumos:</b> ${consulta.insumos.map(i=>`${i.name} [x${i.qty}]`).join(', ')}</div>` : ''}

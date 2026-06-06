@@ -4,6 +4,7 @@ const STORE_KEYS = {
     agenda: 'vet_pro_agenda',
     finanzas: 'vet_pro_finanzas',
     serviciosExternos: 'vet_pro_servicios_externos',
+    clinicasExternas: 'vet_pro_clinicas_externas',
     gastosFinancieros: 'vet_pro_gastos_financieros',
     auditLogs: 'vet_pro_audit_logs'
 };
@@ -21,6 +22,7 @@ let syncTimer = null;
 let remotePollingTimer = null;
 let guardandoRemoto = false;
 let guardadoPendiente = false;
+let edicionLocalActivaHasta = 0;
 const STORAGE_BUCKET = 'vet-files';
 function loadStore(key, fallback) {
     try {
@@ -31,7 +33,7 @@ function loadStore(key, fallback) {
     }
 }
 function estadoCompleto() {
-    return { clientes, inventario, agenda, finanzas, movimientosInventario, serviciosExternos, gastosFinancieros, auditLogs };
+    return { clientes, inventario, agenda, finanzas, movimientosInventario, serviciosExternos, clinicasExternas, gastosFinancieros, auditLogs };
 }
 function aplicarEstado(data = {}) {
     clientes = data.clientes || [];
@@ -40,6 +42,7 @@ function aplicarEstado(data = {}) {
     finanzas = data.finanzas || [];
     movimientosInventario = data.movimientosInventario || [];
     serviciosExternos = data.serviciosExternos || [];
+    clinicasExternas = data.clinicasExternas || [];
     gastosFinancieros = data.gastosFinancieros || [];
     auditLogs = data.auditLogs || [];
 }
@@ -48,26 +51,41 @@ function actualizarEstadoSync(texto, error = false) {
     $('sync-status').innerText = texto;
     $('sync-status').className = error ? 'text-red-300' : '';
 }
-function mostrarToastSync(titulo = 'Datos actualizados', detalle = 'Se recibieron cambios de otro dispositivo.') {
-    const toast = $('sync-toast');
-    if (!toast) return;
-    if ($('sync-toast-title')) $('sync-toast-title').innerText = titulo;
-    if ($('sync-toast-detail')) $('sync-toast-detail').innerText = detalle;
-    toast.classList.remove('hidden');
-    renderIcons();
-    clearTimeout(mostrarToastSync.timer);
-    mostrarToastSync.timer = setTimeout(() => toast.classList.add('hidden'), 3500);
-}
 function aplicarEstadoRemoto(estado, detalle = 'Se recibieron cambios de otro dispositivo.') {
+    if (debePausarAplicacionRemota()) {
+        actualizarEstadoSync('Edición local activa');
+        return;
+    }
+    const agendaFormSnapshot = typeof capturarFormularioAgendaActivo === 'function' ? capturarFormularioAgendaActivo() : null;
     aplicarEstado(estado);
     if (typeof refrescarInterfaz === 'function') refrescarInterfaz();
+    if (typeof restaurarFormularioAgendaActivo === 'function') restaurarFormularioAgendaActivo(agendaFormSnapshot);
     actualizarEstadoSync('Sincronizado');
-    mostrarToastSync('Datos actualizados', detalle);
 }
 function mostrarBannerActualizacion() {
     $('update-banner')?.classList.remove('hidden');
     renderIcons();
 }
+function debePausarAplicacionRemota() {
+    if (Date.now() < edicionLocalActivaHasta) return true;
+    const activo = document.activeElement;
+    if (!activo || activo === document.body) return false;
+    const tag = activo.tagName;
+    const editable = ['INPUT', 'TEXTAREA', 'SELECT'].includes(tag) || activo.isContentEditable;
+    if (!editable) return false;
+    const form = activo.closest('form');
+    if (!form) return false;
+    return Boolean(form.id);
+}
+function marcarEdicionLocalActiva(event) {
+    const target = event.target;
+    if (!target?.closest?.('form')) return;
+    if (!['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName) && !target.isContentEditable) return;
+    edicionLocalActivaHasta = Date.now() + 120000;
+}
+document.addEventListener('input', marcarEdicionLocalActiva, true);
+document.addEventListener('change', marcarEdicionLocalActiva, true);
+document.addEventListener('focusin', marcarEdicionLocalActiva, true);
 window.addEventListener('vethome-update-ready', mostrarBannerActualizacion);
 function limpiarDatosLocalesAnteriores() {
     Object.values(STORE_KEYS).forEach(key => localStorage.removeItem(key));
@@ -267,6 +285,7 @@ function datosLocalesAnteriores() {
         finanzas: loadStore(STORE_KEYS.finanzas, []),
         movimientosInventario: [],
         serviciosExternos: loadStore(STORE_KEYS.serviciosExternos, []),
+        clinicasExternas: loadStore(STORE_KEYS.clinicasExternas, []),
         gastosFinancieros: loadStore(STORE_KEYS.gastosFinancieros, []),
         auditLogs: loadStore(STORE_KEYS.auditLogs, [])
     };
@@ -276,6 +295,7 @@ function tieneDatos(data) {
 }
 async function refrescarEstadoDesdeRemotoSilencioso() {
     if (!usuarioActivo || guardandoRemoto || document.visibilityState === 'hidden') return;
+    if (debePausarAplicacionRemota()) return;
     try {
         let estadoRemoto = null;
         if (modoDatosRemotos === 'normalizado' && typeof cargarEstadoBaseNormalizada === 'function') {
@@ -298,9 +318,9 @@ async function refrescarEstadoDesdeRemotoSilencioso() {
 }
 function iniciarRefrescoRemotoAutomatico() {
     clearInterval(remotePollingTimer);
-    remotePollingTimer = setInterval(refrescarEstadoDesdeRemotoSilencioso, 10000);
+    remotePollingTimer = setInterval(refrescarEstadoDesdeRemotoSilencioso, 60000);
     document.addEventListener('visibilitychange', () => {
-        if (document.visibilityState === 'visible') refrescarEstadoDesdeRemotoSilencioso();
+        if (document.visibilityState === 'visible' && !debePausarAplicacionRemota()) refrescarEstadoDesdeRemotoSilencioso();
     });
 }
 function escucharCambiosRemotos() {
@@ -319,6 +339,7 @@ function escucharCambiosRemotos() {
             filter: filtroRealtimeScope()
         }, payload => {
             if (!payload.new?.data || guardandoRemoto) return;
+            if (debePausarAplicacionRemota()) return;
             aplicarEstadoRemoto(payload.new.data);
         })
         .subscribe();
@@ -451,6 +472,7 @@ let finanzas = loadStore(STORE_KEYS.finanzas, [
 ]);
 let movimientosInventario = [];
 let serviciosExternos = loadStore(STORE_KEYS.serviciosExternos, []);
+let clinicasExternas = loadStore(STORE_KEYS.clinicasExternas, []);
 let gastosFinancieros = loadStore(STORE_KEYS.gastosFinancieros, []);
 let auditLogs = loadStore(STORE_KEYS.auditLogs, []);
 let consultaSeleccionada = { ownerId: null, petId: null, ownerObj: null, petObj: null };
@@ -458,7 +480,7 @@ let clienteActivoSubpaginaId = null;
 let firmaDuenoEstablecida = false;
 let firmaVetEstablecida = false;
 function exportarAICloud() {
-    const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify({ clientes, inventario, agenda, finanzas, serviciosExternos, gastosFinancieros }));
+    const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify({ clientes, inventario, agenda, finanzas, serviciosExternos, clinicasExternas, gastosFinancieros }));
     const downloadAnchor = document.createElement('a');
     downloadAnchor.setAttribute("href", dataStr);
     downloadAnchor.setAttribute("download", `VetHomePro_iCloudBackup_${new Date().toISOString().split('T')[0]}.json`);
@@ -479,6 +501,7 @@ function importarDesdeICloud(event) {
                 agenda = importado.agenda || agenda;
                 finanzas = importado.finanzas || finanzas;
                 serviciosExternos = importado.serviciosExternos || serviciosExternos;
+                clinicasExternas = importado.clinicasExternas || clinicasExternas;
                 gastosFinancieros = importado.gastosFinancieros || gastosFinancieros;
                 saveAllStores();
                 alert("¡Sincronización iCloud completada exitosamente!");
