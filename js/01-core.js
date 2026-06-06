@@ -13,6 +13,7 @@ const setHidden = (id, hidden = true) => $(id)?.classList.toggle('hidden', hidde
 let usuarioActivo = null;
 let realtimeChannel = null;
 let syncTimer = null;
+let remotePollingTimer = null;
 let guardandoRemoto = false;
 let guardadoPendiente = false;
 const STORAGE_BUCKET = 'vet-files';
@@ -169,6 +170,38 @@ function datosLocalesAnteriores() {
 function tieneDatos(data) {
     return Object.values(data).some(lista => Array.isArray(lista) && lista.length);
 }
+async function refrescarEstadoDesdeRemotoSilencioso() {
+    if (!usuarioActivo || guardandoRemoto || document.visibilityState === 'hidden') return;
+    try {
+        let estadoRemoto = null;
+        if (modoDatosRemotos === 'normalizado' && typeof cargarEstadoBaseNormalizada === 'function') {
+            const remoto = await cargarEstadoBaseNormalizada();
+            if (!remoto.ok) throw remoto.error;
+            estadoRemoto = remoto.estado;
+        } else {
+            const { data, error } = await supabaseClient
+                .from('app_state')
+                .select('data')
+                .eq('user_id', usuarioActivo.id)
+                .maybeSingle();
+            if (error) throw error;
+            estadoRemoto = data?.data || null;
+        }
+        if (!estadoRemoto) return;
+        aplicarEstado(estadoRemoto);
+        if (typeof refrescarInterfaz === 'function') refrescarInterfaz();
+        actualizarEstadoSync('Sincronizado');
+    } catch (error) {
+        console.warn('No se pudo refrescar estado remoto en segundo plano.', error);
+    }
+}
+function iniciarRefrescoRemotoAutomatico() {
+    clearInterval(remotePollingTimer);
+    remotePollingTimer = setInterval(refrescarEstadoDesdeRemotoSilencioso, 15000);
+    document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible') refrescarEstadoDesdeRemotoSilencioso();
+    });
+}
 function escucharCambiosRemotos() {
     if (!usuarioActivo) return;
     if (modoDatosRemotos === 'normalizado' && typeof escucharCambiosBaseNormalizada === 'function') {
@@ -222,6 +255,7 @@ async function initRemoteStorage() {
                 await guardarEstadoRemoto();
             }
             escucharCambiosRemotos();
+            iniciarRefrescoRemotoAutomatico();
             actualizarEstadoSync('Sincronizado');
             return true;
         }
@@ -247,6 +281,7 @@ async function initRemoteStorage() {
         await guardarEstadoRemoto();
     }
     escucharCambiosRemotos();
+    iniciarRefrescoRemotoAutomatico();
     actualizarEstadoSync('Sincronizado');
     return true;
 }
