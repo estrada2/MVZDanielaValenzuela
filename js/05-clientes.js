@@ -1,3 +1,5 @@
+// Clientes, mascotas y expediente clinico.
+// Maneja directorio, identificacion, estudios PDF, vacunas manuales y timeline del paciente.
 let historialActivo = { ownerId: null, petId: null, filtro: 'todas' };
 let fotoIdentificacionCapturada = '';
 let streamIdentificacion = null;
@@ -532,6 +534,7 @@ function renderCardConsultaHistorial(owner, pet, consulta) {
     `;
 }
 
+// Vista principal del expediente: ficha del paciente, vacunas/refuerzos, estudios y consultas.
 function renderHistorialClinicoActivo() {
     const owner = clientes.find(c => c.id === historialActivo.ownerId);
     const pet = owner?.mascotas.find(m => m.id === historialActivo.petId);
@@ -707,6 +710,7 @@ function prepararAgendaDesdeExpediente(ownerId, petId) {
     switchTab('agenda');
     actualizarSelectAgenda();
     if ($('agenda-cliente-select')) $('agenda-cliente-select').value = `${ownerId}|${petId}`;
+    if (typeof sincronizarBusquedaClienteAgenda === 'function') sincronizarBusquedaClienteAgenda();
     if ($('agenda-direccion')) $('agenda-direccion').value = owner.address || '';
     if ($('agenda-notes')) $('agenda-notes').value = `Seguimiento de ${pet.name}`;
 }

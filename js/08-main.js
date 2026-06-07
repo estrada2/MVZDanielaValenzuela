@@ -1,3 +1,5 @@
+// Arranque y renders generales.
+// Inicializa Supabase, listeners globales y re-renderiza las secciones despues de cada cambio.
 document.addEventListener('DOMContentLoaded', async () => {
     $('form-login')?.addEventListener('submit', iniciarSesion);
     const listo = await initRemoteStorage();
@@ -20,6 +22,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     setupWhiteboardCanvas();
     renderIcons();
 });
+// Punto unico de refresco visual usado despues de guardar, sincronizar o cambiar de seccion.
 function refrescarInterfaz() {
     renderDashboard();
     renderClientes(); 
@@ -166,7 +169,7 @@ function notificacionesOperativas() {
                 icono: cita.petId ? 'calendar-clock' : 'briefcase-medical',
                 titulo: minutos < 0 ? `Cita en curso: ${cita.petName || cita.clienteNombre}` : `Cita en ${minutos} min`,
                 detalle: `${cita.hora || '--:--'} · ${cita.clienteNombre || 'Cliente'} · ${cita.notas || 'Sin notas'}`,
-                accion: cita.petId ? `atenderCita(${cita.id})` : `gestionarServicioExternoAgenda(${cita.id})`
+                accion: cita.petId ? `atenderCita(${cita.id})` : `marcarServicioExternoAtendido(${cita.id})`
             };
         })
         .filter(Boolean);
@@ -439,7 +442,7 @@ function renderDashboard() {
             </div>
             ${cita.petId
                 ? `<button type="button" onclick="atenderCita(${cita.id})" class="dash-row-action"><i data-lucide="stethoscope" class="w-3.5 h-3.5"></i><span>Atender</span></button>`
-                : `<button type="button" onclick="gestionarServicioExternoAgenda(${cita.id})" class="dash-row-action"><i data-lucide="briefcase-medical" class="w-3.5 h-3.5"></i><span>Gestionar</span></button>`
+                : `<button type="button" onclick="marcarServicioExternoAtendido(${cita.id})" class="dash-row-action"><i data-lucide="briefcase-medical" class="w-3.5 h-3.5"></i><span>Atender</span></button>`
             }
         </article>
     `).join(''), 'No hay citas activas para hoy.');

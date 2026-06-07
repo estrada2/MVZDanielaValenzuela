@@ -1,21 +1,91 @@
+// Agenda: búsqueda de pacientes, calendario mensual, reagenda y recordatorios.
+// Este archivo se usa desde handlers inline del HTML, por eso las funciones quedan en scope global.
 function actualizarSelectAgenda() {
     const sel = $('agenda-cliente-select'); 
     if(!sel) return;
     sel.innerHTML = '<option value="">-- Vincular Propietario --</option>';
     clientes.forEach(c => {
         if(c.mascotas && c.mascotas.length > 0) {
-            c.mascotas.forEach(m => { sel.innerHTML += `<option value="${c.id}|${m.id}">${c.owner} (${m.name})</option>`; });
-        } else { sel.innerHTML += `<option value="${c.id}|">${c.owner} (Sin mascotas)</option>`; }
-    });
-    if ((clinicasExternas || []).length) {
-        sel.innerHTML += '<option disabled>──────── Clínicas externas ────────</option>';
-        (clinicasExternas || [])
-            .slice()
-            .sort((a, b) => String(a.nombre || '').localeCompare(String(b.nombre || ''), 'es'))
-            .forEach(clinica => {
-                sel.innerHTML += `<option value="clinic|${clinica.id}">${clinica.nombre}</option>`;
+            c.mascotas.forEach(m => {
+                const label = `${c.owner} (${m.name})`;
+                sel.innerHTML += `<option value="${c.id}|${m.id}">${label}</option>`;
             });
+        } else {
+            const label = `${c.owner} (Sin mascotas)`;
+            sel.innerHTML += `<option value="${c.id}|">${label}</option>`;
+        }
+    });
+}
+function seleccionarClienteAgendaPorBusqueda() {
+    const texto = $('agenda-cliente-buscar')?.value.trim() || '';
+    const select = $('agenda-cliente-select');
+    if (!select) return;
+    const normalizado = texto.toLowerCase();
+    const opciones = Array.from(select.options).filter(opt => opt.value);
+    const opcion = opciones.find(opt => opt.textContent.toLowerCase() === normalizado)
+        || opciones.find(opt => opt.textContent.toLowerCase().replace(/\s*\(sin mascotas\)\s*$/, '') === normalizado);
+    select.value = opcion?.value || '';
+    if (opcion) {
+        autocompletarDireccionAgenda();
+        if ($('agenda-cliente-status')) $('agenda-cliente-status').textContent = 'Propietario encontrado en expedientes.';
+        $('agenda-cliente-status')?.classList.remove('text-amber-600');
+        $('agenda-cliente-status')?.classList.add('text-emerald-600');
+    } else {
+        if ($('agenda-cliente-status')) $('agenda-cliente-status').textContent = texto ? 'No existe todavía. Al guardar se pedirá confirmación para crear el propietario.' : 'Elige un propietario o mascota. Si no existe, se pedirá confirmación al guardar.';
+        $('agenda-cliente-status')?.classList.remove('text-emerald-600');
+        $('agenda-cliente-status')?.classList.add('text-amber-600');
     }
+    renderSugerenciasAgendaCliente();
+}
+function opcionesAgendaClienteFiltradas() {
+    const select = $('agenda-cliente-select');
+    const texto = $('agenda-cliente-buscar')?.value.trim().toLowerCase() || '';
+    if (!select) return [];
+    const opciones = Array.from(select.options).filter(opt => opt.value);
+    const filtradas = texto
+        ? opciones.filter(opt => opt.textContent.toLowerCase().includes(texto))
+        : opciones;
+    return filtradas.slice(0, 8);
+}
+function renderSugerenciasAgendaCliente() {
+    const contenedor = $('agenda-cliente-sugerencias');
+    if (!contenedor) return;
+    const opciones = opcionesAgendaClienteFiltradas();
+    const texto = $('agenda-cliente-buscar')?.value.trim() || '';
+    if (!opciones.length && !texto) {
+        contenedor.classList.add('hidden');
+        contenedor.innerHTML = '';
+        return;
+    }
+    if (!opciones.length) {
+        contenedor.classList.remove('hidden');
+        contenedor.innerHTML = `<div class="agenda-suggestion-empty">No hay coincidencias. Se pedirá confirmación al guardar.</div>`;
+        return;
+    }
+    contenedor.classList.remove('hidden');
+    contenedor.innerHTML = opciones.map(opt => `
+        <button type="button" onclick="seleccionarSugerenciaAgendaCliente('${opt.value}')" class="agenda-suggestion-item">
+            <span>${opt.textContent}</span>
+        </button>
+    `).join('');
+}
+function seleccionarSugerenciaAgendaCliente(valor) {
+    const select = $('agenda-cliente-select');
+    const input = $('agenda-cliente-buscar');
+    if (!select || !input) return;
+    select.value = valor;
+    input.value = select.selectedOptions?.[0]?.textContent || '';
+    $('agenda-cliente-sugerencias')?.classList.add('hidden');
+    if ($('agenda-cliente-status')) $('agenda-cliente-status').textContent = 'Propietario encontrado en expedientes.';
+    $('agenda-cliente-status')?.classList.remove('text-amber-600');
+    $('agenda-cliente-status')?.classList.add('text-emerald-600');
+    autocompletarDireccionAgenda();
+}
+function sincronizarBusquedaClienteAgenda() {
+    const select = $('agenda-cliente-select');
+    const input = $('agenda-cliente-buscar');
+    if (!select || !input) return;
+    input.value = select.selectedOptions?.[0]?.textContent || '';
 }
 function autocompletarDireccionAgenda() {
     const selectVal = $('agenda-cliente-select').value;
@@ -38,6 +108,29 @@ function autocompletarDireccionAgenda() {
     const ownerId = parseInt(selectVal.split('|')[0]);
     const tgt = clientes.find(c => c.id === ownerId);
     if(tgt) $('agenda-direccion').value = tgt.address;
+}
+function crearPropietarioDesdeAgenda(nombre) {
+    const limpio = String(nombre || '').trim();
+    if (!limpio) return null;
+    const existente = clientes.find(c => String(c.owner || '').toLowerCase() === limpio.toLowerCase());
+    if (existente) return existente;
+    const nuevo = {
+        id: uid(),
+        owner: limpio,
+        phone: '',
+        address: $('agenda-direccion')?.value.trim() || '',
+        email: '',
+        ownerNotes: 'Creado desde agenda',
+        ownerIdFile: '',
+        mascotas: []
+    };
+    clientes = [nuevo, ...clientes];
+    registrarAuditoria('clientes', 'Crear', `Propietario creado desde agenda: ${limpio}`, nuevo.id);
+    saveStore('clientes');
+    actualizarSelectAgenda();
+    if ($('agenda-cliente-select')) $('agenda-cliente-select').value = `${nuevo.id}|`;
+    if ($('agenda-cliente-buscar')) $('agenda-cliente-buscar').value = nuevo.owner;
+    return nuevo;
 }
 function sincronizarServicioExternoDesdeAgenda(cita, clinica, servicio, total) {
     if (!cita || !clinica) return;
@@ -67,7 +160,9 @@ function sincronizarServicioExternoDesdeAgenda(cita, clinica, servicio, total) {
     if (typeof renderGananciasConsultas === 'function') renderGananciasConsultas();
 }
 let filtroAgendaActivo = 'todas';
-let modoAgendaActivo = 'lista';
+let modoAgendaActivo = 'calendario';
+let fechaAgendaSeleccionada = fechaLocalISO();
+let detalleAgendaVisible = false;
 let citaActivaId = null;
 function capturarFormularioAgendaActivo() {
     const form = $('form-agenda');
@@ -80,6 +175,7 @@ function capturarFormularioAgendaActivo() {
         fecha: $('agenda-fecha')?.value || '',
         hora: $('agenda-hora')?.value || '',
         cliente: $('agenda-cliente-select')?.value || '',
+        clienteBusqueda: $('agenda-cliente-buscar')?.value || '',
         direccion: $('agenda-direccion')?.value || '',
         notas: $('agenda-notes')?.value || '',
         clinicaServicio: $('agenda-clinica-servicio')?.value || '',
@@ -92,6 +188,7 @@ function restaurarFormularioAgendaActivo(snapshot) {
     if ($('agenda-fecha')) $('agenda-fecha').value = snapshot.fecha;
     if ($('agenda-hora')) $('agenda-hora').value = snapshot.hora;
     if ($('agenda-cliente-select')) $('agenda-cliente-select').value = snapshot.cliente;
+    if ($('agenda-cliente-buscar')) $('agenda-cliente-buscar').value = snapshot.clienteBusqueda;
     if ($('agenda-direccion')) $('agenda-direccion').value = snapshot.direccion;
     if ($('agenda-notes')) $('agenda-notes').value = snapshot.notas;
     if ($('agenda-clinica-servicio')) $('agenda-clinica-servicio').value = snapshot.clinicaServicio;
@@ -194,11 +291,6 @@ function renderHorariosRecomendados() {
         </button>
     `).join('');
 }
-function fechaCitaBonita(cita) {
-    const fecha = fechaHoraCita(cita);
-    if (Number.isNaN(fecha.getTime())) return normalizarFechaCita(cita) || 'Sin fecha';
-    return fecha.toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' });
-}
 function fechaCitaCompacta(cita) {
     const fecha = fechaHoraCita(cita);
     if (Number.isNaN(fecha.getTime())) return normalizarFechaCita(cita) || '';
@@ -237,45 +329,215 @@ function cambiarModoAgenda(modo) {
     }
     renderAgenda();
 }
-function renderAgendaCalendarioDia(citas) {
-    const hoy = fechaLocalISO();
-    const citasHoy = citas
-        .filter(cita => normalizarFechaCita(cita) === hoy)
-        .sort((a, b) => fechaHoraCita(a) - fechaHoraCita(b));
-    const horas = Array.from({ length: 12 }, (_, idx) => `${String(idx + 8).padStart(2, '0')}:00`);
+function seleccionarDiaCalendarioAgenda(fecha) {
+    if (detalleAgendaVisible && fechaAgendaSeleccionada === fecha) {
+        detalleAgendaVisible = false;
+    } else {
+        fechaAgendaSeleccionada = fecha;
+        detalleAgendaVisible = true;
+    }
+    modoAgendaActivo = 'calendario';
+    renderAgenda();
+}
+function cambiarMesCalendarioAgenda(delta) {
+    const base = new Date(`${fechaAgendaSeleccionada || fechaLocalISO()}T12:00:00`);
+    base.setMonth(base.getMonth() + delta);
+    fechaAgendaSeleccionada = fechaLocalISO(new Date(base.getFullYear(), base.getMonth(), 1, 12));
+    detalleAgendaVisible = false;
+    modoAgendaActivo = 'calendario';
+    renderAgenda();
+}
+function cambiarMesAnioCalendarioAgenda() {
+    const mes = parseInt($('agenda-calendario-mes')?.value || '0');
+    const anio = parseInt($('agenda-calendario-anio')?.value || new Date().getFullYear());
+    if (!Number.isFinite(mes) || !Number.isFinite(anio)) return;
+    fechaAgendaSeleccionada = fechaLocalISO(new Date(anio, mes, 1, 12));
+    detalleAgendaVisible = false;
+    modoAgendaActivo = 'calendario';
+    renderAgenda();
+}
+function irHoyCalendarioAgenda() {
+    fechaAgendaSeleccionada = fechaLocalISO();
+    detalleAgendaVisible = true;
+    modoAgendaActivo = 'calendario';
+    renderAgenda();
+}
+function abrirModalAgenda(fecha = fechaAgendaSeleccionada || fechaLocalISO()) {
+    $('modal-agenda')?.classList.remove('hidden');
+    if (!$('edit-agenda-id')?.value) {
+        bloquearCamposReagendaAgenda(false);
+        if ($('agenda-fecha')) $('agenda-fecha').value = fecha || fechaLocalISO();
+        if ($('agenda-hora')) $('agenda-hora').value = '';
+        if ($('btn-guardar-agenda')) $('btn-guardar-agenda').innerText = 'Agregar a la Agenda';
+        if ($('titulo-form-agenda')) $('titulo-form-agenda').innerHTML = `<i data-lucide="calendar-plus" class="w-5 h-5 text-amber-300"></i> Agendar Nueva Visita`;
+        $('btn-cancelar-agenda')?.classList.add('hidden');
+    }
+    renderHorariosRecomendados();
+    renderIcons();
+}
+function cerrarModalAgenda() {
+    $('modal-agenda')?.classList.add('hidden');
+}
+function bloquearCamposReagendaAgenda(activo) {
+    ['agenda-cliente-buscar', 'agenda-direccion', 'agenda-notes', 'agenda-clinica-servicio', 'agenda-clinica-costo'].forEach(id => {
+        const campo = $(id);
+        if (!campo) return;
+        campo.disabled = activo;
+        campo.classList.toggle('opacity-60', activo);
+        campo.classList.toggle('cursor-not-allowed', activo);
+    });
+    $('agenda-cliente-sugerencias')?.classList.add('hidden');
+    if ($('agenda-cliente-status')) {
+        $('agenda-cliente-status').textContent = activo
+            ? 'Reagenda solo fecha y hora. Los datos de la cita se conservan igual.'
+            : 'Elige un propietario o mascota. Si no existe, se pedirá confirmación al guardar.';
+        $('agenda-cliente-status').classList.remove('text-emerald-600', 'text-amber-600');
+        $('agenda-cliente-status').classList.toggle('text-blue-600', activo);
+        $('agenda-cliente-status').classList.toggle('text-slate-400', !activo);
+    }
+}
+function renderAgendaRow(a, hoy = fechaLocalISO(), compacto = false) {
+    const nombre = a.clienteNombre || a.ownerName || 'Desconocido';
+    const mascota = (a.petName && a.petName !== 'N/A') ? ` (${a.petName})` : '';
+    const direccion = a.direccion || a.address || '';
+    const notas = a.notas || a.notes || 'Sin notas';
+    const estado = a.estado || 'Programada';
+    const esServicioExterno = (a.origen || '') === 'Servicio externo' || (!a.petId && (a.petName || '').toLowerCase().includes('extern'));
+    const fechaNormalizada = normalizarFechaCita(a);
+    const esHoy = fechaNormalizada === hoy;
+    const owner = clientes.find(c => c.id === (a.clienteId || a.ownerId));
+    const tel = typeof telefonoLimpio === 'function' ? telefonoLimpio(owner?.phone) : String(owner?.phone || '').replace(/\D/g, '');
+    const puedeConfirmar = estado === 'Programada';
+    const puedeAtender = estado === 'Confirmada';
+    const puedeCancelar = ['Programada', 'Confirmada'].includes(estado);
+    const puedeReagendar = ['Programada', 'Confirmada'].includes(estado);
     return `
-        <div class="space-y-2">
-            ${horas.map(hora => {
-                const horaNum = parseInt(hora.slice(0, 2));
-                const items = citasHoy.filter(cita => parseInt(horaCita(cita).slice(0, 2)) === horaNum);
-                return `
-                    <div class="grid grid-cols-[4.5rem_1fr] gap-3 app-list-card">
-                        <div class="text-xs font-black text-slate-500">${hora}</div>
-                        <div class="space-y-2">
-                            ${items.length ? items.map(cita => `
-                                <button type="button" onclick="${cita.petId ? `atenderCita(${cita.id})` : `gestionarServicioExternoAgenda(${cita.id})`}" class="w-full text-left rounded-lg border ${cita.origen === 'Servicio externo' ? 'bg-blue-50 border-blue-100' : 'bg-amber-50 border-amber-100'} p-2">
-                                    <p class="text-xs font-black text-slate-900">${horaCita(cita)} · ${cita.petName || cita.clienteNombre || 'Cita'}</p>
-                                    <p class="text-[11px] text-slate-500">${cita.clienteNombre || ''} · ${cita.notas || 'Sin notas'}</p>
-                                </button>
-                            `).join('') : `<p class="text-[11px] text-slate-300 py-1">Libre</p>`}
-                        </div>
+        <article class="agenda-row ${esHoy ? 'today' : ''} ${compacto ? 'compact' : ''}">
+            <div class="agenda-row-main">
+                <div class="agenda-time">
+                    <span>${horaCita(a)}</span>
+                    <small>${fechaCitaCompacta(a)}</small>
+                </div>
+                <div class="agenda-main">
+                    <div class="agenda-title-line">
+                        <span class="agenda-title">${nombre}${mascota}</span>
+                        ${esHoy ? '<span class="agenda-badge amber">Hoy</span>' : ''}
+                        <span class="agenda-badge ${estado === 'Confirmada' ? 'green' : estado === 'Cancelada' ? 'rose' : estado === 'Atendida' ? 'slate' : 'blue'}">${estado}</span>
                     </div>
-                `;
-            }).join('')}
-        </div>
-    `;
+                    <div class="agenda-meta">
+                        <span>${direccion || 'Sin dirección'}</span>
+                        <span>${notas}</span>
+                    </div>
+                </div>
+                <div class="agenda-actions">
+                    ${puedeConfirmar ? `<button type="button" onclick="cambiarEstadoCita(${a.id}, 'Confirmada')" class="agenda-action primary">Confirmar</button>` : ''}
+                    ${puedeAtender && a.petId ? `<button type="button" onclick="atenderCita(${a.id})" class="agenda-action primary">Atender</button>` : ''}
+                    ${puedeAtender && esServicioExterno ? `<button type="button" onclick="marcarServicioExternoAtendido(${a.id})" class="agenda-action primary">Atender</button>` : ''}
+                    ${tel ? `<a href="https://wa.me/52${tel}" target="_blank" rel="noopener" class="agenda-action green" title="WhatsApp">WhatsApp</a>` : ''}
+                    <button onclick="abrirNavegacionMaps('${direccion.replace(/'/g, "\\'")}')" class="agenda-action blue" title="Maps">Maps</button>
+                </div>
+            </div>
+            <details class="action-menu row-action-menu">
+                <summary class="agenda-action more cursor-pointer" title="Más acciones">Más</summary>
+                <div class="action-menu-popover row-action-panel">
+                    ${puedeConfirmar ? `<button type="button" onclick="cambiarEstadoCita(${a.id}, 'Confirmada')"><i data-lucide="check" class="w-4 h-4 text-emerald-700"></i> Confirmar cita</button>` : ''}
+                    ${puedeReagendar ? `<button type="button" onclick="iniciarEdicionAgenda(${a.id})"><i data-lucide="calendar-range" class="w-4 h-4 text-blue-700"></i> Reagendar</button>` : ''}
+                    <button type="button" onclick="crearRecordatorioApple(${a.id})"><i data-lucide="list-todo" class="w-4 h-4 text-amber-700"></i> Enviar a Reminders</button>
+                    ${puedeCancelar ? `<button type="button" onclick="cambiarEstadoCita(${a.id}, 'Cancelada')" class="text-rose-700"><i data-lucide="x-circle" class="w-4 h-4"></i> Cancelar cita</button>` : ''}
+                    <button type="button" onclick="eliminarCita(${a.id})" class="text-rose-700"><i data-lucide="trash-2" class="w-4 h-4"></i> Eliminar</button>
+                </div>
+            </details>
+        </article>`;
+}
+function renderAgendaCalendarioMes(citas) {
+    const base = new Date(`${fechaAgendaSeleccionada || fechaLocalISO()}T12:00:00`);
+    const year = base.getFullYear();
+    const month = base.getMonth();
+    const primerDia = new Date(year, month, 1);
+    const ultimoDia = new Date(year, month + 1, 0);
+    const inicioSemana = primerDia.getDay();
+    const totalCeldas = Math.ceil((inicioSemana + ultimoDia.getDate()) / 7) * 7;
+    const hoy = fechaLocalISO();
+    const citasPorFecha = citas.reduce((acc, cita) => {
+        const fecha = normalizarFechaCita(cita);
+        acc[fecha] = acc[fecha] || [];
+        acc[fecha].push(cita);
+        return acc;
+    }, {});
+    const dias = Array.from({ length: totalCeldas }, (_, idx) => {
+        const diaMes = idx - inicioSemana + 1;
+        if (diaMes < 1 || diaMes > ultimoDia.getDate()) return `<div class="calendar-day muted"></div>`;
+        const fecha = fechaLocalISO(new Date(year, month, diaMes, 12));
+        const items = (citasPorFecha[fecha] || []).sort((a, b) => fechaHoraCita(a) - fechaHoraCita(b));
+        const visibles = items.slice(0, 3);
+        const extras = items.length - visibles.length;
+        return `
+            <button type="button" onclick="seleccionarDiaCalendarioAgenda('${fecha}')" class="calendar-day ${detalleAgendaVisible && fecha === fechaAgendaSeleccionada ? 'selected' : ''} ${fecha === hoy ? 'today' : ''}">
+                <span class="calendar-day-number">${diaMes}</span>
+                <div class="calendar-day-events">
+                    ${visibles.map(cita => {
+                        const estado = (cita.estado || 'Programada').toLowerCase();
+                        const tipo = cita.origen === 'Servicio externo' || cita.clinicaId ? 'external' : estado === 'confirmada' ? 'confirmed' : estado === 'cancelada' ? 'cancelled' : 'scheduled';
+                        const titulo = `${cita.petName || cita.clienteNombre || 'Cita'}`;
+                        return `<span class="calendar-event ${tipo}" title="${titulo}">${titulo}</span>`;
+                    }).join('')}
+                    ${extras > 0 ? `<span class="calendar-event more">+${extras} más</span>` : ''}
+                </div>
+            </button>`;
+    }).join('');
+    const citasDia = (citasPorFecha[fechaAgendaSeleccionada] || []).sort((a, b) => fechaHoraCita(a) - fechaHoraCita(b));
+    const tituloMes = base.toLocaleDateString('es-MX', { month: 'long', year: 'numeric' });
+    const meses = Array.from({ length: 12 }, (_, idx) => new Date(2026, idx, 1).toLocaleDateString('es-MX', { month: 'long' }));
+    const totalMes = Object.entries(citasPorFecha)
+        .filter(([fecha]) => fecha.startsWith(`${year}-${String(month + 1).padStart(2, '0')}`))
+        .reduce((acc, [, items]) => acc + items.length, 0);
+    return `
+        <div class="agenda-calendar">
+            <div class="agenda-calendar-header">
+                <div>
+                    <h4>${tituloMes}</h4>
+                    <span>${totalMes} cita${totalMes === 1 ? '' : 's'} este mes</span>
+                </div>
+                <div class="calendar-nav">
+                    <button type="button" onclick="cambiarMesCalendarioAgenda(-1)" title="Mes anterior"><i data-lucide="chevron-left" class="w-4 h-4"></i></button>
+                    <select id="agenda-calendario-mes" onchange="cambiarMesAnioCalendarioAgenda()">
+                        ${meses.map((nombre, idx) => `<option value="${idx}" ${idx === month ? 'selected' : ''}>${nombre}</option>`).join('')}
+                    </select>
+                    <input type="number" id="agenda-calendario-anio" min="2000" max="2100" value="${year}" onchange="cambiarMesAnioCalendarioAgenda()">
+                    <button type="button" onclick="cambiarMesCalendarioAgenda(1)" title="Mes siguiente"><i data-lucide="chevron-right" class="w-4 h-4"></i></button>
+                    <button type="button" onclick="irHoyCalendarioAgenda()" class="today-shortcut">Hoy</button>
+                </div>
+            </div>
+            <div class="calendar-layout ${detalleAgendaVisible ? 'with-detail' : 'no-detail'}">
+                <div class="calendar-month">
+                    <div class="calendar-weekdays">
+                        ${['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'].map(dia => `<span>${dia}</span>`).join('')}
+                    </div>
+                    <div class="calendar-grid">${dias}</div>
+                </div>
+                ${detalleAgendaVisible ? `<div class="calendar-detail">
+                    <div class="calendar-detail-header">
+                        <h5>${new Date(`${fechaAgendaSeleccionada}T12:00:00`).toLocaleDateString('es-MX', { weekday: 'long', day: '2-digit', month: 'short' })}</h5>
+                        <button type="button" onclick="abrirModalAgenda('${fechaAgendaSeleccionada}')" class="calendar-add-button"><i data-lucide="plus" class="w-4 h-4"></i> Agendar</button>
+                    </div>
+                    <div class="calendar-day-list">
+                        ${citasDia.length ? citasDia.map(cita => renderAgendaRow(cita, hoy, true)).join('') : `<p class="text-xs text-slate-400 py-3">No hay citas para este día.</p>`}
+                    </div>
+                </div>` : ''}
+            </div>
+        </div>`;
 }
 function renderAgenda() {
     const list = $('lista-agenda'); 
     if(!list) return;
     list.innerHTML = "";
     const citas = citasAgendaFiltradas();
-    if(citas.length === 0) { list.innerHTML = `<div class="text-center py-12 text-gray-400 text-xs italic">No hay visitas en este filtro.</div>`; return; }
     if (modoAgendaActivo === 'calendario') {
-        list.innerHTML = renderAgendaCalendarioDia(citas);
+        list.innerHTML = renderAgendaCalendarioMes(citas);
         renderIcons();
         return;
     }
+    if(citas.length === 0) { list.innerHTML = `<div class="text-center py-12 text-gray-400 text-xs italic">No hay visitas en este filtro.</div>`; return; }
     const ordenadas = citas.sort((a,b) => fechaHoraCita(a) - fechaHoraCita(b));
     const hoy = fechaLocalISO();
     const grupos = [
@@ -289,70 +551,13 @@ function renderAgenda() {
                 <h4 class="text-[11px] font-black text-slate-500 uppercase tracking-wider">${grupo.titulo}</h4>
                 <span class="text-[10px] font-bold text-slate-400">${grupo.items.length} visita${grupo.items.length === 1 ? '' : 's'}</span>
             </div>
-            ${grupo.items.map(a => {
-        const nombre = a.clienteNombre || a.ownerName || 'Desconocido';
-        const mascota = (a.petName && a.petName !== 'N/A') ? ` (${a.petName})` : '';
-        const direccion = a.direccion || a.address || '';
-        const notas = a.notas || a.notes || 'Sin notas';
-        const estado = a.estado || 'Programada';
-        const esServicioExterno = (a.origen || '') === 'Servicio externo' || (!a.petId && (a.petName || '').toLowerCase().includes('extern'));
-        const fechaNormalizada = normalizarFechaCita(a);
-        const esHoy = fechaNormalizada === hoy;
-        const owner = clientes.find(c => c.id === (a.clienteId || a.ownerId));
-        const tel = typeof telefonoLimpio === 'function' ? telefonoLimpio(owner?.phone) : String(owner?.phone || '').replace(/\D/g, '');
-        const badgeEstado = {
-            Programada: 'bg-blue-100 text-blue-800',
-            Confirmada: 'bg-emerald-100 text-emerald-800',
-            Atendida: 'bg-slate-200 text-slate-700',
-            Cancelada: 'bg-rose-100 text-rose-700'
-        }[estado] || 'bg-gray-100 text-gray-700';
-        return `
-            <article class="agenda-row ${esHoy ? 'today' : ''}">
-                <div class="agenda-row-main">
-                    <div class="agenda-time">
-                        <span>${horaCita(a)}</span>
-                        <small>${fechaCitaCompacta(a)}</small>
-                    </div>
-                    <div class="agenda-main">
-                        <div class="agenda-title-line">
-                            <span class="agenda-title">${nombre}${mascota}</span>
-                            ${esHoy ? '<span class="agenda-badge amber">Hoy</span>' : ''}
-                            <span class="agenda-badge ${estado === 'Confirmada' ? 'green' : estado === 'Cancelada' ? 'rose' : 'blue'}">${estado}</span>
-                        </div>
-                        <div class="agenda-meta">
-                            <span>${direccion || 'Sin dirección'}</span>
-                            <span>${notas}</span>
-                        </div>
-                    </div>
-                    <div class="agenda-actions">
-                            ${a.petId && estado !== 'Cancelada' ? `<button onclick="atenderCita(${a.id})" class="agenda-action primary">Atender</button>` : ''}
-                            ${esServicioExterno && estado !== 'Cancelada' ? `<button onclick="gestionarServicioExternoAgenda(${a.id})" class="agenda-action primary">Gestionar</button>` : ''}
-                            ${tel ? `<a href="https://wa.me/52${tel}" target="_blank" rel="noopener" class="agenda-action green" title="WhatsApp">WhatsApp</a>` : ''}
-                            <button onclick="abrirNavegacionMaps('${direccion.replace(/'/g, "\\'")}')" class="agenda-action blue" title="Maps">Maps</button>
-                    </div>
-                </div>
-                <details class="action-menu row-action-menu">
-                    <summary class="agenda-action more cursor-pointer" title="Más acciones">Más</summary>
-                    <div class="action-menu-popover row-action-panel">
-                        ${estado === 'Programada' ? `<button type="button" onclick="cambiarEstadoCita(${a.id}, 'Confirmada')"><i data-lucide="check" class="w-4 h-4 text-emerald-700"></i> Confirmar cita</button>` : ''}
-                        <button type="button" onclick="iniciarEdicionAgenda(${a.id})"><i data-lucide="calendar-range" class="w-4 h-4 text-blue-700"></i> Reagendar</button>
-                        <button type="button" onclick="crearRecordatorioApple(${a.id})"><i data-lucide="list-todo" class="w-4 h-4 text-amber-700"></i> Enviar a Reminders</button>
-                        <label><i data-lucide="refresh-cw" class="w-4 h-4 text-slate-500"></i><select onchange="cambiarEstadoCita(${a.id}, this.value)" class="flex-1 bg-transparent outline-none text-[12px] font-bold">
-                            ${['Programada', 'Confirmada', 'Atendida', 'Cancelada'].map(opcion => `<option value="${opcion}" ${estado === opcion ? 'selected' : ''}>${opcion}</option>`).join('')}
-                        </select></label>
-                        <button type="button" onclick="eliminarCita(${a.id})" class="text-rose-700"><i data-lucide="trash-2" class="w-4 h-4"></i> Eliminar</button>
-                    </div>
-                </details>
-            </article>`;
-            }).join('')}
+            ${grupo.items.map(a => renderAgendaRow(a, hoy)).join('')}
         </div>
     `).join('');
     renderIcons();
 }
 function guardarCita(e) {
     e.preventDefault();
-    const selectVal = $('agenda-cliente-select').value;
-    if(!selectVal) return;
     const editId = $('edit-agenda-id').value;
     const fecha = $('agenda-fecha').value;
     const hora = $('agenda-hora').value;
@@ -360,6 +565,40 @@ function guardarCita(e) {
     if (conflicto) {
         alert(`Ya hay una visita activa muy cerca de ese horario.\n\nCita existente: ${horaCita(conflicto)} hrs · ${conflicto.clienteNombre || 'Cliente'} ${conflicto.petName ? `(${conflicto.petName})` : ''}\n\nAgenda la siguiente visita al menos 45 minutos después.`);
         return;
+    }
+    if (editId) {
+        const idEditando = parseInt(editId);
+        agenda = agenda.map(item => item.id === idEditando ? { ...item, fecha, hora, estado: 'Programada' } : item);
+        const servicioExterno = (serviciosExternos || []).find(item => item.agendaId === idEditando);
+        if (servicioExterno) {
+            servicioExterno.fecha = fecha;
+            servicioExterno.hora = hora;
+            servicioExterno.fechaISO = new Date(`${fecha}T12:00:00`).toISOString();
+            saveStore('serviciosExternos');
+            if (typeof renderServiciosExternos === 'function') renderServiciosExternos();
+            if (typeof renderGananciasConsultas === 'function') renderGananciasConsultas();
+        }
+        saveStore('agenda');
+        cancelarEdicionAgenda();
+        renderAgenda();
+        renderHorariosRecomendados();
+        if (typeof renderDashboard === 'function') renderDashboard();
+        return;
+    }
+    let selectVal = $('agenda-cliente-select').value;
+    if(!selectVal) {
+        const nombreNuevo = $('agenda-cliente-buscar')?.value?.trim() || '';
+        if (!nombreNuevo) {
+            alert('Escribe el propietario o paciente para agendar.');
+            return;
+        }
+        if (!confirm(`No encontré "${nombreNuevo}" en expedientes.\n\n¿Crear este propietario nuevo y guardar la cita?`)) return;
+        const nuevoOwner = crearPropietarioDesdeAgenda(nombreNuevo);
+        if (!nuevoOwner) {
+            alert('Escribe el nombre del propietario para crear la cita.');
+            return;
+        }
+        selectVal = `${nuevoOwner.id}|`;
     }
     if (selectVal.startsWith('clinic|')) {
         const clinica = typeof clinicaExternaPorId === 'function' ? clinicaExternaPorId(selectVal.split('|')[1]) : null;
@@ -391,6 +630,7 @@ function guardarCita(e) {
         cancelarEdicionAgenda();
         saveStore('agenda');
         $('form-agenda').reset();
+        if ($('agenda-cliente-buscar')) $('agenda-cliente-buscar').value = '';
         $('agenda-clinica-detalle')?.classList.add('hidden');
         renderAgenda();
         renderHorariosRecomendados();
@@ -434,6 +674,8 @@ function guardarCita(e) {
     }
     saveStore('agenda'); 
     $('form-agenda').reset(); 
+    if ($('agenda-cliente-buscar')) $('agenda-cliente-buscar').value = '';
+    cerrarModalAgenda();
     renderAgenda();
     renderHorariosRecomendados();
     if (typeof renderDashboard === 'function') renderDashboard();
@@ -447,11 +689,14 @@ function preguntarCrearReminderAutomatico(idCita) {
 function iniciarEdicionAgenda(id) {
     const target = agenda.find(item => item.id === id);
     if (!target) return;
+    abrirModalAgenda(target.fecha || fechaAgendaSeleccionada || fechaLocalISO());
     $('edit-agenda-id').value = target.id;
     $('agenda-fecha').value = target.fecha;
     $('agenda-hora').value = target.hora;
     if ((target.origen || '') === 'Servicio externo' && target.clinicaId) {
+        const clinica = typeof clinicaExternaPorId === 'function' ? clinicaExternaPorId(target.clinicaId) : null;
         $('agenda-cliente-select').value = `clinic|${target.clinicaId}`;
+        if ($('agenda-cliente-buscar')) $('agenda-cliente-buscar').value = clinica?.nombre || target.clienteNombre || 'Servicio externo';
         $('agenda-clinica-detalle')?.classList.remove('hidden');
         const servicioExterno = (serviciosExternos || []).find(item => item.agendaId === target.id);
         if ($('agenda-clinica-servicio')) $('agenda-clinica-servicio').value = servicioExterno?.servicioCobrado || target.notas || target.petName || '';
@@ -459,19 +704,33 @@ function iniciarEdicionAgenda(id) {
     } else {
         const clientVal = target.clienteId || target.ownerId;
         $('agenda-cliente-select').value = target.petId ? `${clientVal}|${target.petId}` : `${clientVal}|`;
+        sincronizarBusquedaClienteAgenda();
         $('agenda-clinica-detalle')?.classList.add('hidden');
     }
     $('agenda-direccion').value = target.direccion || target.address || '';
     $('agenda-notes').value = (target.notas || target.notes) === 'Sin notas' ? '' : (target.notas || target.notes);
     $('titulo-form-agenda').innerHTML = `<i data-lucide="calendar-range" class="text-amber-600 w-5 h-5"></i> Reagendar Visita`;
-    $('btn-guardar-agenda').innerText = "Actualizar Cita";
+    $('btn-guardar-agenda').innerText = "Guardar Reagenda";
     $('btn-cancelar-agenda').classList.remove('hidden');
+    bloquearCamposReagendaAgenda(true);
     renderHorariosRecomendados();
     renderIcons();
 }
 function cambiarEstadoCita(id, estado) {
     const cita = agenda.find(item => item.id === id);
     if (!cita) return;
+    const actual = cita.estado || 'Programada';
+    const permitidos = {
+        Programada: ['Confirmada', 'Cancelada'],
+        Confirmada: ['Atendida', 'Cancelada'],
+        Atendida: [],
+        Cancelada: []
+    };
+    if (!permitidos[actual]?.includes(estado)) {
+        alert(`La cita está ${actual}. No se puede cambiar a ${estado}.`);
+        renderAgenda();
+        return;
+    }
     cita.estado = estado;
     saveStore('agenda');
     renderAgenda();
@@ -482,37 +741,69 @@ function atenderCita(id) {
     const cita = agenda.find(item => item.id === id);
     const clienteId = cita?.clienteId || cita?.ownerId;
     if (!clienteId || !cita?.petId) return;
-    cita.estado = 'Confirmada';
+    cita.estado = 'Atendida';
     citaActivaId = id;
     saveStore('agenda');
     if (typeof renderDashboard === 'function') renderDashboard();
     cargarPacienteAConsulta(clienteId, cita.petId);
 }
+function marcarServicioExternoAtendido(agendaId) {
+    const cita = agenda.find(item => item.id === agendaId);
+    if (!cita) return;
+    if ((cita.origen || '') !== 'Servicio externo' && !cita.clinicaId) {
+        atenderCita(agendaId);
+        return;
+    }
+    if (cita.estado !== 'Confirmada') {
+        alert(`La cita está ${cita.estado || 'Programada'}. Primero confírmala para marcarla atendida.`);
+        renderAgenda();
+        return;
+    }
+    cita.estado = 'Atendida';
+    const servicio = (serviciosExternos || []).find(item => item.agendaId === agendaId);
+    if (servicio) servicio.estadoAgenda = 'Atendida';
+    registrarAuditoria('agenda', 'Atender', `Servicio externo atendido: ${cita.clienteNombre || cita.notas || agendaId}`, agendaId);
+    saveStore('agenda');
+    if (servicio) saveStore('serviciosExternos');
+    renderAgenda();
+    renderHorariosRecomendados();
+    if (typeof renderDashboard === 'function') renderDashboard();
+    if (typeof renderServiciosExternos === 'function') renderServiciosExternos();
+}
 function gestionarServicioExternoAgenda(agendaId) {
     const cita = agenda.find(item => item.id === agendaId);
     const servicio = serviciosExternos.find(item => item.agendaId === agendaId);
+    if (cita?.estado === 'Confirmada') {
+        marcarServicioExternoAtendido(agendaId);
+        return;
+    }
     if (!servicio) {
         switchTab('servicios-externos');
         alert('No encontré el servicio externo vinculado a esta cita. Puedes revisarlo en Servicios Externos.');
         return;
-    }
-    if (cita && cita.estado === 'Programada') {
-        cita.estado = 'Confirmada';
-        saveStore('agenda');
-        if (typeof renderDashboard === 'function') renderDashboard();
     }
     switchTab('servicios-externos');
     renderServiciosExternos();
 }
 function cancelarEdicionAgenda() {
     $('edit-agenda-id').value = ''; 
+    bloquearCamposReagendaAgenda(false);
     $('form-agenda').reset();
-    $('titulo-form-agenda').innerHTML = `<i data-lucide="calendar-plus" class="text-blue-600 w-5 h-5"></i> Agendar Nueva Visita`;
+    if ($('agenda-fecha')) $('agenda-fecha').value = fechaAgendaSeleccionada || fechaLocalISO();
+    if ($('agenda-cliente-buscar')) $('agenda-cliente-buscar').value = '';
+    if ($('agenda-cliente-status')) {
+        $('agenda-cliente-status').textContent = 'Elige un propietario o mascota. Si no existe, se pedirá confirmación al guardar.';
+        $('agenda-cliente-status').classList.remove('text-emerald-600', 'text-amber-600');
+        $('agenda-cliente-status').classList.add('text-slate-400');
+    }
+    $('agenda-cliente-sugerencias')?.classList.add('hidden');
+    $('titulo-form-agenda').innerHTML = `<i data-lucide="calendar-plus" class="w-5 h-5 text-amber-300"></i> Agendar Nueva Visita`;
     $('btn-guardar-agenda').innerText = "Agregar a la Agenda";
     $('btn-cancelar-agenda').classList.add('hidden');
     $('agenda-clinica-detalle')?.classList.add('hidden');
     if ($('agenda-clinica-servicio')) $('agenda-clinica-servicio').value = '';
     if ($('agenda-clinica-costo')) $('agenda-clinica-costo').value = '';
+    cerrarModalAgenda();
     renderHorariosRecomendados();
     renderIcons();
 }

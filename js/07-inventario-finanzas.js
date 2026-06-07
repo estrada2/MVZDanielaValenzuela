@@ -1,3 +1,5 @@
+// Inventario y finanzas: stock, cobros, gastos, servicios externos y cortes.
+// Las funciones son globales porque el HTML usa handlers inline en botones/forms.
 const INVENTARIO_FORM = {
     formId: 'form-inventario',
     editId: 'edit-med-id',
@@ -191,25 +193,6 @@ function revisarAlertasStockGlobal() {
         $('texto-alerta-stock').innerText = mensajes.join(' · ');
     }
 }
-function ajustarStockManual(id) {
-    const item = inventario.find(m => m.id === id);
-    if (!item) return;
-    const valor = prompt(`Existencia actual de ${item.name}: ${item.stock}\nIngresa la nueva existencia:`, item.stock);
-    if (valor === null) return;
-    const nuevaExistencia = parseInt(valor);
-    if (!Number.isInteger(nuevaExistencia) || nuevaExistencia < 0) {
-        alert("Ingresa una existencia válida.");
-        return;
-    }
-    const diferencia = nuevaExistencia - item.stock;
-    if (!diferencia) return;
-    item.stock = nuevaExistencia;
-    registrarMovimientoInventario({ item, tipo: diferencia > 0 ? 'Entrada' : 'Ajuste', cantidad: diferencia, motivo: 'Ajuste manual' });
-    registrarAuditoria('inventario', 'Ajustar', `Stock ajustado: ${item.name} (${item.stock})`, item.id);
-    saveStore('inventario');
-    renderInventario();
-    revisarAlertasStockGlobal();
-}
 function registrarEntradaSalidaStock(id, tipo) {
     const item = inventario.find(m => m.id === id);
     if (!item) return;
@@ -228,29 +211,6 @@ function registrarEntradaSalidaStock(id, tipo) {
     item.stock += delta;
     registrarMovimientoInventario({ item, tipo, cantidad: delta, motivo: `${tipo} rápida` });
     registrarAuditoria('inventario', tipo, `${tipo} de stock: ${item.name} (${cantidad})`, item.id);
-    saveStore('inventario');
-    renderInventario();
-    revisarAlertasStockGlobal();
-}
-function registrarCompraInventario(id) {
-    const item = inventario.find(m => m.id === id);
-    if (!item) return;
-    const cantidadTexto = prompt(`Compra de ${item.name}\nCantidad recibida:`, '1');
-    if (cantidadTexto === null) return;
-    const cantidad = parseInt(cantidadTexto);
-    if (!Number.isInteger(cantidad) || cantidad <= 0) {
-        alert('Ingresa una cantidad válida.');
-        return;
-    }
-    const costoTexto = prompt('Costo unitario de compra:', item.costoUnitario || '0');
-    if (costoTexto === null) return;
-    const costo = parseFloat(costoTexto || 0);
-    const proveedor = prompt('Proveedor / factura / nota:', item.proveedor || '') || item.proveedor || '';
-    item.stock += cantidad;
-    if (Number.isFinite(costo) && costo >= 0) item.costoUnitario = costo;
-    if (proveedor) item.proveedor = proveedor;
-    registrarMovimientoInventario({ item, tipo: 'Compra', cantidad, motivo: proveedor ? `Compra · ${proveedor}` : 'Compra registrada' });
-    registrarAuditoria('inventario', 'Compra', `Compra de ${item.name}: ${cantidad} ${item.unit || ''} · $${formatoMoneda(costo)}`, item.id);
     saveStore('inventario');
     renderInventario();
     revisarAlertasStockGlobal();
@@ -395,15 +355,39 @@ function estaEnFiltro(fechaConsulta, ahora = new Date()) {
 function costoInsumosConsulta(con) {
     return (con.insumos || []).reduce((acc, ins) => acc + (parseFloat(ins.costoSubtotal) || (parseFloat(ins.costoUnitario) || 0) * (parseInt(ins.qty) || 0)), 0);
 }
+function redondearCentavos(valor) {
+    return Math.round((parseFloat(valor) || 0) * 100) / 100;
+}
 function totalAbonos(item) {
-    return (item.abonos || []).reduce((acc, abono) => acc + (parseFloat(abono.monto) || 0), 0);
+    const total = redondearCentavos((item.abonos || []).reduce((acc, abono) => acc + (parseFloat(abono.monto) || 0), 0));
+    const totalCargo = redondearCentavos(item.total ?? item.costoTotal);
+    if ((item.estadoPago || 'Pagado') === 'Pendiente' && total > 0 && total <= 0.05 && totalCargo >= 1) return 0;
+    if ((item.estadoPago || 'Pagado') === 'Pagado' && Math.abs(totalCargo - total) <= 0.05) return totalCargo;
+    return total;
 }
 function saldoPendiente(item) {
-    return Math.max(0, (parseFloat(item.total ?? item.costoTotal) || 0) - totalAbonos(item));
+    return Math.max(0, redondearCentavos((parseFloat(item.total ?? item.costoTotal) || 0) - totalAbonos(item)));
 }
 function estadoPagoCalculado(item) {
     if ((item.estadoPago || 'Pagado') === 'Pagado') return 'Pagado';
     return saldoPendiente(item) <= 0 ? 'Pagado' : 'Pendiente';
+}
+function normalizarAbonosPagados(item) {
+    const total = redondearCentavos(item.total ?? item.costoTotal);
+    if ((item.estadoPago || 'Pagado') !== 'Pagado' || total <= 0) return item;
+    const abonado = totalAbonos(item);
+    if (!item.abonos?.length || Math.abs(total - abonado) <= 0.05 || abonado <= 0.05) {
+        item.abonos = [{ id: uid(), fechaISO: new Date().toISOString(), monto: total, metodo: item.metodoPago || 'Efectivo' }];
+    }
+    return item;
+}
+// En externos pagados se respeta el total capturado como ingreso neto; los abonos solo explican parcialidades.
+function montoCobradoFinanzas(item) {
+    const total = redondearCentavos(item.total ?? item.costoTotal);
+    if ((item.origenFinanciero || '') === 'Externo' && (item.estadoPago || 'Pagado') === 'Pagado') return total;
+    const abonado = totalAbonos(item);
+    if (abonado) return abonado;
+    return (item.estadoPago || 'Pagado') === 'Pagado' ? total : 0;
 }
 function obtenerGastosFiltrados() {
     return (gastosFinancieros || [])
@@ -449,9 +433,7 @@ function renderGananciasConsultas() {
     const cobradas = consultasFiltradas.filter(con => con.estadoPago === 'Pagado');
     const pendientes = consultasFiltradas.filter(con => con.estadoPago === 'Pendiente');
     const totalAcumulado = consultasFiltradas.reduce((acc, con) => {
-        const abonado = totalAbonos(con);
-        if (abonado) return acc + abonado;
-        return con.estadoPago === 'Pagado' ? acc + con.total : acc;
+        return acc + montoCobradoFinanzas(con);
     }, 0);
     const costoInsumos = cobradas.reduce((acc, con) => acc + (parseFloat(con.costoInsumos || 0)), 0);
     const gastos = obtenerGastosFiltrados();
@@ -487,6 +469,7 @@ function renderListaIngresos(consultas) {
                 ? 'bg-rose-100 text-rose-800'
                 : 'bg-slate-100 text-slate-700';
         const abonado = totalAbonos(con);
+        const cobrado = montoCobradoFinanzas(con);
         const saldo = saldoPendiente(con);
         return `
             <div class="app-list-card flex flex-col sm:flex-row sm:items-center justify-between gap-2">
@@ -498,8 +481,8 @@ function renderListaIngresos(consultas) {
                 </div>
                 <div class="text-right space-y-1">
                     <span class="app-chip ${con.estadoPago === 'Pagado' ? 'green' : con.estadoPago === 'Pendiente' ? 'rose' : ''}">${con.estadoPago}</span>
-                    <p class="text-sm font-black ${con.estadoPago === 'Pagado' ? 'text-emerald-700' : 'text-slate-600'}">$${formatoMoneda(con.total)}</p>
-                    ${abonado ? `<p class="text-[10px] text-emerald-700 font-bold">Abonado: $${formatoMoneda(abonado)}</p>` : ''}
+                    <p class="text-sm font-black ${con.estadoPago === 'Pagado' ? 'text-emerald-700' : 'text-slate-600'}">$${formatoMoneda(con.estadoPago === 'Pagado' ? cobrado : con.total)}</p>
+                    ${abonado && con.estadoPago !== 'Pagado' ? `<p class="text-[10px] text-emerald-700 font-bold">Abonado: $${formatoMoneda(abonado)}</p>` : ''}
                     ${saldo && con.estadoPago === 'Pendiente' ? `<p class="text-[10px] text-rose-700 font-bold">Saldo: $${formatoMoneda(saldo)}</p>` : ''}
                     ${con.costoInsumos ? `<p class="text-[10px] text-blue-600 font-bold">Costo insumos: $${formatoMoneda(con.costoInsumos)}</p>` : ''}
                     ${con.estadoPago === 'Pendiente' ? (con.origenFinanciero === 'Externo'
@@ -590,7 +573,7 @@ function actualizarSelectClinicasExternas() {
         const select = $(id);
         if (!select) return;
         const valorActual = select.value;
-        select.innerHTML = '<option value="">-- Clínica manual / sin catálogo --</option>';
+        select.innerHTML = '<option value="">-- Seleccionar clínica --</option>';
         (clinicasExternas || [])
             .slice()
             .sort((a, b) => String(a.nombre || '').localeCompare(String(b.nombre || ''), 'es'))
@@ -606,6 +589,45 @@ function aplicarClinicaServicioExterno() {
     if (!clinica) return;
     if ($('externo-cliente')) $('externo-cliente').value = clinica.nombre || '';
     if ($('externo-direccion')) $('externo-direccion').value = clinica.direccion || '';
+}
+function servicioExternoAgendaIdEnEdicion() {
+    const editId = parseInt($('edit-servicio-externo-id')?.value || '');
+    if (!editId) return '';
+    return serviciosExternos.find(item => item.id === editId)?.agendaId || '';
+}
+function seleccionarHoraExternaRecomendada(hora) {
+    if ($('externo-hora')) $('externo-hora').value = hora;
+    renderHorariosExternosRecomendados();
+}
+function renderHorariosExternosRecomendados() {
+    const contenedor = $('externo-horarios-recomendados');
+    if (!contenedor) return;
+    const fecha = $('externo-fecha')?.value || '';
+    const horaActual = $('externo-hora')?.value || '';
+    if (!fecha) {
+        contenedor.innerHTML = `<span class="text-[11px] text-slate-400">Selecciona una fecha para ver horas libres.</span>`;
+        return;
+    }
+    const disponibles = typeof horariosDisponiblesAgenda === 'function'
+        ? horariosDisponiblesAgenda(fecha, servicioExternoAgendaIdEnEdicion())
+        : [];
+    const recomendados = horaActual
+        ? disponibles
+            .map(hora => ({ hora, distancia: Math.abs(new Date(`${fecha}T${hora}`) - new Date(`${fecha}T${horaActual}`)) }))
+            .sort((a, b) => a.distancia - b.distancia)
+            .slice(0, 12)
+            .map(item => item.hora)
+            .sort()
+        : disponibles.slice(0, 12);
+    if (!recomendados.length) {
+        contenedor.innerHTML = `<span class="text-[11px] text-rose-500 font-semibold">No hay horarios libres ese día con separación de 45 min.</span>`;
+        return;
+    }
+    contenedor.innerHTML = recomendados.map(hora => `
+        <button type="button" onclick="seleccionarHoraExternaRecomendada('${hora}')" class="px-2.5 py-1.5 rounded-lg border text-[11px] font-bold transition-all ${hora === horaActual ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-slate-700 border-slate-200 hover:bg-indigo-50 hover:text-indigo-700'}">
+            ${hora}
+        </button>
+    `).join('');
 }
 function renderClinicasExternas() {
     actualizarSelectClinicasExternas();
@@ -626,7 +648,7 @@ function renderClinicasExternas() {
         <article class="border border-slate-200 rounded-2xl bg-white p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div class="min-w-0">
                 <h5 class="text-sm font-black text-slate-900 truncate">${clinica.nombre || 'Clínica sin nombre'}</h5>
-                <p class="text-xs text-slate-500 mt-1">${clinica.contacto || 'Sin contacto'}${clinica.telefono ? ` · ${clinica.telefono}` : ''}</p>
+                <p class="text-xs text-slate-500 mt-1">${clinica.telefono || 'Sin teléfono'}</p>
                 <div class="flex flex-wrap gap-1.5 mt-2">
                     ${clinica.direccion ? `<span class="app-chip">${clinica.direccion}</span>` : ''}
                 </div>
@@ -645,7 +667,7 @@ function guardarClinicaExterna(e) {
     const item = {
         id: editId ? parseInt(editId) : uid(),
         nombre: $('clinica-nombre')?.value.trim() || '',
-        contacto: $('clinica-contacto')?.value.trim() || '',
+        contacto: '',
         telefono: $('clinica-telefono')?.value.trim() || '',
         direccion: $('clinica-direccion')?.value.trim() || '',
         servicioHabitual: '',
@@ -665,7 +687,6 @@ function iniciarEdicionClinicaExterna(id) {
     if (!item) return;
     $('edit-clinica-id').value = item.id;
     $('clinica-nombre').value = item.nombre || '';
-    $('clinica-contacto').value = item.contacto || '';
     $('clinica-telefono').value = item.telefono || '';
     $('clinica-direccion').value = item.direccion || '';
     $('btn-clinica-externa').innerText = 'Actualizar clínica';
@@ -689,9 +710,11 @@ function eliminarClinicaExterna(id) {
 }
 function renderServiciosExternos() {
     renderClinicasExternas();
+    if ($('externo-fecha') && !$('externo-fecha').value) $('externo-fecha').value = fechaLocalInputFinanzas();
+    if ($('externo-agendar')) $('externo-agendar').checked = true;
+    renderHorariosExternosRecomendados();
     const lista = $('lista-servicios-externos');
     if (!lista) return;
-    if ($('externo-fecha') && !$('externo-fecha').value) $('externo-fecha').value = fechaLocalInputFinanzas();
     const ordenados = [...(serviciosExternos || [])].sort((a, b) => (parseFechaConsulta(b)?.getTime() || 0) - (parseFechaConsulta(a)?.getTime() || 0));
     if (!ordenados.length) {
         lista.innerHTML = `
@@ -800,7 +823,7 @@ function guardarServicioExterno(e) {
         servicioCobrado: $('externo-servicio')?.value.trim() || clinica?.servicioHabitual || '',
         direccion: $('externo-direccion')?.value.trim() || clinica?.direccion || '',
         agendaId: editId ? (serviciosExternos.find(s => s.id === parseInt(editId))?.agendaId || null) : null,
-        total: parseFloat($('externo-total')?.value || 0),
+        total: redondearCentavos($('externo-total')?.value || 0),
         metodoPago: $('externo-metodo')?.value || 'Efectivo',
         estadoPago: $('externo-estado')?.value || 'Pagado',
         notaPago: $('externo-nota')?.value.trim() || '',
@@ -808,10 +831,11 @@ function guardarServicioExterno(e) {
         abonos: editId
             ? (serviciosExternos.find(s => s.id === parseInt(editId))?.abonos || [])
             : (($('externo-estado')?.value || 'Pagado') === 'Pagado'
-                ? [{ id: uid(), fechaISO: new Date().toISOString(), monto: parseFloat($('externo-total')?.value || 0), metodo: $('externo-metodo')?.value || 'Efectivo' }]
+                ? [{ id: uid(), fechaISO: new Date().toISOString(), monto: redondearCentavos($('externo-total')?.value || 0), metodo: $('externo-metodo')?.value || 'Efectivo' }]
                 : []),
         tipo: 'Servicio externo'
     };
+    normalizarAbonosPagados(item);
     if (!sincronizarAgendaServicioExterno(item, $('externo-agendar')?.checked)) return;
     serviciosExternos = editId
         ? serviciosExternos.map(s => s.id === item.id ? item : s)
@@ -852,6 +876,7 @@ function iniciarEdicionServicioExterno(id) {
     $('externo-estado').value = item.estadoPago || 'Pagado';
     $('externo-nota').value = item.notaPago || '';
     if ($('externo-agendar')) $('externo-agendar').checked = Boolean(item.agendaId || item.hora);
+    renderHorariosExternosRecomendados();
     $('btn-servicio-externo').innerText = 'Actualizar Servicio Externo';
     $('btn-cancelar-servicio-externo')?.classList.remove('hidden');
     document.getElementById('form-servicio-externo')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -862,8 +887,9 @@ function cancelarEdicionServicioExterno() {
     if ($('externo-fecha')) $('externo-fecha').value = fechaLocalInputFinanzas();
     if ($('externo-hora')) $('externo-hora').value = '';
     if ($('externo-clinica-select')) $('externo-clinica-select').value = '';
-    if ($('externo-agendar')) $('externo-agendar').checked = false;
-    if ($('btn-servicio-externo')) $('btn-servicio-externo').innerText = 'Guardar Servicio Externo';
+    if ($('externo-agendar')) $('externo-agendar').checked = true;
+    renderHorariosExternosRecomendados();
+    if ($('btn-servicio-externo')) $('btn-servicio-externo').innerText = 'Agendar Servicio Externo';
     $('btn-cancelar-servicio-externo')?.classList.add('hidden');
 }
 function eliminarServicioExterno(id) {
@@ -889,14 +915,16 @@ function marcarServicioExternoPagado(id) {
     const saldo = saldoPendiente(item);
     const montoTexto = prompt(`Saldo pendiente: $${formatoMoneda(saldo)}\nMonto recibido:`, saldo.toFixed(2));
     if (montoTexto === null) return;
-    const monto = parseFloat(montoTexto);
+    let monto = redondearCentavos(montoTexto);
     if (!Number.isFinite(monto) || monto <= 0) {
         alert('Ingresa un monto válido.');
         return;
     }
+    if (monto >= saldo - 0.05) monto = saldo;
     item.abonos = [...(item.abonos || []), { id: uid(), fechaISO: new Date().toISOString(), monto, metodo: metodo || item.metodoPago || 'Efectivo' }];
     item.estadoPago = saldoPendiente(item) <= 0 ? 'Pagado' : 'Pendiente';
     item.metodoPago = metodo || item.metodoPago || 'Efectivo';
+    normalizarAbonosPagados(item);
     item.notaPago = item.notaPago ? `${item.notaPago} | Abono $${formatoMoneda(monto)} ${new Date().toLocaleString('es-MX')}` : `Abono $${formatoMoneda(monto)} ${new Date().toLocaleString('es-MX')}`;
     registrarAuditoria('pagos', item.estadoPago === 'Pagado' ? 'Cobrar' : 'Abonar', `Servicio externo: ${item.servicioCobrado} · abono $${formatoMoneda(monto)} · saldo $${formatoMoneda(saldoPendiente(item))}`, id);
     if (item.agendaId) {
@@ -1042,7 +1070,7 @@ function exportarCorteDelDia() {
     }
     const cobradas = consultas.filter(con => con.estadoPago === 'Pagado');
     const pendientes = consultas.filter(con => con.estadoPago === 'Pendiente');
-    const totalCobrado = cobradas.reduce((acc, con) => acc + con.total, 0);
+    const totalCobrado = cobradas.reduce((acc, con) => acc + montoCobradoFinanzas(con), 0);
     const costoInsumos = cobradas.reduce((acc, con) => acc + (parseFloat(con.costoInsumos || 0)), 0);
     const gastos = obtenerGastosFiltrados();
     const totalGastos = gastos.reduce((acc, gasto) => acc + gasto.monto, 0);
@@ -1050,7 +1078,7 @@ function exportarCorteDelDia() {
     const totalPendiente = pendientes.reduce((acc, con) => acc + con.total, 0);
     const porMetodo = {};
     cobradas.forEach(con => {
-        porMetodo[con.metodoPago || 'Efectivo'] = (porMetodo[con.metodoPago || 'Efectivo'] || 0) + con.total;
+        porMetodo[con.metodoPago || 'Efectivo'] = (porMetodo[con.metodoPago || 'Efectivo'] || 0) + montoCobradoFinanzas(con);
     });
     const lineas = [
         'Corte del día - VetHome Pro',

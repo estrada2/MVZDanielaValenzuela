@@ -1,3 +1,5 @@
+// Consultas clinicas.
+// Controla formulario medico, vacunas, servicios a cobrar, descuento de inventario y guardado en expediente.
 function actualizarVistaPorTipoConsulta() {
     const tipo = $('consulta-tipo-drop').value;
     const secSeguimiento = $('seccion-campos-seguimiento');
@@ -128,6 +130,7 @@ function descontarVacunasDelInventario(insumosAplicados) {
     });
     return resultado;
 }
+// Dropdown multi-servicio: permite cobrar una consulta desde el flujo clinico.
 function toggleDropdownServicios() {
     const panel = $('dropdown-servicios-opciones');
     panel?.classList.toggle('hidden');

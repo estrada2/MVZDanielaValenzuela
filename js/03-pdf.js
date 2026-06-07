@@ -1,3 +1,5 @@
+// Generacion de responsivas y comprobantes PDF.
+// Usa html2pdf para convertir plantillas HTML de consulta/historial en archivos descargables.
 function exportarResponsivaAPDF() {
     if (!consultaSeleccionada.petId) return;
     const elementoOrigen = $('seccion-responsiva-imprimir');

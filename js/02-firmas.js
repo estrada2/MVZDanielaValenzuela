@@ -1,3 +1,5 @@
+// Firmas, responsiva y whiteboard.
+// Agrupa lienzos táctiles usados en consulta: firma del propietario, firma MVZ y notas rápidas.
 function setupSignatureCanvas(canvasId) {
     const canvas = $(canvasId);
     if (!canvas) return;
@@ -76,6 +78,7 @@ let whiteboardHerramienta = 'lapiz';
 let whiteboardGrosor = 4;
 let whiteboardTieneContenido = false;
 
+// Whiteboard simple compatible con mouse, touch y Apple Pencil.
 function setupWhiteboardCanvas() {
     const canvas = $('consulta-whiteboard');
     if (!canvas) return;

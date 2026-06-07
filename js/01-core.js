@@ -1,3 +1,5 @@
+// Core de la app: estado global, persistencia local, Supabase, modo offline y navegación.
+// La app guarda primero en localStorage y luego intenta sincronizar con Supabase.
 const STORE_KEYS = {
     clientes: 'vet_pro_clientes',
     inventario: 'vet_pro_stock',
@@ -22,8 +24,11 @@ let syncTimer = null;
 let remotePollingTimer = null;
 let guardandoRemoto = false;
 let guardadoPendiente = false;
+let sincronizacionParcialPendiente = false;
 let edicionLocalActivaHasta = 0;
 const STORAGE_BUCKET = 'vet-files';
+const OFFLINE_PENDING_KEY = 'vet_pro_sync_pendiente';
+const estaOffline = () => typeof navigator !== 'undefined' && navigator.onLine === false;
 function loadStore(key, fallback) {
     try {
         return JSON.parse(localStorage.getItem(key)) || fallback;
@@ -32,17 +37,73 @@ function loadStore(key, fallback) {
         return fallback;
     }
 }
+function guardarStoreLocal(nombre) {
+    if (!STORE_KEYS[nombre]) return;
+    const data = {
+        clientes,
+        inventario,
+        agenda,
+        finanzas,
+        movimientosInventario,
+        serviciosExternos,
+        clinicasExternas,
+        gastosFinancieros,
+        auditLogs
+    };
+    try {
+        localStorage.setItem(STORE_KEYS[nombre], JSON.stringify(data[nombre] || []));
+    } catch (error) {
+        console.warn(`No se pudo guardar copia local de ${nombre}.`, error);
+    }
+}
+function guardarStoresLocales() {
+    Object.keys(STORE_KEYS).forEach(guardarStoreLocal);
+}
+function marcarCambiosPendientesOffline(pendiente = true) {
+    try {
+        if (pendiente) localStorage.setItem(OFFLINE_PENDING_KEY, '1');
+        else localStorage.removeItem(OFFLINE_PENDING_KEY);
+    } catch (error) {
+        console.warn('No se pudo actualizar estado offline.', error);
+    }
+}
+function hayCambiosPendientesOffline() {
+    try {
+        return localStorage.getItem(OFFLINE_PENDING_KEY) === '1';
+    } catch {
+        return false;
+    }
+}
+function combinarPorId(remoto = [], local = []) {
+    const mapa = new Map();
+    (remoto || []).forEach(item => mapa.set(item.id, item));
+    (local || []).forEach(item => {
+        if (!mapa.has(item.id)) mapa.set(item.id, item);
+    });
+    return Array.from(mapa.values());
+}
+// Mantiene registros creados offline cuando Supabase todavía no los devuelve.
+function combinarAgendaExternaLocal(remoto = [], local = []) {
+    const mapa = new Map();
+    (remoto || []).forEach(item => mapa.set(item.id, item));
+    (local || []).forEach(item => {
+        const esExterno = (item?.origen || '') === 'Servicio externo' || item?.clinicaId;
+        if (esExterno && !mapa.has(item.id)) mapa.set(item.id, item);
+    });
+    return Array.from(mapa.values());
+}
 function estadoCompleto() {
     return { clientes, inventario, agenda, finanzas, movimientosInventario, serviciosExternos, clinicasExternas, gastosFinancieros, auditLogs };
 }
 function aplicarEstado(data = {}) {
+    const locales = datosLocalesAnteriores();
     clientes = data.clientes || [];
     inventario = data.inventario || [];
-    agenda = data.agenda || [];
+    agenda = combinarAgendaExternaLocal(data.agenda || [], locales.agenda || []);
     finanzas = data.finanzas || [];
     movimientosInventario = data.movimientosInventario || [];
-    serviciosExternos = data.serviciosExternos || [];
-    clinicasExternas = data.clinicasExternas || [];
+    serviciosExternos = combinarPorId(data.serviciosExternos || [], locales.serviciosExternos || []);
+    clinicasExternas = combinarPorId(data.clinicasExternas || [], locales.clinicasExternas || []);
     gastosFinancieros = data.gastosFinancieros || [];
     auditLogs = data.auditLogs || [];
 }
@@ -51,6 +112,17 @@ function actualizarEstadoSync(texto, error = false) {
     $('sync-status').innerText = texto;
     $('sync-status').className = error ? 'text-red-300' : '';
 }
+function cargarModoOffline(mensaje = 'Sin conexión. Usando copia local.') {
+    const locales = datosLocalesAnteriores();
+    if (!tieneDatos(locales)) return false;
+    aplicarEstado(locales);
+    ocultarLogin();
+    usuarioActivo = usuarioActivo || { id: 'offline', email: 'Modo offline' };
+    if ($('sync-user')) $('sync-user').innerText = 'Modo offline';
+    actualizarEstadoSync(mensaje, true);
+    return true;
+}
+// Protege formularios activos: evita pisar lo que el usuario está escribiendo con datos remotos.
 function aplicarEstadoRemoto(estado, detalle = 'Se recibieron cambios de otro dispositivo.') {
     if (debePausarAplicacionRemota()) {
         actualizarEstadoSync('Edición local activa');
@@ -87,6 +159,14 @@ document.addEventListener('input', marcarEdicionLocalActiva, true);
 document.addEventListener('change', marcarEdicionLocalActiva, true);
 document.addEventListener('focusin', marcarEdicionLocalActiva, true);
 window.addEventListener('vethome-update-ready', mostrarBannerActualizacion);
+window.addEventListener('offline', () => {
+    marcarCambiosPendientesOffline(true);
+    actualizarEstadoSync('Offline · cambios pendientes', true);
+});
+window.addEventListener('online', () => {
+    actualizarEstadoSync('Conectando...');
+    sincronizarCambiosPendientesOnline();
+});
 function limpiarDatosLocalesAnteriores() {
     Object.values(STORE_KEYS).forEach(key => localStorage.removeItem(key));
 }
@@ -206,11 +286,22 @@ async function subirArchivoStorage(file, carpeta, nombreBase) {
 }
 async function guardarEstadoRemoto() {
     if (!usuarioActivo) return;
+    if (estaOffline()) {
+        marcarCambiosPendientesOffline(true);
+        actualizarEstadoSync('Offline · cambios pendientes', true);
+        return;
+    }
+    if (usuarioActivo.id === 'offline') {
+        marcarCambiosPendientesOffline(true);
+        actualizarEstadoSync('Pendiente de iniciar sesión', true);
+        return;
+    }
     if (guardandoRemoto) {
         guardadoPendiente = true;
         return;
     }
     guardandoRemoto = true;
+    sincronizacionParcialPendiente = false;
     actualizarEstadoSync('Guardando...');
     let error = null;
     try {
@@ -230,11 +321,19 @@ async function guardarEstadoRemoto() {
     guardandoRemoto = false;
     if (error) {
         console.error('No se pudo sincronizar con Supabase.', error);
+        marcarCambiosPendientesOffline(true);
         actualizarEstadoSync('Error de sincronización', true);
         return;
     }
-    limpiarDatosLocalesAnteriores();
-    actualizarEstadoSync('Sincronizado');
+    if (sincronizacionParcialPendiente) {
+        guardarStoresLocales();
+        marcarCambiosPendientesOffline(true);
+        actualizarEstadoSync('Sincronizado parcial');
+    } else {
+        limpiarDatosLocalesAnteriores();
+        marcarCambiosPendientesOffline(false);
+        actualizarEstadoSync('Sincronizado');
+    }
     if (guardadoPendiente) {
         guardadoPendiente = false;
         programarGuardadoRemoto();
@@ -269,12 +368,19 @@ function registrarAuditoria(tabla, accion, resumen, registroId = '') {
 }
 function programarGuardadoRemoto() {
     clearTimeout(syncTimer);
+    marcarCambiosPendientesOffline(true);
+    if (estaOffline()) {
+        actualizarEstadoSync('Offline · cambios pendientes', true);
+        return;
+    }
     syncTimer = setTimeout(guardarEstadoRemoto, 250);
 }
 function saveStore(nombre) {
+    guardarStoreLocal(nombre);
     programarGuardadoRemoto();
 }
 function saveAllStores() {
+    guardarStoresLocales();
     programarGuardadoRemoto();
 }
 function datosLocalesAnteriores() {
@@ -294,6 +400,7 @@ function tieneDatos(data) {
     return Object.values(data).some(lista => Array.isArray(lista) && lista.length);
 }
 async function refrescarEstadoDesdeRemotoSilencioso() {
+    if (estaOffline()) return;
     if (!usuarioActivo || guardandoRemoto || document.visibilityState === 'hidden') return;
     if (debePausarAplicacionRemota()) return;
     try {
@@ -314,6 +421,32 @@ async function refrescarEstadoDesdeRemotoSilencioso() {
         aplicarEstadoRemoto(estadoRemoto, 'Se refrescó la información más reciente de Supabase.');
     } catch (error) {
         console.warn('No se pudo refrescar estado remoto en segundo plano.', error);
+    }
+}
+async function sincronizarCambiosPendientesOnline() {
+    if (estaOffline()) return;
+    try {
+        if (!usuarioActivo || usuarioActivo.id === 'offline') {
+            const { data: { session } } = await supabaseClient.auth.getSession();
+            usuarioActivo = session?.user || null;
+            if (!usuarioActivo) {
+                actualizarEstadoSync('Online · inicia sesión para sincronizar', true);
+                return;
+            }
+            if ($('sync-user')) $('sync-user').innerText = usuarioActivo.email || '';
+            await cargarWorkspaceActivo();
+        }
+        if (hayCambiosPendientesOffline()) {
+            guardarStoresLocales();
+            await guardarEstadoRemoto();
+        } else {
+            await refrescarEstadoDesdeRemotoSilencioso();
+        }
+        escucharCambiosRemotos();
+        iniciarRefrescoRemotoAutomatico();
+    } catch (error) {
+        console.warn('No se pudo sincronizar al volver online.', error);
+        actualizarEstadoSync('Pendiente de sincronizar', true);
     }
 }
 function iniciarRefrescoRemotoAutomatico() {
@@ -345,7 +478,17 @@ function escucharCambiosRemotos() {
         .subscribe();
 }
 async function initRemoteStorage() {
-    const { data: { session } } = await supabaseClient.auth.getSession();
+    if (estaOffline() && cargarModoOffline('Offline · usando copia local')) return true;
+    let session = null;
+    try {
+        const resultadoSesion = await supabaseClient.auth.getSession();
+        session = resultadoSesion.data?.session || null;
+    } catch (error) {
+        console.warn('No se pudo obtener sesión. Intentando modo offline.', error);
+        if (cargarModoOffline('Sin conexión · usando copia local')) return true;
+        mostrarLogin('No se pudo conectar y no hay copia local disponible.');
+        return false;
+    }
     usuarioActivo = session?.user || null;
     if (!usuarioActivo) {
         mostrarLogin();
@@ -353,7 +496,14 @@ async function initRemoteStorage() {
     }
     ocultarLogin();
     if ($('sync-user')) $('sync-user').innerText = usuarioActivo.email || '';
-    await cargarWorkspaceActivo();
+    try {
+        await cargarWorkspaceActivo();
+    } catch (error) {
+        console.warn('No se pudo cargar workspace. Intentando modo offline.', error);
+        if (cargarModoOffline('Sin conexión · usando copia local')) return true;
+        mostrarLogin('No se pudo cargar el workspace y no hay copia local disponible.');
+        return false;
+    }
     actualizarEstadoSync('Cargando...');
     if (typeof cargarEstadoBaseNormalizada === 'function') {
         const normalizado = await cargarEstadoBaseNormalizada();
@@ -388,6 +538,7 @@ async function initRemoteStorage() {
     const { data, error } = await aplicarFiltroScope(query).maybeSingle();
     if (error) {
         console.error('No se pudo cargar app_state.', error);
+        if (cargarModoOffline('Sin conexión · usando copia local')) return true;
         actualizarEstadoSync('Error de conexión', true);
         alert("No se pudieron cargar tus datos desde Supabase. Revisa las políticas RLS de app_state.");
         return false;

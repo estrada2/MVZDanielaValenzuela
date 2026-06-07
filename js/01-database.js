@@ -1,3 +1,5 @@
+// Capa de base de datos normalizada.
+// Traduce el estado local de la app hacia tablas Supabase y reconstruye el estado al leerlas.
 let modoDatosRemotos = 'app_state';
 let normalizedReloadTimer = null;
 let tablaVacunasPacienteDisponible = false;
@@ -54,6 +56,7 @@ async function upsertTabla(nombre, registros, columnas = '*') {
     return data || [];
 }
 
+// Borra en Supabase lo que ya no existe localmente dentro del scope activo.
 async function borrarFaltantes(nombre, legacyIds) {
     let query = supabaseClient.from(nombre).delete();
     query = aplicarFiltroScope(query);
@@ -383,7 +386,13 @@ async function guardarEstadoBaseNormalizada() {
         origen: cita.origen || 'Consulta',
         updated_at: new Date().toISOString()
     }));
-    await upsertTabla('agenda', agendaRows, 'id, legacy_id');
+    try {
+        await upsertTabla('agenda', agendaRows, 'id, legacy_id');
+    } catch (error) {
+        console.warn('No se pudo sincronizar agenda completa; se reintentara sin citas externas sin paciente.', error);
+        sincronizacionParcialPendiente = true;
+        await upsertTabla('agenda', agendaRows.filter(row => row.cliente_id || row.mascota_id), 'id, legacy_id');
+    }
 
     const consultasRows = [];
     clientes.forEach(cliente => {
@@ -481,16 +490,21 @@ async function guardarEstadoBaseNormalizada() {
         hora: servicio.hora || '',
         direccion: servicio.direccion || '',
         agenda_id: servicio.agendaId || null,
+        clinica_legacy_id: servicio.clinicaId || null,
         total: parseFloat(servicio.total || 0),
         metodo_pago: servicio.metodoPago || 'Efectivo',
         estado_pago: servicio.estadoPago || 'Pagado',
         nota: servicio.notaPago || '',
         abonos: servicio.abonos || [],
-        ...(tablaClinicasExternasDisponible ? { clinica_legacy_id: servicio.clinicaId || null } : {}),
         tipo: servicio.tipo || 'Servicio externo',
         updated_at: new Date().toISOString()
     }));
-    await upsertTabla('servicios_externos', serviciosExternosRows, 'id, legacy_id');
+    try {
+        await upsertTabla('servicios_externos', serviciosExternosRows, 'id, legacy_id');
+    } catch (error) {
+        console.warn('No se pudo sincronizar servicios externos; se conserva en local.', error);
+        sincronizacionParcialPendiente = true;
+    }
 
     if (tablaClinicasExternasDisponible) {
         const clinicasRows = (clinicasExternas || []).map(clinica => ({
@@ -502,8 +516,13 @@ async function guardarEstadoBaseNormalizada() {
             direccion: clinica.direccion || '',
             updated_at: new Date().toISOString()
         }));
-        await upsertTabla('clinicas_externas', clinicasRows, 'id, legacy_id');
-        await borrarFaltantes('clinicas_externas', idsLegacy(clinicasRows));
+        try {
+            await upsertTabla('clinicas_externas', clinicasRows, 'id, legacy_id');
+            await borrarFaltantes('clinicas_externas', idsLegacy(clinicasRows));
+        } catch (errorClinicas) {
+            tablaClinicasExternasDisponible = false;
+            console.warn('No se pudo sincronizar clinicas_externas. Se conservaran en copia local.', errorClinicas);
+        }
     }
 
     const gastosRows = gastosFinancieros.map(gasto => ({
@@ -533,7 +552,12 @@ async function guardarEstadoBaseNormalizada() {
 
     await borrarFaltantes('pagos', idsLegacy(pagosRows));
     await borrarFaltantes('consultas', idsLegacy(consultasRows));
-    await borrarFaltantes('servicios_externos', idsLegacy(serviciosExternosRows));
+    try {
+        await borrarFaltantes('servicios_externos', idsLegacy(serviciosExternosRows));
+    } catch (error) {
+        console.warn('No se pudieron limpiar servicios externos remotos.', error);
+        sincronizacionParcialPendiente = true;
+    }
     await borrarFaltantes('gastos', idsLegacy(gastosRows));
     await borrarFaltantes('movimientos_inventario', idsLegacy(movimientosInventario));
     await borrarFaltantes('agenda', idsLegacy(agenda));
