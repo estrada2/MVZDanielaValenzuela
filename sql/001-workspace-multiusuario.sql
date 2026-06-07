@@ -1,6 +1,7 @@
 -- VetHome Pro v10 - workspace multiusuario
 -- Ejecutar en Supabase SQL Editor.
 -- Permite que varios usuarios de Auth compartan los mismos datos operativos.
+-- Seguro para datos existentes: crea workspace/membresias y policies sin borrar registros.
 
 create extension if not exists pgcrypto;
 

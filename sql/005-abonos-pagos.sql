@@ -1,4 +1,5 @@
 -- VetHome Pro v10 - pagos parciales / abonos
+-- Guarda parcialidades como JSON para consultas y servicios externos.
 
 alter table public.pagos
     add column if not exists abonos jsonb not null default '[]'::jsonb;

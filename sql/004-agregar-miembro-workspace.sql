@@ -1,5 +1,6 @@
 -- VetHome Pro v10 - agregar segundo usuario al mismo workspace
 -- Cambia los correos antes de ejecutar.
+-- No crea usuarios; el segundo usuario debe existir antes en Supabase Auth.
 
 with workspace_principal as (
     select member.workspace_id

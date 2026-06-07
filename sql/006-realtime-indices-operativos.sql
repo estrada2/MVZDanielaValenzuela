@@ -2,6 +2,7 @@
 -- Realtime e indices operativos.
 -- Seguro para datos existentes: no borra registros ni modifica valores cargados.
 
+-- Activa replica identity y publicacion realtime solo si la tabla existe.
 do $$
 declare
     tabla text;
@@ -39,6 +40,7 @@ begin
     end loop;
 end $$;
 
+-- Crea indices condicionales: evita fallar en bases que aun no tienen todas las columnas.
 do $$
 declare
     columnas text[];
