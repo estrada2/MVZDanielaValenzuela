@@ -1,6 +1,6 @@
 // Service worker PWA.
 // Cachea el shell local para abrir la app offline y actualiza recursos cuando hay nueva version.
-const CACHE_NAME = 'vethome-pro-v10-schnauzer-2026-06-07-17';
+const CACHE_NAME = 'vethome-pro-v10-schnauzer-2026-06-07-19';
 const APP_SHELL = [
     '/',
     '/index.html',
@@ -16,6 +16,7 @@ const APP_SHELL = [
     '/js/05-clientes.js',
     '/js/06-agenda.js',
     '/js/07-inventario-finanzas.js',
+    '/js/09-eutanasia.js',
     '/js/08-main.js'
 ];
 
