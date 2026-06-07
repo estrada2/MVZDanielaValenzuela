@@ -1,3 +1,10 @@
+        /*
+         * VetHome Pro styles
+         * CSS propio para complementar Tailwind y los componentes creados desde JS.
+         * Mantiene patrones comunes de cards, acciones, agenda, calendario y mobile.
+         */
+
+        /* Base y soporte PWA/mobile */
         html,
         body {
             min-height: 100%;
@@ -22,14 +29,6 @@
 
         .sidebar-brand {
             background: linear-gradient(135deg, #1e3a8a 0%, #0f172a 100%);
-        }
-
-        @keyframes pulse-highlight {
-            0%, 100% { border-color: rgba(20, 184, 166, 0.2); background-color: rgb(249, 250, 251); }
-            50% { border-color: rgb(20, 184, 166); background-color: rgb(240, 253, 250); }
-        }
-        .highlight-card {
-            animation: pulse-highlight 2s ease-in-out 2;
         }
 
         .signature-canvas {
@@ -64,6 +63,7 @@
             max-height: calc(100dvh - 1.5rem);
         }
 
+        /* Sistema visual reutilizable */
         .dashboard-hero,
         .dashboard-panel,
         .dash-metric,
@@ -111,11 +111,6 @@
             line-height: 1.25rem;
             font-weight: 950;
             color: #0f172a;
-        }
-
-        .section-subtitle {
-            font-size: 0.72rem;
-            color: #64748b;
         }
 
         .app-chip {
@@ -169,7 +164,6 @@
         }
 
         .btn-primary,
-        .btn-secondary,
         .btn-soft,
         .btn-danger-soft {
             min-height: 2.25rem;
@@ -187,11 +181,6 @@
 
         .btn-primary {
             background: #0f172a;
-            color: #ffffff;
-        }
-
-        .btn-secondary {
-            background: #2563eb;
             color: #ffffff;
         }
 
@@ -279,13 +268,7 @@
             background: #f8fafc;
         }
 
-        .form-zone {
-            border: 1px solid #e2e8f0;
-            background: #f8fafc;
-            border-radius: 0.9rem;
-            padding: 0.85rem;
-        }
-
+        /* Agenda en lista y acciones secundarias */
         .agenda-group {
             display: grid;
             gap: 0.45rem;
@@ -401,6 +384,53 @@
             border-color: #fecdd3;
             background: #fff1f2;
             color: #be123c;
+        }
+
+        .agenda-badge.slate {
+            border-color: #cbd5e1;
+            background: #f1f5f9;
+            color: #475569;
+        }
+
+        .agenda-suggestions {
+            position: absolute;
+            left: 0;
+            right: 0;
+            top: calc(100% + 0.35rem);
+            z-index: 80;
+            max-height: 14rem;
+            overflow-y: auto;
+            border: 1px solid #dbeafe;
+            border-radius: 0.85rem;
+            background: #ffffff;
+            box-shadow: 0 18px 40px rgba(15, 23, 42, 0.16);
+            padding: 0.35rem;
+        }
+
+        .agenda-suggestion-item {
+            width: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: flex-start;
+            min-height: 2.35rem;
+            border-radius: 0.65rem;
+            padding: 0.45rem 0.65rem;
+            text-align: left;
+            color: #0f172a;
+            font-size: 0.78rem;
+            font-weight: 850;
+        }
+
+        .agenda-suggestion-item:hover {
+            background: #eff6ff;
+            color: #1d4ed8;
+        }
+
+        .agenda-suggestion-empty {
+            padding: 0.6rem 0.65rem;
+            color: #b45309;
+            font-size: 0.72rem;
+            font-weight: 800;
         }
 
         .agenda-meta {
@@ -643,6 +673,309 @@
             justify-content: flex-end;
             gap: 0.35rem;
             min-width: 0;
+        }
+
+        .agenda-calendar {
+            display: flex;
+            flex-direction: column;
+            gap: 0.7rem;
+        }
+
+        .agenda-calendar-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 0.75rem;
+            flex-wrap: wrap;
+        }
+
+        .agenda-calendar-header h4 {
+            font-size: 0.9rem;
+            font-weight: 950;
+            color: #0f172a;
+            text-transform: capitalize;
+        }
+
+        .agenda-calendar-header span {
+            font-size: 0.68rem;
+            font-weight: 800;
+            color: #64748b;
+        }
+
+        .calendar-nav {
+            display: flex;
+            align-items: center;
+            justify-content: flex-end;
+            flex-wrap: wrap;
+            gap: 0.35rem;
+        }
+
+        .calendar-nav button,
+        .calendar-nav select,
+        .calendar-nav input {
+            min-height: 2rem;
+            border: 1px solid #e2e8f0;
+            border-radius: 0.65rem;
+            background: #ffffff;
+            color: #0f172a;
+            font-size: 0.7rem;
+            font-weight: 850;
+            outline: none;
+        }
+
+        .calendar-nav button {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            padding: 0 0.55rem;
+        }
+
+        .calendar-nav select {
+            max-width: 7.4rem;
+            padding: 0 0.5rem;
+            text-transform: capitalize;
+        }
+
+        .calendar-nav input {
+            width: 4.8rem;
+            padding: 0 0.5rem;
+        }
+
+        .calendar-nav .today-shortcut {
+            color: #1d4ed8;
+            background: #eff6ff;
+            border-color: #bfdbfe;
+        }
+
+        .calendar-layout {
+            display: grid;
+            gap: 0.75rem;
+            align-items: start;
+        }
+
+        .calendar-layout.no-detail {
+            grid-template-columns: 1fr;
+        }
+
+        .calendar-layout.with-detail {
+            grid-template-columns: minmax(28rem, 1fr) minmax(21rem, 0.55fr);
+        }
+
+        .calendar-month {
+            min-width: 0;
+        }
+
+        .calendar-weekdays,
+        .calendar-grid {
+            display: grid;
+            grid-template-columns: repeat(7, minmax(0, 1fr));
+            gap: 0.35rem;
+        }
+
+        .calendar-weekdays span {
+            text-align: center;
+            font-size: 0.62rem;
+            font-weight: 900;
+            color: #94a3b8;
+        }
+
+        .calendar-day {
+            min-height: 4.55rem;
+            border: 1px solid #e2e8f0;
+            border-radius: 0.75rem;
+            background: #ffffff;
+            padding: 0.5rem;
+            text-align: left;
+            display: flex;
+            flex-direction: column;
+            align-items: stretch;
+            justify-content: flex-start;
+            gap: 0.35rem;
+            overflow: hidden;
+        }
+
+        .calendar-day-number {
+            font-size: 0.82rem;
+            font-weight: 950;
+            color: #0f172a;
+            align-self: flex-end;
+            line-height: 1;
+        }
+
+        .calendar-day-events {
+            display: flex;
+            flex-direction: column;
+            gap: 0.22rem;
+            min-width: 0;
+        }
+
+        .calendar-event {
+            display: block;
+            width: 100%;
+            border-radius: 0.38rem;
+            padding: 0.16rem 0.35rem;
+            font-size: 0.58rem;
+            line-height: 1.1;
+            font-weight: 900;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            color: #ffffff;
+            background: #2563eb;
+        }
+
+        .calendar-event.external {
+            background: #b45309;
+        }
+
+        .calendar-event.confirmed {
+            background: #059669;
+        }
+
+        .calendar-event.cancelled {
+            background: #e11d48;
+        }
+
+        .calendar-event.more {
+            color: #475569;
+            background: #e2e8f0;
+        }
+
+        .calendar-day.today {
+            border-color: #bfdbfe;
+            background: #eff6ff;
+        }
+
+        .calendar-day.selected {
+            border-color: #2563eb;
+            background: #eff6ff;
+            box-shadow: inset 0 0 0 1px #2563eb;
+        }
+
+        .calendar-day.selected .calendar-day-number {
+            color: #1d4ed8;
+        }
+
+        .calendar-day.muted {
+            background: #f8fafc;
+            border-style: dashed;
+        }
+
+        @media (max-width: 640px) {
+            .calendar-day {
+                min-height: 4.7rem;
+                padding: 0.38rem;
+                border-radius: 0.65rem;
+            }
+
+            .calendar-event {
+                font-size: 0.5rem;
+                padding: 0.12rem 0.25rem;
+            }
+        }
+
+        .calendar-detail {
+            border: 1px solid #e2e8f0;
+            border-radius: 0.9rem;
+            background: #f8fafc;
+            padding: 0.75rem;
+            overflow: visible;
+        }
+
+        .calendar-detail h5 {
+            font-size: 0.78rem;
+            font-weight: 950;
+            color: #334155;
+            text-transform: capitalize;
+        }
+
+        .calendar-detail-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 0.75rem;
+            margin-bottom: 0.55rem;
+        }
+
+        .calendar-add-button {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.3rem;
+            min-height: 2rem;
+            border-radius: 0.65rem;
+            padding: 0 0.7rem;
+            border: 1px solid #bfdbfe;
+            background: #2563eb;
+            color: #ffffff;
+            font-size: 0.7rem;
+            font-weight: 900;
+            white-space: nowrap;
+        }
+
+        .calendar-day-list {
+            display: grid;
+            gap: 0.5rem;
+        }
+
+        .calendar-detail .agenda-row {
+            padding: 0.5rem;
+            min-height: auto;
+        }
+
+        .calendar-detail .agenda-row.compact .agenda-row-main {
+            grid-template-columns: 3.85rem minmax(0, 1fr);
+            align-items: start;
+        }
+
+        .calendar-detail .agenda-row.compact .agenda-actions {
+            grid-column: 1 / -1;
+            justify-content: flex-start;
+            gap: 0.28rem;
+        }
+
+        .calendar-detail .agenda-row.compact .row-action-menu {
+            margin-top: 0.38rem;
+        }
+
+        .calendar-detail .agenda-row.compact .agenda-time {
+            padding: 0.34rem 0.25rem;
+        }
+
+        .calendar-detail .agenda-row.compact .agenda-time span {
+            font-size: 0.7rem;
+        }
+
+        .calendar-detail .agenda-row.compact .agenda-action {
+            min-height: 1.7rem;
+            padding: 0.28rem 0.45rem;
+            font-size: 0.62rem;
+        }
+
+        @media (max-width: 900px) {
+            .calendar-layout {
+                grid-template-columns: 1fr;
+            }
+
+            .calendar-detail {
+                max-height: none;
+            }
+        }
+
+        @media (max-width: 520px) {
+            .calendar-nav {
+                justify-content: stretch;
+                width: 100%;
+            }
+
+            .calendar-nav select {
+                flex: 1 1 7rem;
+                max-width: none;
+            }
+
+            .calendar-nav input {
+                flex: 0 0 4.8rem;
+            }
         }
 
         .client-actions {
@@ -1111,7 +1444,6 @@
             }
 
             .btn-primary,
-            .btn-secondary,
             .btn-soft,
             .btn-danger-soft {
                 min-height: 2.15rem;

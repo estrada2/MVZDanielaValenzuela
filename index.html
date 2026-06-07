@@ -1,6 +1,11 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
+    <!--
+        VetHome Pro
+        App estatica: HTML + Tailwind CDN + CSS propio + modulos JS cargados en orden.
+        Muchas acciones usan onclick inline; por eso las funciones principales viven en scope global.
+    -->
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <meta name="theme-color" content="#0f172a">
@@ -14,6 +19,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
     <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
     <link rel="stylesheet" href="style.css">
+    <!-- Registro PWA: revisa actualizaciones sin interrumpir formularios activos. -->
     <script>
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
@@ -48,6 +54,7 @@
 </head>
 <body class="h-screen flex overflow-hidden">
 
+    <!-- Navegacion lateral desktop. La navegacion mobile esta al final del documento. -->
     <aside class="w-68 sidebar-brand text-white flex flex-col justify-between hidden md:flex shrink-0 shadow-xl border-r border-slate-900">
         <div class="p-5 flex-1 flex flex-col justify-between overflow-y-auto">
             <div>
@@ -125,6 +132,7 @@
         </div>
     </div>
 
+    <!-- Shell principal: header fijo, contenido con scroll y paneles/modales inyectados por JS. -->
     <main class="flex-1 flex flex-col overflow-hidden glass-main">
         <header class="app-header bg-white/80 border-b border-gray-200 min-h-16 flex items-center justify-between gap-3 px-4 sm:px-6 py-3 z-10 backdrop-blur-md">
             <div class="flex items-center gap-3">
@@ -327,83 +335,17 @@
             </section>
 
             <section id="view-agenda" class="hidden space-y-6">
-                <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                    <div class="app-panel space-y-4 h-fit">
-                        <h3 class="text-md font-bold text-slate-900 flex items-center gap-2" id="titulo-form-agenda">
-                            <i data-lucide="calendar-plus" class="text-blue-600 w-5 h-5"></i> Agendar Nueva Visita
-                        </h3>
-                        <form id="form-agenda" class="space-y-3" onsubmit="guardarCita(event)">
-                            <input type="hidden" id="edit-agenda-id">
-                            <div class="grid grid-cols-2 gap-2">
-                                <div>
-                                    <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Fecha</label>
-                                    <input type="date" id="agenda-fecha" required onchange="renderHorariosRecomendados()" class="w-full px-3 py-2 border rounded-xl text-sm">
-                                </div>
-                                <div>
-                                    <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Hora</label>
-                                    <input type="time" id="agenda-hora" required onchange="renderHorariosRecomendados()" class="w-full px-3 py-2 border rounded-xl text-sm">
-                                </div>
-                            </div>
-                            <div class="bg-slate-50 border border-slate-200 rounded-xl p-3">
-                                <div class="flex items-center justify-between gap-2 mb-2">
-                                    <label class="text-[10px] font-bold text-slate-500 uppercase">Horarios recomendados</label>
-                                    <span class="text-[10px] font-semibold text-slate-400">45 min libres</span>
-                                </div>
-                                <div id="agenda-horarios-recomendados" class="flex flex-wrap gap-1.5"></div>
-                            </div>
-                            <div>
-                                <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Asociar Propietario / Paciente</label>
-                                <select id="agenda-cliente-select" required onchange="autocompletarDireccionAgenda()" class="w-full px-3 py-2 border rounded-xl text-sm bg-white"></select>
-                                <p class="text-[10px] text-slate-400 mt-1">También puedes asociar una clínica externa para agenda y cobro.</p>
-                            </div>
-                            <div id="agenda-clinica-detalle" class="hidden bg-blue-50 border border-blue-100 rounded-xl p-3 space-y-2">
-                                <div class="flex items-start gap-2">
-                                    <i data-lucide="building-2" class="w-4 h-4 text-blue-700 mt-0.5"></i>
-                                    <div>
-                                        <p class="text-[11px] font-black text-blue-900 uppercase">Servicio externo vinculado</p>
-                                        <p class="text-[11px] text-blue-700">Se guardará en agenda y en servicios externos para finanzas.</p>
-                                    </div>
-                                </div>
-                                <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                                    <div>
-                                        <label class="block text-[10px] font-bold text-blue-700 uppercase mb-1">Servicio</label>
-                                        <input type="text" id="agenda-clinica-servicio" class="w-full px-3 py-2 border border-blue-100 rounded-xl text-sm bg-white outline-none" placeholder="Servicio a realizar">
-                                    </div>
-                                    <div>
-                                        <label class="block text-[10px] font-bold text-blue-700 uppercase mb-1">Costo sugerido</label>
-                                        <input type="number" id="agenda-clinica-costo" min="0" step="0.01" class="w-full px-3 py-2 border border-blue-100 rounded-xl text-sm bg-white outline-none" placeholder="0.00">
-                                    </div>
-                                </div>
-                            </div>
-                            <div>
-                                <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Dirección del Destino</label>
-                                <textarea id="agenda-direccion" required rows="2" class="w-full px-3 py-2 border rounded-xl text-sm" placeholder="Dirección exacta para mapeo..."></textarea>
-                            </div>
-                            <div>
-                                <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Notas / Motivo de Visita</label>
-                                <input type="text" id="agenda-notes" placeholder="ej. Vacunación Anual o Revisión" class="w-full px-3 py-2 border rounded-xl text-sm">
-                            </div>
-                            <div class="flex gap-2">
-                                <button type="submit" id="btn-guardar-agenda" class="flex-1 bg-blue-600 text-white font-bold py-2.5 rounded-xl text-sm hover:bg-blue-700 shadow-xs">
-                                    Agregar a la Agenda
-                                </button>
-                                <button type="button" id="btn-cancelar-agenda" onclick="cancelarEdicionAgenda()" class="hidden px-3 py-2.5 bg-gray-100 text-gray-600 font-medium rounded-xl text-sm hover:bg-gray-200">
-                                    Cancelar
-                                </button>
-                            </div>
-                        </form>
-                    </div>
-                    <div class="lg:col-span-2 app-panel flex flex-col h-[480px]">
+                <div class="app-panel flex flex-col">
                         <div class="flex flex-col gap-3 mb-3">
                             <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                                 <div>
-                                    <h3 class="text-sm font-black text-slate-900 uppercase tracking-wider">Cronograma</h3>
-                                    <p class="text-[11px] text-slate-500">Consulta tus visitas en lista o por bloques del día.</p>
+                                    <h3 class="text-sm font-black text-slate-900 uppercase tracking-wider">Calendario</h3>
+                                    <p class="text-[11px] text-slate-500">Toca un día para consultar sus citas.</p>
                                 </div>
                                 <div class="flex items-center gap-2">
                                     <div class="flex bg-slate-100 p-1 rounded-xl border border-slate-200">
-                                        <button type="button" onclick="cambiarModoAgenda('lista')" id="btn-agenda-modo-lista" class="px-3 py-1.5 text-[11px] font-bold rounded-lg bg-white shadow-xs">Lista</button>
-                                        <button type="button" onclick="cambiarModoAgenda('calendario')" id="btn-agenda-modo-calendario" class="px-3 py-1.5 text-[11px] font-bold rounded-lg text-slate-600">Día</button>
+                                        <button type="button" onclick="cambiarModoAgenda('calendario')" id="btn-agenda-modo-calendario" class="px-3 py-1.5 text-[11px] font-bold rounded-lg bg-white shadow-xs">Calendario</button>
+                                        <button type="button" onclick="cambiarModoAgenda('lista')" id="btn-agenda-modo-lista" class="px-3 py-1.5 text-[11px] font-bold rounded-lg text-slate-600">Lista</button>
                                     </div>
                                     <select id="filtro-agenda-select" onchange="filtrarAgenda(this.value)" class="px-3 py-2 border border-slate-200 rounded-xl text-xs bg-white font-bold text-slate-700">
                                         <option value="todas">Todas</option>
@@ -414,8 +356,7 @@
                                 </div>
                             </div>
                         </div>
-                        <div class="flex-1 overflow-y-auto space-y-3" id="lista-agenda"></div>
-                    </div>
+                        <div class="space-y-3" id="lista-agenda"></div>
                 </div>
             </section>
 
@@ -861,15 +802,9 @@
                                 <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Nombre de clínica</label>
                                 <input type="text" id="clinica-nombre" required placeholder="Ej. Vet San Ángel" class="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm outline-none">
                             </div>
-                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                                <div>
-                                    <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Contacto</label>
-                                    <input type="text" id="clinica-contacto" placeholder="Persona contacto" class="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm outline-none">
-                                </div>
-                                <div>
-                                    <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Teléfono</label>
-                                    <input type="tel" id="clinica-telefono" placeholder="Opcional" class="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm outline-none">
-                                </div>
+                            <div>
+                                <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Teléfono</label>
+                                <input type="tel" id="clinica-telefono" placeholder="Opcional" class="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm outline-none">
                             </div>
                             <div>
                                 <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Dirección</label>
@@ -882,6 +817,85 @@
                         </form>
                         <div class="min-h-[260px] max-h-[420px] overflow-y-auto space-y-2 p-1" id="lista-clinicas-externas"></div>
                     </div>
+                </section>
+                <section class="app-card overflow-hidden">
+                    <div class="p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-slate-900 text-white">
+                        <div class="flex items-start gap-3">
+                            <div class="w-10 h-10 rounded-xl bg-white/10 text-white flex items-center justify-center shrink-0">
+                                <i data-lucide="calendar-plus" class="w-5 h-5"></i>
+                            </div>
+                            <div>
+                                <h4 class="text-base font-black">Agendar servicio externo</h4>
+                                <p class="text-xs text-slate-300">Agenda trabajos para clínicas y envíalos al calendario operativo.</p>
+                            </div>
+                        </div>
+                    </div>
+                    <form id="form-servicio-externo" class="space-y-4 p-5 sm:p-6" onsubmit="guardarServicioExterno(event)">
+                        <input type="hidden" id="edit-servicio-externo-id">
+                        <input type="checkbox" id="externo-agendar" class="hidden" checked>
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            <div>
+                                <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Fecha</label>
+                                <input type="date" id="externo-fecha" required onchange="renderHorariosExternosRecomendados()" class="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm outline-none">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Hora</label>
+                                <input type="time" id="externo-hora" required onchange="renderHorariosExternosRecomendados()" class="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm outline-none">
+                            </div>
+                        </div>
+                        <div class="bg-slate-50 border border-slate-200 rounded-xl p-3">
+                            <div class="flex items-center justify-between gap-2 mb-2">
+                                <label class="text-[10px] font-bold text-slate-500 uppercase">Horarios recomendados</label>
+                                <span class="text-[10px] font-semibold text-slate-400">45 min libres</span>
+                            </div>
+                            <div id="externo-horarios-recomendados" class="flex flex-wrap gap-1.5"></div>
+                        </div>
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            <div>
+                                <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Clínica veterinaria</label>
+                                <select id="externo-clinica-select" required onchange="aplicarClinicaServicioExterno()" class="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm bg-white outline-none"></select>
+                            </div>
+                            <div>
+                                <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Monto ($)</label>
+                                <input type="number" id="externo-total" required min="0" step="0.01" class="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm outline-none">
+                            </div>
+                        </div>
+                        <input type="hidden" id="externo-cliente">
+                        <div>
+                            <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Servicio a realizar</label>
+                            <input type="text" id="externo-servicio" placeholder="Ultrasonido, toma de sangre, corte de uñas..." required class="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm outline-none">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Dirección / Lugar</label>
+                            <textarea id="externo-direccion" rows="2" placeholder="Se llena con la dirección de la clínica si existe..." class="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm outline-none"></textarea>
+                        </div>
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            <div>
+                                <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Método</label>
+                                <select id="externo-metodo" class="w-full px-3 py-2 border rounded-xl text-sm bg-white outline-none">
+                                    <option>Efectivo</option>
+                                    <option>Transferencia</option>
+                                    <option>Tarjeta</option>
+                                    <option>Crédito</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Estado</label>
+                                <select id="externo-estado" class="w-full px-3 py-2 border rounded-xl text-sm bg-white outline-none">
+                                    <option>Pendiente</option>
+                                    <option>Pagado</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Nota</label>
+                            <input type="text" id="externo-nota" placeholder="Paciente referido, folio, observaciones..." class="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm outline-none">
+                        </div>
+                        <div class="flex gap-2">
+                            <button type="submit" id="btn-servicio-externo" class="flex-1 bg-blue-600 text-white font-bold py-3 rounded-xl text-sm hover:bg-blue-700 shadow-xs">Agendar Servicio Externo</button>
+                            <button type="button" onclick="cancelarEdicionServicioExterno()" id="btn-cancelar-servicio-externo" class="hidden px-3 py-2.5 bg-gray-100 text-gray-600 font-medium rounded-xl text-sm hover:bg-gray-200">Cancelar</button>
+                        </div>
+                    </form>
                 </section>
             </section>
 
@@ -1016,6 +1030,86 @@
             </section>
         </div>
     </main>
+
+    <div id="modal-agenda" class="fixed inset-0 bg-slate-950/70 z-[60] flex items-center justify-center p-3 sm:p-4 hidden backdrop-blur-xs">
+        <div class="modal-mobile-sheet bg-white rounded-2xl max-w-lg w-full h-[88vh] flex flex-col shadow-2xl overflow-hidden border border-slate-200">
+            <div class="p-4 border-b bg-slate-900 text-white flex items-center justify-between shrink-0">
+                <div>
+                    <h3 class="text-base font-black flex items-center gap-2" id="titulo-form-agenda">
+                        <i data-lucide="calendar-plus" class="w-5 h-5 text-amber-300"></i> Agendar Nueva Visita
+                    </h3>
+                    <p class="text-xs text-slate-300">Captura la visita para el día seleccionado.</p>
+                </div>
+                <button type="button" onclick="cancelarEdicionAgenda()" class="p-2 rounded-xl bg-white/10 hover:bg-white/20">
+                    <i data-lucide="x" class="w-5 h-5"></i>
+                </button>
+            </div>
+            <form id="form-agenda" class="flex-1 overflow-y-auto p-4 sm:p-5 space-y-3 bg-white" onsubmit="guardarCita(event)">
+                <input type="hidden" id="edit-agenda-id">
+                <div class="grid grid-cols-2 gap-2">
+                    <div>
+                        <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Fecha</label>
+                        <input type="date" id="agenda-fecha" required onchange="renderHorariosRecomendados()" class="w-full px-3 py-2 border rounded-xl text-sm">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Hora</label>
+                        <input type="time" id="agenda-hora" required onchange="renderHorariosRecomendados()" class="w-full px-3 py-2 border rounded-xl text-sm">
+                    </div>
+                </div>
+                <div class="bg-slate-50 border border-slate-200 rounded-xl p-3">
+                    <div class="flex items-center justify-between gap-2 mb-2">
+                        <label class="text-[10px] font-bold text-slate-500 uppercase">Horarios recomendados</label>
+                        <span class="text-[10px] font-semibold text-slate-400">45 min libres</span>
+                    </div>
+                    <div id="agenda-horarios-recomendados" class="flex flex-wrap gap-1.5"></div>
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Asociar Propietario / Paciente</label>
+                    <div class="relative">
+                        <input type="text" id="agenda-cliente-buscar" oninput="seleccionarClienteAgendaPorBusqueda()" onfocus="renderSugerenciasAgendaCliente()" placeholder="Buscar propietario o mascota..." class="w-full px-3 py-2 border rounded-xl text-sm bg-white outline-none">
+                        <div id="agenda-cliente-sugerencias" class="agenda-suggestions hidden"></div>
+                    </div>
+                    <select id="agenda-cliente-select" onchange="sincronizarBusquedaClienteAgenda(); autocompletarDireccionAgenda()" class="hidden"></select>
+                    <p id="agenda-cliente-status" class="text-[10px] text-slate-400 mt-1">Elige un propietario o mascota. Si no existe, se pedirá confirmación al guardar.</p>
+                </div>
+                <div id="agenda-clinica-detalle" class="hidden bg-blue-50 border border-blue-100 rounded-xl p-3 space-y-2">
+                    <div class="flex items-start gap-2">
+                        <i data-lucide="building-2" class="w-4 h-4 text-blue-700 mt-0.5"></i>
+                        <div>
+                            <p class="text-[11px] font-black text-blue-900 uppercase">Servicio externo vinculado</p>
+                            <p class="text-[11px] text-blue-700">Se guardará en agenda y en servicios externos para finanzas.</p>
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                        <div>
+                            <label class="block text-[10px] font-bold text-blue-700 uppercase mb-1">Servicio</label>
+                            <input type="text" id="agenda-clinica-servicio" class="w-full px-3 py-2 border border-blue-100 rounded-xl text-sm bg-white outline-none" placeholder="Servicio a realizar">
+                        </div>
+                        <div>
+                            <label class="block text-[10px] font-bold text-blue-700 uppercase mb-1">Costo sugerido</label>
+                            <input type="number" id="agenda-clinica-costo" min="0" step="0.01" class="w-full px-3 py-2 border border-blue-100 rounded-xl text-sm bg-white outline-none" placeholder="0.00">
+                        </div>
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Dirección del Destino</label>
+                    <textarea id="agenda-direccion" required rows="2" class="w-full px-3 py-2 border rounded-xl text-sm" placeholder="Dirección exacta para mapeo..."></textarea>
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Notas / Motivo de Visita</label>
+                    <input type="text" id="agenda-notes" placeholder="ej. Vacunación Anual o Revisión" class="w-full px-3 py-2 border rounded-xl text-sm">
+                </div>
+                <div class="flex gap-2 pt-2 sticky bottom-0 bg-white">
+                    <button type="submit" id="btn-guardar-agenda" class="flex-1 bg-blue-600 text-white font-bold py-2.5 rounded-xl text-sm hover:bg-blue-700 shadow-xs">
+                        Agregar a la Agenda
+                    </button>
+                    <button type="button" id="btn-cancelar-agenda" onclick="cancelarEdicionAgenda()" class="hidden px-3 py-2.5 bg-gray-100 text-gray-600 font-medium rounded-xl text-sm hover:bg-gray-200">
+                        Cancelar
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
 
     <div id="modal-responsiva" class="fixed inset-0 bg-slate-950/70 z-50 flex items-center justify-center p-4 hidden backdrop-blur-xs">
         <div class="modal-mobile-sheet bg-white rounded-2xl max-w-3xl w-full h-[90vh] flex flex-col shadow-2xl overflow-hidden border border-slate-200">
@@ -1565,6 +1659,7 @@
         <button onclick="switchTab('finanzas')" id="nav-mobile-finanzas" class="flex flex-col items-center text-blue-200"><i data-lucide="dollar-sign" class="w-5 h-5"></i><span class="text-[10px] mt-1">Finanzas</span></button>
     </nav>
 
+    <!-- Orden importante: configuracion, datos, core, features y arranque. -->
     <script src="js/00-supabase.js"></script>
     <script src="js/01-database.js"></script>
     <script src="js/01-core.js"></script>
