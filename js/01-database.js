@@ -280,6 +280,14 @@ async function cargarEstadoBaseNormalizada() {
         const error = consultas.find(resultado => resultado.error)?.error;
         if (error) return { ok: false, error };
         const rows = Object.fromEntries(TABLAS_NORMALIZADAS.map((tabla, index) => [tabla, consultas[index].data || []]));
+        let estadoExtra = {};
+        try {
+            const extraQuery = supabaseClient.from('app_state').select('data');
+            const extra = await aplicarFiltroScope(extraQuery).maybeSingle();
+            estadoExtra = extra.data?.data || {};
+        } catch (extraError) {
+            console.warn('No se pudo cargar estado extra de app_state.', extraError);
+        }
         try {
             const vacunas = await aplicarFiltroScope(supabaseClient.from('vacunas_paciente').select('*'));
             tablaVacunasPacienteDisponible = !vacunas.error;
@@ -303,7 +311,7 @@ async function cargarEstadoBaseNormalizada() {
             tablaAuditLogsDisponible = false;
             rows.audit_logs = null;
         }
-        return { ok: true, estado: mapearEstadoNormalizado(rows) };
+        return { ok: true, estado: { ...mapearEstadoNormalizado(rows), eutanasias: estadoExtra.eutanasias || [] } };
     } catch (error) {
         return { ok: false, error };
     }
@@ -565,6 +573,20 @@ async function guardarEstadoBaseNormalizada() {
     await borrarFaltantes('clientes', idsLegacy(clientes));
     await borrarFaltantes('inventario', idsLegacy(inventario));
     await borrarFaltantes('servicios', idsLegacy(finanzas));
+
+    try {
+        const extraQuery = supabaseClient.from('app_state').select('data');
+        const extraActual = await aplicarFiltroScope(extraQuery).maybeSingle();
+        const dataActual = extraActual.data?.data || {};
+        await supabaseClient.from('app_state').upsert({
+            ...scopeRemoto(),
+            data: { ...dataActual, eutanasias },
+            updated_at: new Date().toISOString()
+        }, { onConflict: workspaceSoportado && workspaceActivoId ? 'workspace_id' : 'user_id' });
+    } catch (error) {
+        console.warn('No se pudo sincronizar estado extra de eutanasia.', error);
+        sincronizacionParcialPendiente = true;
+    }
 }
 
 async function recargarEstadoNormalizadoPorRealtime(detalle = 'Se recibieron cambios de otro dispositivo.') {
