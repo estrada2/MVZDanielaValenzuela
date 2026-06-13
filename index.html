@@ -149,6 +149,9 @@
                 <button type="button" onclick="abrirBusquedaGlobalMovil()" class="md:hidden h-9 w-9 bg-white border border-slate-200 rounded-xl text-slate-600 hover:text-blue-700 hover:bg-blue-50 flex items-center justify-center shrink-0" title="Buscar">
                     <i data-lucide="search" class="w-4 h-4"></i>
                 </button>
+                <button type="button" onclick="abrirPanelCuentaMovil()" class="md:hidden h-9 w-9 bg-white border border-slate-200 rounded-xl text-slate-600 hover:text-blue-700 hover:bg-blue-50 flex items-center justify-center shrink-0" title="Cuenta">
+                    <i data-lucide="user-circle-2" class="w-4 h-4"></i>
+                </button>
                 <div class="hidden md:block relative w-72">
                     <i data-lucide="search" class="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2"></i>
                     <input type="search" id="buscador-global" oninput="renderBusquedaGlobal()" onfocus="renderBusquedaGlobal()" placeholder="Buscar en toda la app..." class="w-full pl-9 pr-3 py-2 border border-slate-200 rounded-xl text-xs bg-white outline-none focus:border-blue-400">
@@ -849,7 +852,7 @@
                         <div class="bg-slate-50 border border-slate-200 rounded-xl p-3">
                             <div class="flex items-center justify-between gap-2 mb-2">
                                 <label class="text-[10px] font-bold text-slate-500 uppercase">Horarios recomendados</label>
-                                <span class="text-[10px] font-semibold text-slate-400">45 min libres</span>
+                                <span class="text-[10px] font-semibold text-slate-400">30 min libres</span>
                             </div>
                             <div id="externo-horarios-recomendados" class="flex flex-wrap gap-1.5"></div>
                         </div>
@@ -1012,6 +1015,34 @@
                             <input type="text" id="eutanasia-destino-otro" placeholder="Especificar otro destino" class="w-full px-3 py-2 border rounded-xl text-sm outline-none">
                         </div>
                         <div class="border-t border-slate-100 pt-4 space-y-3">
+                            <div class="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
+                                <div>
+                                    <p class="section-kicker">Lectura para propietario</p>
+                                    <h4 class="text-sm font-black text-slate-900">Consentimiento informado y autorización</h4>
+                                </div>
+                                <button type="button" onclick="abrirLecturaEutanasia()" class="btn-soft text-xs">
+                                    <i data-lucide="maximize-2" class="w-4 h-4"></i> Ver grande
+                                </button>
+                            </div>
+                            <div class="bg-white border border-slate-200 rounded-2xl p-4 max-h-[360px] overflow-y-auto text-sm leading-relaxed text-slate-700 space-y-3 shadow-inner">
+                                <p class="font-black text-slate-900 text-base">CONSENTIMIENTO INFORMADO Y AUTORIZACIÓN PARA EUTANASIA HUMANITARIA</p>
+                                <p>El propietario o responsable declara que ha sido informado sobre la condición médica y el pronóstico de su mascota.</p>
+                                <p>Comprende que la eutanasia es un procedimiento humanitario e irreversible que ocasionará el fallecimiento del paciente.</p>
+                                <p>Ha tenido la oportunidad de realizar preguntas y aclarar sus dudas antes de autorizar el procedimiento.</p>
+                                <p>Entiende que la recomendación de eutanasia se basa en criterios médicos y de bienestar animal, con el objetivo de evitar sufrimiento significativo o irreversible.</p>
+                                <p>El procedimiento se llevará a cabo conforme a la legislación vigente en materia de bienestar animal y a la NOM-033-SAG/ZOO-2014, Métodos para dar muerte a los animales domésticos y silvestres, así como demás disposiciones federales, estatales y municipales aplicables.</p>
+                                <p>El propietario libera al Médico Veterinario y al establecimiento de cualquier responsabilidad derivada de información falsa, incompleta u ocultada respecto al paciente.</p>
+                                <p>Autoriza voluntariamente la realización del procedimiento y confirma el destino de los restos seleccionado en este formato.</p>
+                            </div>
+                            <label class="flex items-start gap-3 bg-blue-50 border border-blue-100 rounded-2xl p-3 cursor-pointer">
+                                <input type="checkbox" id="eutanasia-consentimiento-leido" class="mt-1 w-4 h-4 text-blue-600 rounded" required>
+                                <span class="text-sm text-blue-950 leading-snug">
+                                    <b>El propietario leyó y comprendió el consentimiento.</b><br>
+                                    Confirmo que se resolvieron sus dudas antes de firmar.
+                                </span>
+                            </label>
+                        </div>
+                        <div class="border-t border-slate-100 pt-4 space-y-3">
                             <h4 class="text-xs font-black text-slate-900 uppercase">Firmas</h4>
                             <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
                                 <div class="border border-slate-200 rounded-2xl bg-slate-50 p-3">
@@ -1126,17 +1157,18 @@
                                 </div>
                             </div>
                             <div>
-                                <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Categoría</label>
+                                <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Descripción del gasto</label>
+                                <input type="text" id="gasto-descripcion" required placeholder="Ej. Gasolina visita Bahía de Kino, estacionamiento, compra específica..." class="w-full px-3 py-2 border rounded-xl text-sm outline-none">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Categoría / clasificación</label>
                                 <select id="gasto-categoria" class="w-full px-3 py-2 border rounded-xl text-sm bg-white outline-none">
+                                    <option>Gasto operativo</option>
                                     <option>Gasolina</option>
                                     <option>Casetas</option>
                                     <option>Estacionamiento</option>
                                     <option>Otro</option>
                                 </select>
-                            </div>
-                            <div>
-                                <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Descripción</label>
-                                <input type="text" id="gasto-descripcion" placeholder="Ej. Gasolina ruta del día" class="w-full px-3 py-2 border rounded-xl text-sm outline-none">
                             </div>
                             <div class="flex gap-2">
                                 <button type="submit" id="btn-gasto-financiero" class="flex-1 bg-amber-600 text-white font-bold py-2.5 rounded-xl text-sm hover:bg-amber-700">Guardar gasto</button>
@@ -1206,7 +1238,7 @@
                 <div class="bg-slate-50 border border-slate-200 rounded-xl p-3">
                     <div class="flex items-center justify-between gap-2 mb-2">
                         <label class="text-[10px] font-bold text-slate-500 uppercase">Horarios recomendados</label>
-                        <span class="text-[10px] font-semibold text-slate-400">45 min libres</span>
+                        <span class="text-[10px] font-semibold text-slate-400">30 min libres</span>
                     </div>
                     <div id="agenda-horarios-recomendados" class="flex flex-wrap gap-1.5"></div>
                 </div>
@@ -1688,6 +1720,38 @@
         </div>
     </div>
 
+    <div id="modal-cuenta-movil" class="fixed inset-0 bg-slate-950/70 z-[70] flex items-end justify-center p-3 hidden backdrop-blur-xs md:hidden">
+        <div class="modal-mobile-sheet mobile-account-sheet bg-white rounded-2xl w-full p-5 shadow-2xl overflow-y-auto border border-slate-200 space-y-4">
+            <div class="flex items-start justify-between gap-3">
+                <div>
+                    <p class="section-kicker">Cuenta y nube</p>
+                    <h3 class="text-lg font-black text-slate-900">Usuario activo</h3>
+                </div>
+                <button type="button" onclick="cerrarPanelCuentaMovil()" class="h-9 w-9 rounded-xl border border-slate-200 flex items-center justify-center text-slate-500">
+                    <i data-lucide="x" class="w-4 h-4"></i>
+                </button>
+            </div>
+            <div class="bg-slate-50 border border-slate-200 rounded-2xl p-4 space-y-3">
+                <div class="flex items-center gap-2">
+                    <i data-lucide="cloud" class="w-4 h-4 text-blue-700"></i>
+                    <span id="sync-status-mobile" class="text-sm font-black text-slate-900">Conectando...</span>
+                </div>
+                <div class="space-y-1">
+                    <p class="text-[10px] uppercase font-black text-slate-400">Correo</p>
+                    <p id="sync-user-mobile" class="text-sm font-bold text-slate-700 break-all">--</p>
+                </div>
+                <div class="space-y-1">
+                    <p class="text-[10px] uppercase font-black text-slate-400">Workspace</p>
+                    <p id="sync-workspace-mobile" class="text-sm font-bold text-slate-700">Workspace personal</p>
+                </div>
+            </div>
+            <button type="button" onclick="cerrarSesion()" class="w-full bg-slate-900 hover:bg-slate-800 text-white font-black py-3 rounded-xl text-sm flex items-center justify-center gap-2">
+                <i data-lucide="log-out" class="w-4 h-4"></i> Cambiar usuario / cerrar sesión
+            </button>
+            <button type="button" onclick="cerrarPanelCuentaMovil()" class="w-full bg-slate-100 text-slate-700 font-black py-3 rounded-xl text-sm">Volver</button>
+        </div>
+    </div>
+
     <div id="modal-captura-id" class="fixed inset-0 bg-slate-950/90 z-[70] flex items-center justify-center p-4 hidden backdrop-blur-sm">
         <div class="modal-mobile-sheet bg-slate-950 rounded-2xl max-w-2xl w-full h-[86vh] flex flex-col shadow-2xl overflow-hidden border border-slate-800">
             <div class="p-4 text-white flex items-center justify-between border-b border-white/10">
@@ -1784,6 +1848,35 @@
         </div>
     </div>
 
+    <div id="modal-lectura-eutanasia" class="fixed inset-0 bg-slate-950/75 z-[75] flex items-center justify-center p-3 sm:p-4 hidden backdrop-blur-xs">
+        <div class="modal-mobile-sheet bg-white rounded-2xl max-w-3xl w-full h-[88vh] flex flex-col shadow-2xl overflow-hidden border border-slate-200">
+            <div class="p-4 sm:p-5 border-b border-slate-100 flex items-start justify-between gap-3">
+                <div>
+                    <p class="section-kicker">Lectura para propietario</p>
+                    <h3 class="text-lg font-black text-slate-900">Consentimiento para eutanasia humanitaria</h3>
+                </div>
+                <button type="button" onclick="cerrarLecturaEutanasia()" class="h-9 w-9 rounded-xl border border-slate-200 flex items-center justify-center text-slate-500">
+                    <i data-lucide="x" class="w-4 h-4"></i>
+                </button>
+            </div>
+            <div class="flex-1 overflow-y-auto p-5 sm:p-8 text-slate-800 leading-relaxed space-y-5 text-base sm:text-lg">
+                <p>El propietario o responsable declara que ha sido informado sobre la condición médica y el pronóstico del paciente.</p>
+                <p>Comprende que la eutanasia es un procedimiento humanitario e irreversible que ocasionará el fallecimiento de la mascota.</p>
+                <p>Confirma que tuvo oportunidad de realizar preguntas, aclarar dudas y decidir voluntariamente autorizar el procedimiento.</p>
+                <p>Entiende que la recomendación se basa en criterios médicos y de bienestar animal, con el objetivo de evitar sufrimiento significativo o irreversible.</p>
+                <p>El procedimiento se realizará conforme a la legislación vigente en materia de bienestar animal, incluyendo la NOM-033-SAG/ZOO-2014 y disposiciones aplicables.</p>
+                <p>El propietario libera al médico veterinario de responsabilidad derivada de información falsa, incompleta u ocultada respecto al paciente.</p>
+                <div class="bg-blue-50 border border-blue-100 rounded-2xl p-4 text-blue-950">
+                    <p class="font-black text-base sm:text-lg">Antes de firmar</p>
+                    <p class="text-sm sm:text-base mt-1">Verifica nombre del propietario, datos del paciente, motivo médico, destino de los restos y que todas las dudas hayan sido resueltas.</p>
+                </div>
+            </div>
+            <div class="p-4 border-t border-slate-100 bg-slate-50 flex justify-end">
+                <button type="button" onclick="cerrarLecturaEutanasia()" class="btn-primary">Continuar a firmas</button>
+            </div>
+        </div>
+    </div>
+
     <div id="update-banner" class="hidden fixed left-4 right-4 bottom-[calc(5rem+env(safe-area-inset-bottom))] md:left-auto md:right-6 md:bottom-6 md:w-80 z-[80] bg-slate-950 text-white rounded-2xl shadow-2xl border border-white/10 p-4">
         <div class="flex items-start gap-3">
             <div class="w-9 h-9 rounded-xl bg-blue-500 flex items-center justify-center shrink-0">
@@ -1798,6 +1891,7 @@
     </div>
 
     <nav class="mobile-bottom-nav md:hidden fixed bottom-0 left-0 right-0 bg-slate-900 border-t border-blue-900 text-white min-h-16 flex items-center justify-around px-2 z-20 shadow-lg">
+        <button onclick="abrirPanelCuentaMovil()" id="nav-mobile-cuenta" class="flex flex-col items-center text-blue-200"><i data-lucide="user-circle-2" class="w-5 h-5"></i><span class="text-[10px] mt-1">Cuenta</span></button>
         <button onclick="switchTab('dashboard')" id="nav-mobile-dashboard" class="flex flex-col items-center text-amber-300"><i data-lucide="layout-dashboard" class="w-5 h-5"></i><span class="text-[10px] mt-1">Inicio</span></button>
         <button onclick="switchTab('clientes')" id="nav-mobile-clientes" class="flex flex-col items-center text-blue-200"><i data-lucide="users" class="w-5 h-5"></i><span class="text-[10px] mt-1">Clientes</span></button>
         <button onclick="switchTab('agenda')" id="nav-mobile-agenda" class="flex flex-col items-center text-blue-200"><i data-lucide="calendar" class="w-5 h-5"></i><span class="text-[10px] mt-1">Agenda</span></button>

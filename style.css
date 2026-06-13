@@ -50,11 +50,19 @@
         .mobile-bottom-nav {
             padding-bottom: env(safe-area-inset-bottom);
             height: calc(4rem + env(safe-area-inset-bottom));
+            overflow-x: auto;
+            overflow-y: hidden;
+            scrollbar-width: none;
+            -webkit-overflow-scrolling: touch;
+        }
+
+        .mobile-bottom-nav::-webkit-scrollbar {
+            display: none;
         }
 
         .mobile-bottom-nav button {
-            min-width: 0;
-            flex: 1 1 0;
+            min-width: 4.25rem;
+            flex: 0 0 4.25rem;
             min-height: 3.1rem;
             justify-content: center;
         }
@@ -213,6 +221,51 @@
             font-weight: 900;
             flex-shrink: 0;
             white-space: nowrap;
+        }
+
+        .eutanasia-record-card {
+            border: 1px solid #e2e8f0;
+            background: #ffffff;
+            border-radius: 0.9rem;
+            padding: 0.8rem;
+            display: grid;
+            gap: 0.75rem;
+            box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+        }
+
+        .eutanasia-record-main {
+            display: flex;
+            align-items: flex-start;
+            gap: 0.75rem;
+            min-width: 0;
+        }
+
+        .eutanasia-record-icon {
+            width: 2.2rem;
+            height: 2.2rem;
+            border-radius: 0.75rem;
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+            color: #1d4ed8;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex: 0 0 auto;
+        }
+
+        .eutanasia-record-actions {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.45rem;
+            justify-content: flex-end;
+        }
+
+        .eutanasia-record-actions .btn-primary,
+        .eutanasia-record-actions .btn-soft,
+        .eutanasia-record-actions .btn-danger-soft {
+            min-height: 2rem;
+            padding: 0.4rem 0.6rem;
+            font-size: 0.68rem;
         }
 
         .action-menu {
@@ -1391,7 +1444,7 @@
 
             .app-shell-content {
                 padding: 0.85rem;
-                padding-bottom: calc(5rem + env(safe-area-inset-bottom));
+                padding-bottom: calc(5.75rem + env(safe-area-inset-bottom));
                 gap: 0;
             }
 
@@ -1577,6 +1630,22 @@
                 justify-content: flex-start;
             }
 
+            .eutanasia-record-card {
+                padding: 0.75rem;
+            }
+
+            .eutanasia-record-actions {
+                display: grid;
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+                justify-content: stretch;
+            }
+
+            .eutanasia-record-actions .btn-primary,
+            .eutanasia-record-actions .btn-soft,
+            .eutanasia-record-actions .btn-danger-soft {
+                width: 100%;
+            }
+
             .client-actions .row-action-menu > summary,
             .pet-more-menu > summary {
                 margin-left: 0;
@@ -1607,6 +1676,23 @@
             .mobile-bottom-nav {
                 padding-left: 0.25rem;
                 padding-right: 0.25rem;
+                justify-content: flex-start;
+            }
+
+            .app-header {
+                padding-top: calc(0.75rem + env(safe-area-inset-top));
+                min-height: calc(4rem + env(safe-area-inset-top));
+                align-items: flex-end;
+            }
+
+            #page-title {
+                min-width: 0;
+                max-width: 48vw;
+                overflow: hidden;
+                text-overflow: ellipsis;
+                white-space: nowrap;
+                font-size: 1rem;
+                line-height: 1.25rem;
             }
 
             .mobile-bottom-nav button span {
@@ -1631,6 +1717,12 @@
                 max-height: calc(100dvh - 1rem);
                 border-radius: 1rem 1rem 0 0;
                 align-self: flex-end;
+            }
+
+            .mobile-account-sheet {
+                height: auto;
+                max-height: min(26rem, calc(100dvh - 1rem));
+                padding-bottom: calc(1.25rem + env(safe-area-inset-bottom));
             }
 
             .edit-consulta-sheet {
