@@ -271,7 +271,9 @@ function prepararCacheParaUsuarioActivo() {
     localStorage.setItem(LOCAL_ACTIVE_USER_KEY, usuarioActivo.id);
 }
 function scopeRemoto() {
-    return { user_id: usuarioActivo?.id };
+    const scope = { user_id: usuarioActivo?.id };
+    if (workspaceActivoId) scope.workspace_id = workspaceActivoId;
+    return scope;
 }
 function aplicarFiltroScope(query) {
     return query.eq('user_id', usuarioActivo.id);
@@ -285,10 +287,9 @@ async function cargarWorkspaceActivo() {
     workspaceActivoNombre = 'Datos independientes por usuario';
     if ($('sync-workspace')) $('sync-workspace').innerText = workspaceActivoNombre;
     actualizarCuentaMovil();
-    return;
     /*
-     * El modo multiusuario por workspace queda desactivado por decisión operativa:
-     * cada usuario debe ver y guardar únicamente sus propios datos.
+     * Se carga workspace_id solo para satisfacer RLS/constraints existentes.
+     * La app sigue filtrando, escuchando y haciendo upsert por user_id.
      */
     try {
         let { data, error } = await supabaseClient
