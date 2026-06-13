@@ -27,6 +27,15 @@ function actualizarCostoEutanasia() {
     }
 }
 
+function abrirLecturaEutanasia() {
+    $('modal-lectura-eutanasia')?.classList.remove('hidden');
+    renderIcons();
+}
+
+function cerrarLecturaEutanasia() {
+    $('modal-lectura-eutanasia')?.classList.add('hidden');
+}
+
 function motivosEutanasiaSeleccionados() {
     return Array.from($$('.eutanasia-motivo:checked')).map(input => input.value);
 }
@@ -146,6 +155,7 @@ function recolectarEutanasiaFormulario() {
         observaciones: valorEutanasia('eutanasia-observaciones'),
         destino: valorEutanasia('eutanasia-destino'),
         destinoOtro: valorEutanasia('eutanasia-destino-otro'),
+        consentimientoLeido: Boolean($('eutanasia-consentimiento-leido')?.checked),
         firmaPropietario: existente?.firmaPropietario || '',
         firmaVeterinario: existente?.firmaVeterinario || ''
     };
@@ -156,6 +166,10 @@ async function guardarEutanasia(event) {
     const registro = recolectarEutanasiaFormulario();
     if (!registro.tamano || !registro.costo) {
         alert('Selecciona el tamaño para calcular el costo.');
+        return;
+    }
+    if (!registro.consentimientoLeido) {
+        alert('Confirma que el propietario leyó y comprendió el consentimiento antes de firmar.');
         return;
     }
     const firmaPropietarioCanvas = obtenerFirmaCanvas('canvas-eutanasia-propietario');
@@ -197,6 +211,7 @@ function limpiarFormularioEutanasia() {
     if ($('eutanasia-fecha')) $('eutanasia-fecha').value = fechaLocalISO();
     if ($('eutanasia-hora')) $('eutanasia-hora').value = new Date().toTimeString().slice(0, 5);
     if ($('eutanasia-veterinario')) $('eutanasia-veterinario').value = 'Daniela Valenzuela';
+    if ($('eutanasia-consentimiento-leido')) $('eutanasia-consentimiento-leido').checked = false;
     if ($('btn-eutanasia-guardar')) $('btn-eutanasia-guardar').innerText = 'Guardar formatos e ingreso';
     limpiarLienzoFirma('canvas-eutanasia-propietario');
     limpiarLienzoFirma('canvas-eutanasia-vet');
@@ -238,6 +253,7 @@ function editarEutanasia(id) {
     $$('.eutanasia-motivo').forEach(input => {
         input.checked = (registro.motivos || []).includes(input.value);
     });
+    if ($('eutanasia-consentimiento-leido')) $('eutanasia-consentimiento-leido').checked = registro.consentimientoLeido !== false;
     dibujarFirmaCanvas('canvas-eutanasia-propietario', registro.firmaPropietario);
     dibujarFirmaCanvas('canvas-eutanasia-vet', registro.firmaVeterinario);
     if ($('btn-eutanasia-guardar')) $('btn-eutanasia-guardar').innerText = 'Actualizar formatos e ingreso';
@@ -274,26 +290,32 @@ function renderEutanasia() {
         const opcionesFecha = registro.hora ? { dateStyle: 'medium', timeStyle: 'short' } : { dateStyle: 'medium' };
         const fechaTexto = Number.isNaN(fecha.getTime()) ? registro.fecha : fecha.toLocaleString('es-MX', opcionesFecha);
         const costoTexto = typeof formatoMoneda === 'function' ? formatoMoneda(registro.costo || 0) : Number(registro.costo || 0).toFixed(2);
+        const pagoClase = registro.estadoPago === 'Pagado' ? 'green' : 'rose';
         return `
-            <article class="app-list-card">
-                <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
-                    <div class="min-w-0">
-                        <div class="flex flex-wrap items-center gap-2">
+            <article class="eutanasia-record-card">
+                <div class="eutanasia-record-main">
+                    <div class="eutanasia-record-icon">
+                        <i data-lucide="heart-handshake" class="w-4 h-4"></i>
+                    </div>
+                    <div class="min-w-0 flex-1">
+                        <div class="flex items-center justify-between gap-2">
                             <h4 class="text-sm font-black text-slate-900 truncate">${escapeEutanasia(registro.paciente || 'Paciente sin nombre')}</h4>
-                            <span class="app-chip blue">${escapeEutanasia(registro.tamano || 'Sin tamaño')}</span>
-                            <span class="app-chip green">$${costoTexto}</span>
-                            <span class="app-chip ${registro.estadoPago === 'Pagado' ? 'green' : 'rose'}">${escapeEutanasia(registro.estadoPago || 'Pagado')}</span>
+                            <span class="app-chip ${pagoClase}">$${costoTexto}</span>
                         </div>
-                        <p class="text-xs text-slate-500 mt-1 truncate">${escapeEutanasia(registro.propietario || 'Sin propietario')} · ${escapeEutanasia(fechaTexto)}</p>
-                        <p class="text-[11px] text-slate-400 truncate">${escapeEutanasia(registro.diagnostico || 'Sin diagnóstico capturado')}</p>
+                        <p class="text-xs text-slate-500 truncate">${escapeEutanasia(registro.propietario || 'Sin propietario')} · ${escapeEutanasia(fechaTexto)}</p>
+                        <div class="flex flex-wrap items-center gap-1.5 mt-1.5">
+                            <span class="app-chip blue">${escapeEutanasia(registro.tamano || 'Sin tamaño')}</span>
+                            <span class="app-chip ${pagoClase}">${escapeEutanasia(registro.estadoPago || 'Pagado')}</span>
+                        </div>
+                        <p class="text-[11px] text-slate-400 truncate mt-1.5">${escapeEutanasia(registro.diagnostico || 'Sin diagnóstico capturado')}</p>
                     </div>
-                    <div class="flex flex-wrap gap-2">
-                        <button type="button" onclick="descargarPDFEutanasia(${registro.id}, 'consentimiento')" class="btn-soft">Consentimiento</button>
-                        <button type="button" onclick="descargarPDFEutanasia(${registro.id}, 'medica')" class="btn-soft">Info médica</button>
-                        <button type="button" onclick="descargarPDFEutanasia(${registro.id}, 'completo')" class="btn-primary">PDF completo</button>
-                        <button type="button" onclick="editarEutanasia(${registro.id})" class="btn-soft text-amber-700">Editar</button>
-                        <button type="button" onclick="eliminarEutanasia(${registro.id})" class="btn-danger-soft">Eliminar</button>
-                    </div>
+                </div>
+                <div class="eutanasia-record-actions">
+                    <button type="button" onclick="descargarPDFEutanasia(${registro.id}, 'completo')" class="btn-primary">PDF completo</button>
+                    <button type="button" onclick="descargarPDFEutanasia(${registro.id}, 'consentimiento')" class="btn-soft">Consentimiento</button>
+                    <button type="button" onclick="descargarPDFEutanasia(${registro.id}, 'medica')" class="btn-soft">Médica</button>
+                    <button type="button" onclick="editarEutanasia(${registro.id})" class="btn-soft text-amber-700">Editar</button>
+                    <button type="button" onclick="eliminarEutanasia(${registro.id})" class="btn-danger-soft">Eliminar</button>
                 </div>
             </article>
         `;
@@ -459,5 +481,3 @@ function descargarPDFEutanasia(id, tipo = 'completo') {
         jsPDF: { unit: 'pt', format: 'letter', orientation: 'portrait' }
     }).from(contenedor.firstElementChild).save().then(() => contenedor.remove());
 }
-
-

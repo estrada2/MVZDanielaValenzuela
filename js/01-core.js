@@ -84,6 +84,40 @@ function combinarPorId(remoto = [], local = []) {
     });
     return Array.from(mapa.values());
 }
+function combinarClientesPorId(remoto = [], local = []) {
+    const clientesRemotos = new Map((remoto || []).map(cliente => [cliente.id, {
+        ...cliente,
+        mascotas: cliente.mascotas || []
+    }]));
+    (local || []).forEach(clienteLocal => {
+        if (!clientesRemotos.has(clienteLocal.id)) {
+            clientesRemotos.set(clienteLocal.id, clienteLocal);
+            return;
+        }
+        const clienteRemoto = clientesRemotos.get(clienteLocal.id);
+        const mascotas = new Map((clienteRemoto.mascotas || []).map(mascota => [mascota.id, {
+            ...mascota,
+            historial: mascota.historial || [],
+            estudios: mascota.estudios || [],
+            vacunasManuales: mascota.vacunasManuales || []
+        }]));
+        (clienteLocal.mascotas || []).forEach(mascotaLocal => {
+            if (!mascotas.has(mascotaLocal.id)) {
+                mascotas.set(mascotaLocal.id, mascotaLocal);
+                return;
+            }
+            const mascotaRemota = mascotas.get(mascotaLocal.id);
+            mascotas.set(mascotaLocal.id, {
+                ...mascotaRemota,
+                historial: combinarPorId(mascotaRemota.historial || [], mascotaLocal.historial || []),
+                estudios: combinarPorId(mascotaRemota.estudios || [], mascotaLocal.estudios || []),
+                vacunasManuales: combinarPorId(mascotaRemota.vacunasManuales || [], mascotaLocal.vacunasManuales || [])
+            });
+        });
+        clientesRemotos.set(clienteLocal.id, { ...clienteRemoto, mascotas: Array.from(mascotas.values()) });
+    });
+    return Array.from(clientesRemotos.values());
+}
 // Mantiene registros creados offline cuando Supabase todavía no los devuelve.
 function combinarAgendaExternaLocal(remoto = [], local = []) {
     const mapa = new Map();
@@ -99,7 +133,8 @@ function estadoCompleto() {
 }
 function aplicarEstado(data = {}) {
     const locales = datosLocalesAnteriores();
-    clientes = data.clientes || [];
+    const protegerLocalesPendientes = hayCambiosPendientesOffline();
+    clientes = protegerLocalesPendientes ? combinarClientesPorId(data.clientes || [], locales.clientes || []) : (data.clientes || []);
     inventario = data.inventario || [];
     agenda = combinarAgendaExternaLocal(data.agenda || [], locales.agenda || []);
     finanzas = data.finanzas || [];
@@ -111,9 +146,26 @@ function aplicarEstado(data = {}) {
     auditLogs = data.auditLogs || [];
 }
 function actualizarEstadoSync(texto, error = false) {
-    if (!$('sync-status')) return;
-    $('sync-status').innerText = texto;
-    $('sync-status').className = error ? 'text-red-300' : '';
+    if ($('sync-status')) {
+        $('sync-status').innerText = texto;
+        $('sync-status').className = error ? 'text-red-300' : '';
+    }
+    if ($('sync-status-mobile')) {
+        $('sync-status-mobile').innerText = texto;
+        $('sync-status-mobile').className = `text-sm font-black ${error ? 'text-rose-700' : 'text-slate-900'}`;
+    }
+}
+function actualizarCuentaMovil() {
+    if ($('sync-user-mobile')) $('sync-user-mobile').innerText = usuarioActivo?.email || 'Sin sesión activa';
+    if ($('sync-workspace-mobile')) $('sync-workspace-mobile').innerText = workspaceActivoNombre || 'Workspace personal';
+}
+function abrirPanelCuentaMovil() {
+    actualizarCuentaMovil();
+    $('modal-cuenta-movil')?.classList.remove('hidden');
+    renderIcons();
+}
+function cerrarPanelCuentaMovil() {
+    $('modal-cuenta-movil')?.classList.add('hidden');
 }
 function cargarModoOffline(mensaje = 'Sin conexión. Usando copia local.') {
     const locales = datosLocalesAnteriores();
@@ -122,6 +174,7 @@ function cargarModoOffline(mensaje = 'Sin conexión. Usando copia local.') {
     ocultarLogin();
     usuarioActivo = usuarioActivo || { id: 'offline', email: 'Modo offline' };
     if ($('sync-user')) $('sync-user').innerText = 'Modo offline';
+    actualizarCuentaMovil();
     actualizarEstadoSync(mensaje, true);
     return true;
 }
@@ -220,9 +273,12 @@ async function cargarWorkspaceActivo() {
             .maybeSingle();
         workspaceActivoNombre = workspace.data?.nombre || 'VetHome';
         if ($('sync-workspace')) $('sync-workspace').innerText = workspaceActivoNombre;
+        actualizarCuentaMovil();
     } catch (error) {
         console.warn('Workspace multiusuario no disponible. Se usará el modo por usuario.', error);
         if ($('sync-workspace')) $('sync-workspace').innerText = 'Datos por usuario';
+        workspaceActivoNombre = 'Datos por usuario';
+        actualizarCuentaMovil();
     }
 }
 function dataUrlToBlob(dataUrl) {
@@ -333,7 +389,7 @@ async function guardarEstadoRemoto() {
         marcarCambiosPendientesOffline(true);
         actualizarEstadoSync('Sincronizado parcial');
     } else {
-        limpiarDatosLocalesAnteriores();
+        guardarStoresLocales();
         marcarCambiosPendientesOffline(false);
         actualizarEstadoSync('Sincronizado');
     }
@@ -438,6 +494,7 @@ async function sincronizarCambiosPendientesOnline() {
                 return;
             }
             if ($('sync-user')) $('sync-user').innerText = usuarioActivo.email || '';
+            actualizarCuentaMovil();
             await cargarWorkspaceActivo();
         }
         if (hayCambiosPendientesOffline()) {
@@ -500,6 +557,7 @@ async function initRemoteStorage() {
     }
     ocultarLogin();
     if ($('sync-user')) $('sync-user').innerText = usuarioActivo.email || '';
+    actualizarCuentaMovil();
     try {
         await cargarWorkspaceActivo();
     } catch (error) {

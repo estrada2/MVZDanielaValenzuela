@@ -528,10 +528,14 @@ function guardarGastoFinanciero(e) {
         id: editId ? parseInt(editId) : uid(),
         fecha,
         fechaISO: editId ? (gastosFinancieros.find(g => g.id === parseInt(editId))?.fechaISO || new Date(`${fecha}T12:00:00`).toISOString()) : new Date(`${fecha}T12:00:00`).toISOString(),
-        categoria: $('gasto-categoria')?.value || 'Gasolina',
+        categoria: $('gasto-categoria')?.value || 'Gasto operativo',
         descripcion: $('gasto-descripcion')?.value.trim() || '',
         monto: parseFloat($('gasto-monto')?.value || 0)
     };
+    if (!item.descripcion) {
+        alert('Agrega una descripción del gasto.');
+        return;
+    }
     gastosFinancieros = editId ? gastosFinancieros.map(g => g.id === item.id ? item : g) : [item, ...gastosFinancieros];
     registrarAuditoria('gastos', editId ? 'Editar' : 'Crear', `${item.categoria}: $${formatoMoneda(item.monto)}`, item.id);
     saveStore('gastosFinancieros');
@@ -604,6 +608,7 @@ function renderHorariosExternosRecomendados() {
     if (!contenedor) return;
     const fecha = $('externo-fecha')?.value || '';
     const horaActual = $('externo-hora')?.value || '';
+    const separacionMinutos = typeof AGENDA_SEPARACION_MINUTOS !== 'undefined' ? AGENDA_SEPARACION_MINUTOS : 30;
     if (!fecha) {
         contenedor.innerHTML = `<span class="text-[11px] text-slate-400">Selecciona una fecha para ver horas libres.</span>`;
         return;
@@ -620,7 +625,7 @@ function renderHorariosExternosRecomendados() {
             .sort()
         : disponibles.slice(0, 12);
     if (!recomendados.length) {
-        contenedor.innerHTML = `<span class="text-[11px] text-rose-500 font-semibold">No hay horarios libres ese día con separación de 45 min.</span>`;
+        contenedor.innerHTML = `<span class="text-[11px] text-rose-500 font-semibold">No hay horarios libres ese día con separación de ${separacionMinutos} min.</span>`;
         return;
     }
     contenedor.innerHTML = recomendados.map(hora => `
@@ -785,7 +790,8 @@ function sincronizarAgendaServicioExterno(item, agendar) {
         ? conflictoHorarioAgenda(item.fecha, item.hora, item.agendaId || '')
         : null;
     if (conflicto) {
-        alert(`Ese horario interfiere con una cita activa.\n\nCita existente: ${horaCita(conflicto)} hrs · ${conflicto.clienteNombre || 'Cliente'} ${conflicto.petName ? `(${conflicto.petName})` : ''}\n\nUsa un horario con al menos 45 minutos de separación.`);
+        const separacionMinutos = typeof AGENDA_SEPARACION_MINUTOS !== 'undefined' ? AGENDA_SEPARACION_MINUTOS : 30;
+        alert(`Ese horario interfiere con una cita activa.\n\nCita existente: ${horaCita(conflicto)} hrs · ${conflicto.clienteNombre || 'Cliente'} ${conflicto.petName ? `(${conflicto.petName})` : ''}\n\nUsa un horario con al menos ${separacionMinutos} minutos de separación.`);
         return false;
     }
     const agendaItem = {

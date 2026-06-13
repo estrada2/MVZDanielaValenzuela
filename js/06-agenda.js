@@ -164,6 +164,7 @@ let modoAgendaActivo = 'calendario';
 let fechaAgendaSeleccionada = fechaLocalISO();
 let detalleAgendaVisible = false;
 let citaActivaId = null;
+const AGENDA_SEPARACION_MINUTOS = 30;
 function capturarFormularioAgendaActivo() {
     const form = $('form-agenda');
     if (!form) return null;
@@ -240,7 +241,7 @@ function conflictoHorarioAgenda(fecha, hora, editId = '') {
         const fechaExistente = fechaHoraCita(cita);
         if (Number.isNaN(fechaExistente.getTime())) return false;
         const diferenciaMinutos = Math.abs(nuevaFecha.getTime() - fechaExistente.getTime()) / (1000 * 60);
-        return diferenciaMinutos < 45;
+        return diferenciaMinutos < AGENDA_SEPARACION_MINUTOS;
     }) || null;
 }
 function seleccionarHoraRecomendada(hora) {
@@ -282,7 +283,7 @@ function renderHorariosRecomendados() {
             .sort()
         : disponibles.slice(0, 12);
     if (!recomendados.length) {
-        contenedor.innerHTML = `<span class="text-[11px] text-rose-500 font-semibold">No hay horarios libres ese día con separación de 45 min.</span>`;
+        contenedor.innerHTML = `<span class="text-[11px] text-rose-500 font-semibold">No hay horarios libres ese día con separación de ${AGENDA_SEPARACION_MINUTOS} min.</span>`;
         return;
     }
     contenedor.innerHTML = recomendados.map(hora => `
@@ -563,7 +564,7 @@ function guardarCita(e) {
     const hora = $('agenda-hora').value;
     const conflicto = conflictoHorarioAgenda(fecha, hora, editId);
     if (conflicto) {
-        alert(`Ya hay una visita activa muy cerca de ese horario.\n\nCita existente: ${horaCita(conflicto)} hrs · ${conflicto.clienteNombre || 'Cliente'} ${conflicto.petName ? `(${conflicto.petName})` : ''}\n\nAgenda la siguiente visita al menos 45 minutos después.`);
+        alert(`Ya hay una visita activa muy cerca de ese horario.\n\nCita existente: ${horaCita(conflicto)} hrs · ${conflicto.clienteNombre || 'Cliente'} ${conflicto.petName ? `(${conflicto.petName})` : ''}\n\nAgenda la siguiente visita al menos ${AGENDA_SEPARACION_MINUTOS} minutos después.`);
         return;
     }
     if (editId) {

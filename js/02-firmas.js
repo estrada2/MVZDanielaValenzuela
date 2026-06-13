@@ -13,7 +13,10 @@ function setupSignatureCanvas(canvasId) {
         const rect = canvas.getBoundingClientRect();
         const clienteX = e.touches ? e.touches[0].clientX : e.clientX;
         const clienteY = e.touches ? e.touches[0].clientY : e.clientY;
-        return { x: clienteX - rect.left, y: clienteY - rect.top };
+        return {
+            x: (clienteX - rect.left) * (canvas.width / rect.width),
+            y: (clienteY - rect.top) * (canvas.height / rect.height)
+        };
     }
     function iniciarDibujo(e) {
         dibujando = true;

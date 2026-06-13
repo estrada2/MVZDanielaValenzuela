@@ -199,7 +199,7 @@ function notificacionesOperativas() {
             icono: 'badge-dollar-sign',
             titulo: `Pago pendiente: $${dashboardFormatoMoneda(typeof saldoPendiente === 'function' ? saldoPendiente(item) : item.total)}`,
             detalle: `${item.clienteNombre} · ${item.servicioCobrado || item.servicio || 'Servicio'}`,
-            accion: item.origenFinanciero === 'Externo' ? `switchTab('servicios-externos')` : `abrirModalHistorial(${item.ownerId}, ${item.petId})`
+            accion: item.origenFinanciero === 'Externo' ? `switchTab('finanzas')` : `abrirModalHistorial(${item.ownerId}, ${item.petId})`
         }));
     return [...citas, ...notificacionesVacunas(), ...notificacionesSeguimientos(), ...stock, ...pagos]
         .sort((a, b) => (a.prioridad === 'alta' ? -1 : 0) - (b.prioridad === 'alta' ? -1 : 0));
