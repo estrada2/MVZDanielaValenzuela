@@ -50,7 +50,7 @@ async function upsertTabla(nombre, registros, columnas = '*') {
     if (!registros.length) return [];
     const { data, error } = await supabaseClient
         .from(nombre)
-        .upsert(registros, { onConflict: workspaceSoportado && workspaceActivoId ? 'workspace_id,legacy_id' : 'user_id,legacy_id' })
+        .upsert(registros, { onConflict: 'user_id,legacy_id' })
         .select(columnas);
     if (error) throw error;
     return data || [];
@@ -582,7 +582,7 @@ async function guardarEstadoBaseNormalizada() {
             ...scopeRemoto(),
             data: { ...dataActual, eutanasias },
             updated_at: new Date().toISOString()
-        }, { onConflict: workspaceSoportado && workspaceActivoId ? 'workspace_id' : 'user_id' });
+        }, { onConflict: 'user_id' });
     } catch (error) {
         console.warn('No se pudo sincronizar estado extra de eutanasia.', error);
         sincronizacionParcialPendiente = true;

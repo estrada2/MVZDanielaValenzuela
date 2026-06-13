@@ -29,6 +29,7 @@ let sincronizacionParcialPendiente = false;
 let edicionLocalActivaHasta = 0;
 const STORAGE_BUCKET = 'vet-files';
 const OFFLINE_PENDING_KEY = 'vet_pro_sync_pendiente';
+const LOCAL_ACTIVE_USER_KEY = 'vet_pro_usuario_activo';
 const estaOffline = () => typeof navigator !== 'undefined' && navigator.onLine === false;
 function loadStore(key, fallback) {
     try {
@@ -226,23 +227,35 @@ window.addEventListener('online', () => {
 function limpiarDatosLocalesAnteriores() {
     Object.values(STORE_KEYS).forEach(key => localStorage.removeItem(key));
 }
+function prepararCacheParaUsuarioActivo() {
+    if (!usuarioActivo?.id || usuarioActivo.id === 'offline') return;
+    const usuarioLocal = localStorage.getItem(LOCAL_ACTIVE_USER_KEY);
+    if (usuarioLocal && usuarioLocal !== usuarioActivo.id) {
+        limpiarDatosLocalesAnteriores();
+        marcarCambiosPendientesOffline(false);
+    }
+    localStorage.setItem(LOCAL_ACTIVE_USER_KEY, usuarioActivo.id);
+}
 function scopeRemoto() {
-    const scope = { user_id: usuarioActivo?.id };
-    if (workspaceSoportado && workspaceActivoId) scope.workspace_id = workspaceActivoId;
-    return scope;
+    return { user_id: usuarioActivo?.id };
 }
 function aplicarFiltroScope(query) {
-    if (workspaceSoportado && workspaceActivoId) return query.eq('workspace_id', workspaceActivoId);
     return query.eq('user_id', usuarioActivo.id);
 }
 function filtroRealtimeScope() {
-    if (workspaceSoportado && workspaceActivoId) return `workspace_id=eq.${workspaceActivoId}`;
     return `user_id=eq.${usuarioActivo.id}`;
 }
 async function cargarWorkspaceActivo() {
     workspaceSoportado = false;
     workspaceActivoId = null;
-    workspaceActivoNombre = 'Workspace personal';
+    workspaceActivoNombre = 'Datos independientes por usuario';
+    if ($('sync-workspace')) $('sync-workspace').innerText = workspaceActivoNombre;
+    actualizarCuentaMovil();
+    return;
+    /*
+     * El modo multiusuario por workspace queda desactivado por decisión operativa:
+     * cada usuario debe ver y guardar únicamente sus propios datos.
+     */
     try {
         let { data, error } = await supabaseClient
             .from('app_workspace_members')
@@ -371,7 +384,7 @@ async function guardarEstadoRemoto() {
                 ...scopeRemoto(),
                 data: estadoCompleto(),
                 updated_at: new Date().toISOString()
-            }, { onConflict: workspaceSoportado && workspaceActivoId ? 'workspace_id' : 'user_id' });
+            }, { onConflict: 'user_id' });
             error = resultado.error;
         }
     } catch (err) {
@@ -555,6 +568,7 @@ async function initRemoteStorage() {
         mostrarLogin();
         return false;
     }
+    prepararCacheParaUsuarioActivo();
     ocultarLogin();
     if ($('sync-user')) $('sync-user').innerText = usuarioActivo.email || '';
     actualizarCuentaMovil();
@@ -663,6 +677,9 @@ async function iniciarSesion(event) {
 }
 async function cerrarSesion() {
     await supabaseClient.auth.signOut();
+    limpiarDatosLocalesAnteriores();
+    localStorage.removeItem(LOCAL_ACTIVE_USER_KEY);
+    marcarCambiosPendientesOffline(false);
     location.reload();
 }
 function resetFormState(config) {

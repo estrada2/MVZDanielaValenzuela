@@ -340,6 +340,10 @@ function seleccionarDiaCalendarioAgenda(fecha) {
     modoAgendaActivo = 'calendario';
     renderAgenda();
 }
+function cerrarDetalleCalendarioAgenda() {
+    detalleAgendaVisible = false;
+    renderAgenda();
+}
 function cambiarMesCalendarioAgenda(delta) {
     const base = new Date(`${fechaAgendaSeleccionada || fechaLocalISO()}T12:00:00`);
     base.setMonth(base.getMonth() + delta);
@@ -519,7 +523,10 @@ function renderAgendaCalendarioMes(citas) {
                 ${detalleAgendaVisible ? `<div class="calendar-detail">
                     <div class="calendar-detail-header">
                         <h5>${new Date(`${fechaAgendaSeleccionada}T12:00:00`).toLocaleDateString('es-MX', { weekday: 'long', day: '2-digit', month: 'short' })}</h5>
-                        <button type="button" onclick="abrirModalAgenda('${fechaAgendaSeleccionada}')" class="calendar-add-button"><i data-lucide="plus" class="w-4 h-4"></i> Agendar</button>
+                        <div class="calendar-detail-tools">
+                            <button type="button" onclick="abrirModalAgenda('${fechaAgendaSeleccionada}')" class="calendar-add-button"><i data-lucide="plus" class="w-4 h-4"></i> Agendar</button>
+                            <button type="button" onclick="cerrarDetalleCalendarioAgenda()" class="calendar-close-button" title="Cerrar"><i data-lucide="x" class="w-4 h-4"></i></button>
+                        </div>
                     </div>
                     <div class="calendar-day-list">
                         ${citasDia.length ? citasDia.map(cita => renderAgendaRow(cita, hoy, true)).join('') : `<p class="text-xs text-slate-400 py-3">No hay citas para este día.</p>`}

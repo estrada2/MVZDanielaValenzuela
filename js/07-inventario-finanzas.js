@@ -343,12 +343,9 @@ function estaEnFiltro(fechaConsulta, ahora = new Date()) {
         return true;
     }
     if (filtroGananciasActivo === 'dia') return fechaConsulta.toDateString() === ahora.toDateString();
-    if (filtroGananciasActivo === 'semana') {
-        const difDias = (ahora.getTime() - fechaConsulta.getTime()) / (1000 * 3600 * 24);
-        return difDias >= 0 && difDias <= 7;
-    }
     if (filtroGananciasActivo === 'mes') {
-        return fechaConsulta.getMonth() === ahora.getMonth() && fechaConsulta.getFullYear() === ahora.getFullYear();
+        const mesSeleccionado = Number($('finanzas-mes')?.value ?? ahora.getMonth());
+        return fechaConsulta.getMonth() === mesSeleccionado && fechaConsulta.getFullYear() === ahora.getFullYear();
     }
     return true;
 }
@@ -429,6 +426,10 @@ function obtenerConsultasFinanzas() {
 function renderGananciasConsultas() {
     const txtMonto = $('monto-ganancias-filtrado');
     if (!txtMonto) return;
+    if ($('finanzas-mes') && !$('finanzas-mes').dataset.inicializado) {
+        $('finanzas-mes').value = String(new Date().getMonth());
+        $('finanzas-mes').dataset.inicializado = 'true';
+    }
     const consultasFiltradas = obtenerConsultasFinanzas().filter(con => estaEnFiltro(con.fechaObj));
     const cobradas = consultasFiltradas.filter(con => con.estadoPago === 'Pagado');
     const pendientes = consultasFiltradas.filter(con => con.estadoPago === 'Pendiente');
@@ -1023,7 +1024,10 @@ function renderResumenMetodosPago(consultas) {
 }
 function filtrarGanancias(tipoFiltro) {
     filtroGananciasActivo = tipoFiltro;
-    const filtros = ['dia', 'semana', 'mes', 'todo', 'personalizado'];
+    if (tipoFiltro === 'mes' && $('finanzas-mes') && $('finanzas-mes').value === '') {
+        $('finanzas-mes').value = String(new Date().getMonth());
+    }
+    const filtros = ['dia', 'mes', 'todo', 'personalizado'];
     filtros.forEach(f => {
         const btn = $(`btn-filtro-${f}`);
         if (btn) {
