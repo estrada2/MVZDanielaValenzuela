@@ -26,6 +26,7 @@ let remotePollingTimer = null;
 let guardandoRemoto = false;
 let guardadoPendiente = false;
 let sincronizacionParcialPendiente = false;
+let ultimoCodigoSyncParcial = '';
 let edicionLocalActivaHasta = 0;
 const STORAGE_BUCKET = 'vet-files';
 const OFFLINE_PENDING_KEY = 'vet_pro_sync_pendiente';
@@ -137,14 +138,34 @@ function aplicarEstado(data = {}) {
     const protegerLocalesPendientes = hayCambiosPendientesOffline();
     clientes = protegerLocalesPendientes ? combinarClientesPorId(data.clientes || [], locales.clientes || []) : (data.clientes || []);
     inventario = data.inventario || [];
-    agenda = combinarAgendaExternaLocal(data.agenda || [], locales.agenda || []);
+    agenda = protegerLocalesPendientes ? combinarAgendaExternaLocal(data.agenda || [], locales.agenda || []) : (data.agenda || []);
     finanzas = data.finanzas || [];
     movimientosInventario = data.movimientosInventario || [];
-    serviciosExternos = combinarPorId(data.serviciosExternos || [], locales.serviciosExternos || []);
-    eutanasias = combinarPorId(data.eutanasias || [], locales.eutanasias || []);
-    clinicasExternas = combinarPorId(data.clinicasExternas || [], locales.clinicasExternas || []);
+    serviciosExternos = protegerLocalesPendientes ? combinarPorId(data.serviciosExternos || [], locales.serviciosExternos || []) : (data.serviciosExternos || []);
+    eutanasias = protegerLocalesPendientes ? combinarPorId(data.eutanasias || [], locales.eutanasias || []) : (data.eutanasias || []);
+    clinicasExternas = protegerLocalesPendientes ? combinarPorId(data.clinicasExternas || [], locales.clinicasExternas || []) : (data.clinicasExternas || []);
     gastosFinancieros = data.gastosFinancieros || [];
     auditLogs = data.auditLogs || [];
+}
+function codigoErrorSync(error, prefijo = 'SYNC') {
+    const base = error?.code || error?.status || error?.name || 'UNKNOWN';
+    return `${prefijo}-${String(base).toUpperCase().replace(/[^A-Z0-9_-]/g, '').slice(0, 18) || 'UNKNOWN'}`;
+}
+function registrarErrorSync(codigo, error, contexto = '') {
+    const detalle = {
+        codigo,
+        contexto,
+        mensaje: error?.message || String(error || 'Error desconocido'),
+        supabaseCode: error?.code || '',
+        details: error?.details || '',
+        hint: error?.hint || '',
+        fechaISO: new Date().toISOString()
+    };
+    try {
+        localStorage.setItem('vet_pro_ultimo_error_sync', JSON.stringify(detalle));
+    } catch (_) {}
+    console.error(`[${codigo}] ${contexto || 'Error de sincronización'}`, error);
+    return detalle;
 }
 function actualizarEstadoSync(texto, error = false) {
     if ($('sync-status')) {
@@ -387,6 +408,7 @@ async function guardarEstadoRemoto() {
     }
     guardandoRemoto = true;
     sincronizacionParcialPendiente = false;
+    ultimoCodigoSyncParcial = '';
     actualizarEstadoSync('Guardando...');
     let error = null;
     try {
@@ -405,15 +427,16 @@ async function guardarEstadoRemoto() {
     }
     guardandoRemoto = false;
     if (error) {
-        console.error('No se pudo sincronizar con Supabase.', error);
+        const codigo = error.__syncCode || codigoErrorSync(error, 'SYNC-SAVE');
+        registrarErrorSync(codigo, error, 'guardarEstadoRemoto');
         marcarCambiosPendientesOffline(true);
-        actualizarEstadoSync('Error de sincronización', true);
+        actualizarEstadoSync(`Error ${codigo}`, true);
         return;
     }
     if (sincronizacionParcialPendiente) {
         guardarStoresLocales();
         marcarCambiosPendientesOffline(true);
-        actualizarEstadoSync('Sincronizado parcial');
+        actualizarEstadoSync(ultimoCodigoSyncParcial ? `Parcial ${ultimoCodigoSyncParcial}` : 'Sincronizado parcial', true);
     } else {
         guardarStoresLocales();
         marcarCambiosPendientesOffline(false);
@@ -532,8 +555,9 @@ async function sincronizarCambiosPendientesOnline() {
         escucharCambiosRemotos();
         iniciarRefrescoRemotoAutomatico();
     } catch (error) {
-        console.warn('No se pudo sincronizar al volver online.', error);
-        actualizarEstadoSync('Pendiente de sincronizar', true);
+        const codigo = codigoErrorSync(error, 'SYNC-ONLINE');
+        registrarErrorSync(codigo, error, 'sincronizarCambiosPendientesOnline');
+        actualizarEstadoSync(`Pendiente ${codigo}`, true);
     }
 }
 function iniciarRefrescoRemotoAutomatico() {

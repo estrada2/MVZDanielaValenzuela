@@ -52,7 +52,10 @@ async function upsertTabla(nombre, registros, columnas = '*') {
         .from(nombre)
         .upsert(registros, { onConflict: 'user_id,legacy_id' })
         .select(columnas);
-    if (error) throw error;
+    if (error) {
+        error.__syncCode = `DB-UP-${nombre}`.toUpperCase().replace(/[^A-Z0-9_-]/g, '-');
+        throw error;
+    }
     return data || [];
 }
 
@@ -62,7 +65,10 @@ async function borrarFaltantes(nombre, legacyIds) {
     query = aplicarFiltroScope(query);
     if (legacyIds.length) query = query.not('legacy_id', 'in', `(${legacyIds.join(',')})`);
     const { error } = await query;
-    if (error) throw error;
+    if (error) {
+        error.__syncCode = `DB-DEL-${nombre}`.toUpperCase().replace(/[^A-Z0-9_-]/g, '-');
+        throw error;
+    }
 }
 
 function mapearEstadoNormalizado(rows) {
@@ -399,6 +405,8 @@ async function guardarEstadoBaseNormalizada() {
     } catch (error) {
         console.warn('No se pudo sincronizar agenda completa; se reintentara sin citas externas sin paciente.', error);
         sincronizacionParcialPendiente = true;
+        ultimoCodigoSyncParcial = error.__syncCode || codigoErrorSync(error, 'DB-UP-AGENDA');
+        registrarErrorSync(ultimoCodigoSyncParcial, error, 'guardarEstadoBaseNormalizada:agenda');
         await upsertTabla('agenda', agendaRows.filter(row => row.cliente_id || row.mascota_id), 'id, legacy_id');
     }
 
@@ -513,6 +521,8 @@ async function guardarEstadoBaseNormalizada() {
     } catch (error) {
         console.warn('No se pudo sincronizar servicios externos; se conserva en local.', error);
         sincronizacionParcialPendiente = true;
+        ultimoCodigoSyncParcial = error.__syncCode || codigoErrorSync(error, 'DB-UP-SERVICIOS_EXTERNOS');
+        registrarErrorSync(ultimoCodigoSyncParcial, error, 'guardarEstadoBaseNormalizada:servicios_externos');
     }
 
     if (tablaClinicasExternasDisponible) {
@@ -531,6 +541,8 @@ async function guardarEstadoBaseNormalizada() {
         } catch (errorClinicas) {
             tablaClinicasExternasDisponible = false;
             console.warn('No se pudo sincronizar clinicas_externas. Se conservaran en copia local.', errorClinicas);
+            ultimoCodigoSyncParcial = errorClinicas.__syncCode || codigoErrorSync(errorClinicas, 'DB-UP-CLINICAS_EXTERNAS');
+            registrarErrorSync(ultimoCodigoSyncParcial, errorClinicas, 'guardarEstadoBaseNormalizada:clinicas_externas');
         }
     }
 
@@ -566,6 +578,8 @@ async function guardarEstadoBaseNormalizada() {
     } catch (error) {
         console.warn('No se pudieron limpiar servicios externos remotos.', error);
         sincronizacionParcialPendiente = true;
+        ultimoCodigoSyncParcial = error.__syncCode || codigoErrorSync(error, 'DB-DEL-SERVICIOS_EXTERNOS');
+        registrarErrorSync(ultimoCodigoSyncParcial, error, 'guardarEstadoBaseNormalizada:limpiar_servicios_externos');
     }
     await borrarFaltantes('gastos', idsLegacy(gastosRows));
     await borrarFaltantes('movimientos_inventario', idsLegacy(movimientosInventario));
@@ -587,6 +601,8 @@ async function guardarEstadoBaseNormalizada() {
     } catch (error) {
         console.warn('No se pudo sincronizar estado extra de eutanasia.', error);
         sincronizacionParcialPendiente = true;
+        ultimoCodigoSyncParcial = error.__syncCode || codigoErrorSync(error, 'DB-UP-APP_STATE_EXTRA');
+        registrarErrorSync(ultimoCodigoSyncParcial, error, 'guardarEstadoBaseNormalizada:app_state_extra');
     }
 }
 
@@ -599,8 +615,9 @@ async function recargarEstadoNormalizadoPorRealtime(detalle = 'Se recibieron cam
     actualizarEstadoSync('Actualizando...');
     const remoto = await cargarEstadoBaseNormalizada();
     if (!remoto.ok) {
-        actualizarEstadoSync('Error de sincronización', true);
-        console.warn('No se pudo aplicar cambio remoto normalizado.', remoto.error);
+        const codigo = remoto.error?.__syncCode || codigoErrorSync(remoto.error, 'SYNC-LOAD');
+        registrarErrorSync(codigo, remoto.error, 'recargarEstadoNormalizadoPorRealtime');
+        actualizarEstadoSync(`Error ${codigo}`, true);
         return;
     }
     if (typeof aplicarEstadoRemoto === 'function') {

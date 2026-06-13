@@ -264,7 +264,7 @@ function eliminarEutanasia(id) {
     const registro = (eutanasias || []).find(item => item.id === id);
     if (!registro || !confirm(`¿Eliminar los formatos de ${registro.paciente || 'este paciente'}?`)) return;
     eutanasias = (eutanasias || []).filter(item => item.id !== id);
-    serviciosExternos = (serviciosExternos || []).filter(item => item.eutanasiaId !== id);
+    serviciosExternos = (serviciosExternos || []).filter(item => item.eutanasiaId !== id && item.id !== registro.financieroId);
     registrarAuditoria('eutanasias', 'Borrar', `Eutanasia eliminada: ${registro.paciente || id}`, id);
     saveStore('eutanasias');
     saveStore('serviciosExternos');
