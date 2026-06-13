@@ -1030,7 +1030,7 @@ async function finalizarGuardadoCliente(ow, ph, ad, em, b64, notes, id) {
         clientes = clientes.map(c => c.id===parseInt(id) ? {...c, owner:ow, phone:ph, address:ad, email:em, ownerNotes: notes, ownerIdFile:b64||c.ownerIdFile} : c);
         registrarAuditoria('clientes', 'Editar', `Propietario actualizado: ${ow}`, id);
     } else {
-        const nuevoId = Date.now();
+        const nuevoId = uid();
         clientes.push({ id: nuevoId, owner:ow, phone:ph, address:ad, email:em, ownerNotes: notes, ownerIdFile:b64, mascotas: [] });
         registrarAuditoria('clientes', 'Crear', `Propietario registrado: ${ow}`, nuevoId);
     }
@@ -1087,7 +1087,7 @@ function salvarMascotaData(oId, pId, nm, sp, ag, spy, b64) {
                 c.mascotas = c.mascotas.map(m => m.id===parseInt(pId) ? {...m, name:nm, species:sp, age:ag, spayed:spy, photo:b64||m.photo, estudios: estudiosPaciente(m), vacunasManuales: vacunasManualesPaciente(m)} : m);
                 registrarAuditoria('mascotas', 'Editar', `Paciente actualizado: ${nm}`, pId);
             } else {
-                const nuevoId = Date.now();
+                const nuevoId = uid();
                 c.mascotas.push({ id: nuevoId, name:nm, species:sp, age:ag, spayed:spy, photo:b64, estudios:[], vacunasManuales:[], historial:[] });
                 registrarAuditoria('mascotas', 'Crear', `Paciente registrado: ${nm}`, nuevoId);
             }

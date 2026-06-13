@@ -617,7 +617,7 @@ function guardarCita(e) {
         const servicio = $('agenda-clinica-servicio')?.value.trim() || $('agenda-notes')?.value.trim() || 'Servicio externo';
         const total = parseFloat($('agenda-clinica-costo')?.value || 0);
         const citaBase = {
-            id: editId ? parseInt(editId) : Date.now(),
+            id: editId ? parseInt(editId) : uid(),
             clienteId: null,
             petId: null,
             clinicaId: clinica.id,
@@ -666,7 +666,7 @@ function guardarCita(e) {
         cancelarEdicionAgenda();
     } else {
         const nuevaCita = {
-            id: Date.now(), 
+            id: uid(), 
             clienteId: ownerId, 
             petId: petId,
             fecha,
@@ -873,8 +873,18 @@ async function crearRecordatorioApple(idCita) {
 }
 function eliminarCita(id) { 
     if(confirm("¿Remover esta visita de la agenda?")) { 
+        const cita = agenda.find(a => a.id === id);
+        const servicioVinculado = (serviciosExternos || []).find(item => item.agendaId === id);
+        if (servicioVinculado) {
+            servicioVinculado.agendaId = null;
+            servicioVinculado.estadoAgenda = cita?.estado || servicioVinculado.estadoAgenda || '';
+            saveStore('serviciosExternos');
+        }
         agenda = agenda.filter(a=>a.id!==id); 
         saveStore('agenda'); 
         renderAgenda(); 
+        renderHorariosRecomendados();
+        if (typeof renderServiciosExternos === 'function') renderServiciosExternos();
+        if (typeof renderDashboard === 'function') renderDashboard();
     } 
 }

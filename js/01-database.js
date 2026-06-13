@@ -488,6 +488,7 @@ async function guardarEstadoBaseNormalizada() {
     });
     await upsertTabla('pagos', pagosRows.filter(row => row.consulta_id), 'id, legacy_id');
 
+    const agendaLegacyIds = new Set(agenda.map(cita => cita.id));
     const serviciosExternosRows = serviciosExternos.map(servicio => ({
         ...scope,
         legacy_id: servicio.id,
@@ -497,7 +498,7 @@ async function guardarEstadoBaseNormalizada() {
         servicio: servicio.servicioCobrado || '',
         hora: servicio.hora || '',
         direccion: servicio.direccion || '',
-        agenda_id: servicio.agendaId || null,
+        agenda_id: agendaLegacyIds.has(servicio.agendaId) ? servicio.agendaId : null,
         clinica_legacy_id: servicio.clinicaId || null,
         total: parseFloat(servicio.total || 0),
         metodo_pago: servicio.metodoPago || 'Efectivo',

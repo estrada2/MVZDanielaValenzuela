@@ -14,7 +14,7 @@ const STORE_KEYS = {
 const $ = id => document.getElementById(id);
 const $$ = selector => document.querySelectorAll(selector);
 const renderIcons = () => window.lucide?.createIcons();
-const uid = () => Date.now();
+const uid = () => Math.floor((Date.now() * 1000) + Math.random() * 1000);
 const setHidden = (id, hidden = true) => $(id)?.classList.toggle('hidden', hidden);
 let usuarioActivo = null;
 let workspaceActivoId = null;
@@ -227,11 +227,24 @@ window.addEventListener('online', () => {
 function limpiarDatosLocalesAnteriores() {
     Object.values(STORE_KEYS).forEach(key => localStorage.removeItem(key));
 }
+function reiniciarEstadoEnMemoria() {
+    clientes = [];
+    inventario = [];
+    agenda = [];
+    finanzas = [];
+    movimientosInventario = [];
+    serviciosExternos = [];
+    eutanasias = [];
+    clinicasExternas = [];
+    gastosFinancieros = [];
+    auditLogs = [];
+}
 function prepararCacheParaUsuarioActivo() {
     if (!usuarioActivo?.id || usuarioActivo.id === 'offline') return;
     const usuarioLocal = localStorage.getItem(LOCAL_ACTIVE_USER_KEY);
     if (usuarioLocal && usuarioLocal !== usuarioActivo.id) {
         limpiarDatosLocalesAnteriores();
+        reiniciarEstadoEnMemoria();
         marcarCambiosPendientesOffline(false);
     }
     localStorage.setItem(LOCAL_ACTIVE_USER_KEY, usuarioActivo.id);

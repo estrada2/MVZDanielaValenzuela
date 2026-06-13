@@ -198,7 +198,7 @@ function calcularTotalCobro() {
 function agregarFilaMedicamento() {
     const container = $('contenedor-filas-medicamentos');
     if(!container) return;
-    const filaId = Date.now();
+    const filaId = uid();
     let options = '<option value="">-- Elegir Insumo --</option>';
     inventario.forEach(m => options += `<option value="${m.id}">${m.name} (${m.stock} ${m.unit})</option>`);
     const div = document.createElement('div');
@@ -292,7 +292,7 @@ async function guardarConsulta(e) {
         ? serviciosCobradosArray.join(' + ') 
         : 'Solo Insumos / General';
     if (costoSrv === 0 && $('consulta-estado-pago')?.value === 'Pagado' && !confirm("No seleccionaste ningún servicio a cobrar. ¿Guardar la consulta con total $0.00?")) return;
-    const consultaId = Date.now();
+    const consultaId = uid();
     let notasRapidas = typeof obtenerWhiteboardDataUrl === 'function' ? obtenerWhiteboardDataUrl() : '';
     let firmaDueno = $('canvas-firma').toDataURL();
     let firmaVet = $('canvas-firma-vet').toDataURL();
