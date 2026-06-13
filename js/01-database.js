@@ -28,6 +28,17 @@ function numeroONulo(valor) {
     return Number.isFinite(numero) ? numero : null;
 }
 
+function textoONulo(valor) {
+    if (valor === undefined || valor === null) return '';
+    return String(valor);
+}
+
+function textoBooleano(valor) {
+    if (valor === true) return 'Sí';
+    if (valor === false) return '';
+    return textoONulo(valor);
+}
+
 function fechaAgenda(cita) {
     if (cita.fecha) return cita.fecha;
     if (cita.date) return cita.date;
@@ -53,10 +64,49 @@ async function upsertTabla(nombre, registros, columnas = '*') {
         .upsert(registros, { onConflict: 'user_id,legacy_id' })
         .select(columnas);
     if (error) {
+        const sinIndiceUnico = error.code === '42P10' || /unique|exclusion|conflict/i.test(error.message || '');
+        if (sinIndiceUnico) return upsertTablaManual(nombre, registros, columnas);
         error.__syncCode = `DB-UP-${nombre}`.toUpperCase().replace(/[^A-Z0-9_-]/g, '-');
         throw error;
     }
     return data || [];
+}
+
+async function upsertTablaManual(nombre, registros, columnas = '*') {
+    const guardados = [];
+    for (const registro of registros) {
+        let existenteQuery = supabaseClient
+            .from(nombre)
+            .select('id')
+            .eq('user_id', registro.user_id)
+            .eq('legacy_id', registro.legacy_id)
+            .maybeSingle();
+        const existente = await existenteQuery;
+        if (existente.error) {
+            existente.error.__syncCode = `DB-LOOKUP-${nombre}`.toUpperCase().replace(/[^A-Z0-9_-]/g, '-');
+            throw existente.error;
+        }
+        const payload = { ...registro };
+        let resultado;
+        if (existente.data?.id) {
+            resultado = await supabaseClient
+                .from(nombre)
+                .update(payload)
+                .eq('id', existente.data.id)
+                .select(columnas);
+        } else {
+            resultado = await supabaseClient
+                .from(nombre)
+                .insert(payload)
+                .select(columnas);
+        }
+        if (resultado.error) {
+            resultado.error.__syncCode = `DB-MANUAL-${nombre}`.toUpperCase().replace(/[^A-Z0-9_-]/g, '-');
+            throw resultado.error;
+        }
+        guardados.push(...(resultado.data || []));
+    }
+    return guardados;
 }
 
 // Borra en Supabase lo que ya no existe localmente dentro del scope activo.
@@ -344,18 +394,36 @@ async function guardarEstadoBaseNormalizada() {
         ...scope,
         legacy_id: mascota.id,
         cliente_id: clienteDbPorLegacy.get(cliente.id),
-        nombre: mascota.name || '',
-        especie: mascota.species || '',
-        raza: mascota.raza || '',
+        nombre: textoONulo(mascota.name),
+        especie: textoONulo(mascota.species),
+        raza: textoONulo(mascota.raza),
         edad: numeroONulo(mascota.age),
         peso: numeroONulo(mascota.peso),
-        esterilizado: mascota.spayed || '',
-        foto: mascota.photo || '',
+        esterilizado: textoBooleano(mascota.spayed),
+        foto: textoONulo(mascota.photo),
         estudios: mascota.estudios || [],
         vacunas_manuales: mascota.vacunasManuales || [],
         updated_at: new Date().toISOString()
     }))).filter(row => row.cliente_id);
-    const mascotasGuardadas = await upsertTabla('mascotas', mascotasRows, 'id, legacy_id');
+    let mascotasGuardadas = [];
+    try {
+        mascotasGuardadas = await upsertTabla('mascotas', mascotasRows, 'id, legacy_id');
+    } catch (errorMascotas) {
+        ultimoCodigoSyncParcial = errorMascotas.__syncCode || codigoErrorSync(errorMascotas, 'DB-UP-MASCOTAS');
+        registrarErrorSync(ultimoCodigoSyncParcial, errorMascotas, 'guardarEstadoBaseNormalizada:mascotas');
+        sincronizacionParcialPendiente = true;
+        const guardadas = [];
+        for (const row of mascotasRows) {
+            try {
+                const resultado = await upsertTabla('mascotas', [row], 'id, legacy_id');
+                guardadas.push(...resultado);
+            } catch (errorMascotaIndividual) {
+                const codigoIndividual = errorMascotaIndividual.__syncCode || codigoErrorSync(errorMascotaIndividual, 'DB-UP-MASCOTAS-ROW');
+                registrarErrorSync(codigoIndividual, errorMascotaIndividual, `mascota legacy_id=${row.legacy_id} nombre=${row.nombre}`);
+            }
+        }
+        mascotasGuardadas = guardadas;
+    }
     const mascotaDbPorLegacy = new Map(mascotasGuardadas.map(row => [row.legacy_id, row.id]));
 
     const serviciosRows = finanzas.map(servicio => ({
