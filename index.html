@@ -1091,7 +1091,7 @@
                             <button type="button" onclick="filtrarGanancias('personalizado')" id="btn-filtro-personalizado" class="px-3 py-1.5 text-xs font-bold rounded-lg transition-all text-slate-600 hover:text-slate-900">Rango</button>
                         </div>
                     </div>
-                    <div class="grid grid-cols-1 sm:grid-cols-5 gap-3">
+                    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-7 gap-3">
                         <select id="finanzas-mes" onchange="filtrarGanancias('mes')" class="px-3 py-2 border rounded-xl text-sm bg-white outline-none">
                             <option value="0">Enero</option>
                             <option value="1">Febrero</option>
@@ -1108,6 +1108,12 @@
                         </select>
                         <input type="date" id="finanzas-fecha-inicio" onchange="filtrarGanancias('personalizado')" class="px-3 py-2 border rounded-xl text-sm outline-none">
                         <input type="date" id="finanzas-fecha-fin" onchange="filtrarGanancias('personalizado')" class="px-3 py-2 border rounded-xl text-sm outline-none">
+                        <button type="button" onclick="sincronizarDispositivoActual()" class="bg-blue-600 text-white text-xs font-bold px-3 py-2 rounded-xl flex items-center justify-center gap-2">
+                            <i data-lucide="cloud-upload" class="w-4 h-4"></i> Subir cambios
+                        </button>
+                        <button type="button" onclick="recargarDesdeSupabaseForzado()" class="bg-white border border-blue-200 text-blue-700 text-xs font-bold px-3 py-2 rounded-xl flex items-center justify-center gap-2">
+                            <i data-lucide="cloud-download" class="w-4 h-4"></i> Actualizar nube
+                        </button>
                         <button type="button" onclick="exportarIngresosCSV()" class="bg-slate-900 text-white text-xs font-bold px-3 py-2 rounded-xl flex items-center justify-center gap-2">
                             <i data-lucide="download" class="w-4 h-4"></i> Exportar CSV
                         </button>
