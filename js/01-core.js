@@ -533,6 +533,61 @@ async function refrescarEstadoDesdeRemotoSilencioso() {
         console.warn('No se pudo refrescar estado remoto en segundo plano.', error);
     }
 }
+async function cargarEstadoRemotoActual() {
+    if (modoDatosRemotos === 'normalizado' && typeof cargarEstadoBaseNormalizada === 'function') {
+        const remoto = await cargarEstadoBaseNormalizada();
+        if (!remoto.ok) throw remoto.error;
+        return remoto.estado || null;
+    }
+    const query = supabaseClient.from('app_state').select('data');
+    const { data, error } = await aplicarFiltroScope(query).maybeSingle();
+    if (error) throw error;
+    return data?.data || null;
+}
+async function sincronizarDispositivoActual() {
+    if (!usuarioActivo || usuarioActivo.id === 'offline') {
+        alert('Inicia sesión para subir los cambios de este dispositivo.');
+        return;
+    }
+    await guardarEstadoRemoto();
+    if (hayCambiosPendientesOffline()) {
+        alert('No se pudieron subir todos los cambios. Revisa el código que aparece en Cuenta y Nube.');
+        return;
+    }
+    await refrescarEstadoDesdeRemotoSilencioso();
+    actualizarEstadoSync('Sincronizado');
+    alert('Cambios sincronizados con Supabase.');
+}
+async function recargarDesdeSupabaseForzado() {
+    if (!usuarioActivo || usuarioActivo.id === 'offline') {
+        alert('Inicia sesión para recargar los datos desde Supabase.');
+        return;
+    }
+    if (hayCambiosPendientesOffline()) {
+        const continuar = confirm('Este dispositivo tiene cambios pendientes. Si recargas desde Supabase se reemplazará la copia local por lo que esté guardado en la nube. ¿Quieres continuar?');
+        if (!continuar) return;
+    }
+    actualizarEstadoSync('Actualizando...');
+    try {
+        const estadoRemoto = await cargarEstadoRemotoActual();
+        if (!estadoRemoto) {
+            actualizarEstadoSync('Sin datos remotos', true);
+            alert('No encontré información guardada en Supabase para este usuario.');
+            return;
+        }
+        marcarCambiosPendientesOffline(false);
+        aplicarEstado(estadoRemoto);
+        guardarStoresLocales();
+        if (typeof refrescarInterfaz === 'function') refrescarInterfaz();
+        actualizarEstadoSync('Sincronizado');
+        alert('Datos recargados desde Supabase.');
+    } catch (error) {
+        const codigo = codigoErrorSync(error, 'SYNC-LOAD');
+        registrarErrorSync(codigo, error, 'recargarDesdeSupabaseForzado');
+        actualizarEstadoSync(`Error ${codigo}`, true);
+        alert(`No se pudo recargar desde Supabase. Código: ${codigo}`);
+    }
+}
 async function sincronizarCambiosPendientesOnline() {
     if (estaOffline()) return;
     try {
