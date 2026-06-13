@@ -1086,13 +1086,26 @@
                         </div>
                         <div class="flex bg-slate-100 p-1 rounded-xl border border-gray-200">
                             <button type="button" onclick="filtrarGanancias('dia')" id="btn-filtro-dia" class="px-3 py-1.5 text-xs font-bold rounded-lg transition-all text-slate-700 bg-white shadow-3xs">Día</button>
-                            <button type="button" onclick="filtrarGanancias('semana')" id="btn-filtro-semana" class="px-3 py-1.5 text-xs font-bold rounded-lg transition-all text-slate-600 hover:text-slate-900">Semana</button>
                             <button type="button" onclick="filtrarGanancias('mes')" id="btn-filtro-mes" class="px-3 py-1.5 text-xs font-bold rounded-lg transition-all text-slate-600 hover:text-slate-900">Mes</button>
                             <button type="button" onclick="filtrarGanancias('todo')" id="btn-filtro-todo" class="px-3 py-1.5 text-xs font-bold rounded-lg transition-all text-slate-600 hover:text-slate-900">Todo</button>
                             <button type="button" onclick="filtrarGanancias('personalizado')" id="btn-filtro-personalizado" class="px-3 py-1.5 text-xs font-bold rounded-lg transition-all text-slate-600 hover:text-slate-900">Rango</button>
                         </div>
                     </div>
-                    <div class="grid grid-cols-1 sm:grid-cols-4 gap-3">
+                    <div class="grid grid-cols-1 sm:grid-cols-5 gap-3">
+                        <select id="finanzas-mes" onchange="filtrarGanancias('mes')" class="px-3 py-2 border rounded-xl text-sm bg-white outline-none">
+                            <option value="0">Enero</option>
+                            <option value="1">Febrero</option>
+                            <option value="2">Marzo</option>
+                            <option value="3">Abril</option>
+                            <option value="4">Mayo</option>
+                            <option value="5">Junio</option>
+                            <option value="6">Julio</option>
+                            <option value="7">Agosto</option>
+                            <option value="8">Septiembre</option>
+                            <option value="9">Octubre</option>
+                            <option value="10">Noviembre</option>
+                            <option value="11">Diciembre</option>
+                        </select>
                         <input type="date" id="finanzas-fecha-inicio" onchange="filtrarGanancias('personalizado')" class="px-3 py-2 border rounded-xl text-sm outline-none">
                         <input type="date" id="finanzas-fecha-fin" onchange="filtrarGanancias('personalizado')" class="px-3 py-2 border rounded-xl text-sm outline-none">
                         <button type="button" onclick="exportarIngresosCSV()" class="bg-slate-900 text-white text-xs font-bold px-3 py-2 rounded-xl flex items-center justify-center gap-2">
