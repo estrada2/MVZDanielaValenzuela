@@ -140,7 +140,7 @@ function sincronizarServicioExternoDesdeAgenda(cita, clinica, servicio, total) {
         id: existente?.id || uid(),
         fecha: cita.fecha,
         hora: cita.hora,
-        fechaISO: existente?.fechaISO || new Date(`${cita.fecha}T${cita.hora || '12:00'}`).toISOString(),
+        fechaISO: existente?.fechaISO || (typeof fechaISOFinanzasSegura === 'function' ? fechaISOFinanzasSegura(cita.fecha, cita.hora) : new Date().toISOString()),
         clienteNombre: clinica.nombre || cita.clienteNombre || 'Servicio externo',
         servicioCobrado: servicio || cita.notas || 'Servicio externo',
         direccion: cita.direccion || clinica.direccion || '',

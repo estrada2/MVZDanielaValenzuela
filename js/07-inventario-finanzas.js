@@ -333,8 +333,18 @@ function fechaLocalInputFinanzas(fecha = new Date()) {
     const offset = fecha.getTimezoneOffset() * 60000;
     return new Date(fecha.getTime() - offset).toISOString().split('T')[0];
 }
+function fechaISOFinanzasSegura(fecha, hora = '12:00') {
+    const fechaTexto = fecha || fechaLocalInputFinanzas();
+    const horaTexto = hora || '12:00';
+    const parsed = new Date(`${fechaTexto}T${horaTexto}`);
+    if (!Number.isNaN(parsed.getTime())) return parsed.toISOString();
+    return new Date().toISOString();
+}
 function parseFechaConsulta(consulta) {
-    if (consulta.fechaISO) return new Date(consulta.fechaISO);
+    if (consulta.fechaISO) {
+        const fechaISO = new Date(consulta.fechaISO);
+        if (!Number.isNaN(fechaISO.getTime())) return fechaISO;
+    }
     const directa = new Date(consulta.fecha);
     if (!Number.isNaN(directa.getTime())) return directa;
     const partes = String(consulta.fecha || '').match(/(\d{1,2})\/(\d{1,2})\/(\d{4})(?:,?\s+(\d{1,2}):(\d{2}))?/);
@@ -417,31 +427,35 @@ function montoCobradoFinanzas(item) {
 }
 function normalizarServiciosExternosParaFinanzas() {
     let cambios = false;
-    (agenda || []).forEach(cita => {
-        const esExterno = (cita.origen || '') === 'Servicio externo' || cita.clinicaId;
-        if (!esExterno) return;
-        const existente = (serviciosExternos || []).find(servicio => Number(servicio.agendaId) === Number(cita.id));
-        if (existente) return;
-        const clinica = typeof clinicaExternaPorId === 'function' ? clinicaExternaPorId(cita.clinicaId) : null;
-        serviciosExternos = [{
-            id: uid(),
-            fecha: cita.fecha,
-            hora: cita.hora || '',
-            fechaISO: new Date(`${cita.fecha}T${cita.hora || '12:00'}`).toISOString(),
-            clienteNombre: cita.clienteNombre || clinica?.nombre || 'Servicio externo',
-            servicioCobrado: cita.notas || cita.petName || 'Servicio externo',
-            direccion: cita.direccion || clinica?.direccion || '',
-            agendaId: cita.id,
-            total: redondearCentavos(cita.totalServicioExterno || cita.costoServicioExterno || 0),
-            metodoPago: 'Efectivo',
-            estadoPago: 'Pendiente',
-            notaPago: '',
-            abonos: [],
-            clinicaId: cita.clinicaId || null,
-            tipo: 'Servicio externo'
-        }, ...(serviciosExternos || [])];
-        cambios = true;
-    });
+    try {
+        (agenda || []).forEach(cita => {
+            const esExterno = (cita.origen || '') === 'Servicio externo' || cita.clinicaId;
+            if (!esExterno || !cita.id) return;
+            const existente = (serviciosExternos || []).find(servicio => Number(servicio.agendaId) === Number(cita.id));
+            if (existente) return;
+            const clinica = typeof clinicaExternaPorId === 'function' ? clinicaExternaPorId(cita.clinicaId) : null;
+            serviciosExternos = [{
+                id: uid(),
+                fecha: cita.fecha || fechaLocalInputFinanzas(),
+                hora: cita.hora || '',
+                fechaISO: fechaISOFinanzasSegura(cita.fecha, cita.hora),
+                clienteNombre: cita.clienteNombre || clinica?.nombre || 'Servicio externo',
+                servicioCobrado: cita.notas || cita.petName || 'Servicio externo',
+                direccion: cita.direccion || clinica?.direccion || '',
+                agendaId: cita.id,
+                total: redondearCentavos(cita.totalServicioExterno || cita.costoServicioExterno || 0),
+                metodoPago: 'Efectivo',
+                estadoPago: 'Pendiente',
+                notaPago: '',
+                abonos: [],
+                clinicaId: cita.clinicaId || null,
+                tipo: 'Servicio externo'
+            }, ...(serviciosExternos || [])];
+            cambios = true;
+        });
+    } catch (error) {
+        console.warn('No se pudo reparar servicios externos desde agenda.', error);
+    }
     (serviciosExternos || []).forEach(servicio => {
         const total = redondearCentavos(servicio.total || 0);
         const abonado = totalAbonos(servicio);
@@ -463,7 +477,11 @@ function obtenerGastosFiltrados() {
         .sort((a, b) => (b.fechaObj?.getTime() || 0) - (a.fechaObj?.getTime() || 0));
 }
 function obtenerConsultasFinanzas() {
-    normalizarServiciosExternosParaFinanzas();
+    try {
+        normalizarServiciosExternosParaFinanzas();
+    } catch (error) {
+        console.warn('Normalización financiera omitida para no bloquear tracking.', error);
+    }
     const consultas = clientes.flatMap(c => (c.mascotas || []).flatMap(m => (m.historial || []).map(con => ({
         ...con,
         origenFinanciero: 'Consulta',
