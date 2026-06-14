@@ -175,6 +175,7 @@ function eliminarMedicamento(id) {
     if(confirm("¿Eliminar este insumo del inventario?")){
         const item = inventario.find(m => m.id === id);
         if (item) registrarMovimientoInventario({ item, tipo: 'Baja', cantidad: -item.stock, motivo: 'Eliminación de insumo' });
+        registrarEliminacionRemota('inventario', id);
         inventario = inventario.filter(m=>m.id!==id); 
         registrarAuditoria('inventario', 'Borrar', `Insumo eliminado: ${item?.name || id}`, id);
         saveStore('inventario'); 
@@ -250,7 +251,15 @@ const FINANZAS_FORM = {
 function renderFinanzas() {
     const lst = $('lista-finanzas'); 
     if(!lst) return;
-    lst.innerHTML = finanzas.map(f => `
+    const orden = $('orden-finanzas-servicios')?.value || 'recientes';
+    const serviciosOrdenados = [...(finanzas || [])].sort((a, b) => {
+        if (orden === 'az') return String(a.nombre || '').localeCompare(String(b.nombre || ''), 'es');
+        if (orden === 'za') return String(b.nombre || '').localeCompare(String(a.nombre || ''), 'es');
+        if (orden === 'precio-asc') return Number(a.precio || 0) - Number(b.precio || 0);
+        if (orden === 'precio-desc') return Number(b.precio || 0) - Number(a.precio || 0);
+        return Number(b.id || 0) - Number(a.id || 0);
+    });
+    lst.innerHTML = serviciosOrdenados.map(f => `
         <div class="app-list-card bg-emerald-50/50 border-emerald-100 flex justify-between items-center gap-3">
             <div class="min-w-0">
                 <b class="text-sm text-slate-900 block truncate">${f.nombre}</b>
@@ -303,6 +312,7 @@ function cancelarEdicionServicio() {
 }
 function eliminarServicio(id) { 
     if(confirm("¿Eliminar este servicio del catálogo de cobros?")){
+        registrarEliminacionRemota('servicios', id);
         finanzas = finanzas.filter(f=>f.id!==id); 
         saveStore('finanzas'); 
         renderFinanzas();
@@ -563,6 +573,7 @@ function cancelarEdicionGastoFinanciero() {
 }
 function eliminarGastoFinanciero(id) {
     if (!confirm('¿Eliminar este gasto?')) return;
+    registrarEliminacionRemota('gastos', id);
     gastosFinancieros = gastosFinancieros.filter(g => g.id !== id);
     registrarAuditoria('gastos', 'Borrar', `Gasto eliminado: ${id}`, id);
     saveStore('gastosFinancieros');
@@ -709,6 +720,7 @@ function eliminarClinicaExterna(id) {
     const item = clinicaExternaPorId(id);
     if (!item) return;
     if (!confirm(`¿Eliminar la clínica ${item.nombre}? Los servicios ya guardados conservarán el nombre.`)) return;
+    registrarEliminacionRemota('clinicas_externas', id);
     clinicasExternas = clinicasExternas.filter(clinica => clinica.id !== id);
     registrarAuditoria('clinicas_externas', 'Borrar', `Clínica externa eliminada: ${item.nombre}`, id);
     saveStore('clinicasExternas');
@@ -903,10 +915,12 @@ function eliminarServicioExterno(id) {
     if (!confirm('¿Eliminar este servicio externo?')) return;
     const item = serviciosExternos.find(s => s.id === id);
     if (item?.agendaId) {
+        registrarEliminacionRemota('agenda', item.agendaId);
         agenda = agenda.filter(cita => cita.id !== item.agendaId);
         saveStore('agenda');
         if (typeof renderAgenda === 'function') renderAgenda();
     }
+    registrarEliminacionRemota('servicios_externos', id);
     serviciosExternos = serviciosExternos.filter(s => s.id !== id);
     registrarAuditoria('servicios_externos', 'Borrar', `Servicio externo eliminado: ${item?.servicioCobrado || id}`, id);
     saveStore('serviciosExternos');

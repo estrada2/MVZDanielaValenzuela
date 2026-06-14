@@ -19,8 +19,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     refrescarInterfaz();
     setupSignatureCanvas('canvas-firma'); 
     setupSignatureCanvas('canvas-firma-vet');
-    setupSignatureCanvas('canvas-eutanasia-propietario');
-    setupSignatureCanvas('canvas-eutanasia-vet');
     setupWhiteboardCanvas();
     renderIcons();
 });
@@ -33,7 +31,6 @@ function refrescarInterfaz() {
     renderFinanzas(); 
     renderGananciasConsultas();
     if (typeof renderServiciosExternos === 'function') renderServiciosExternos();
-    if (typeof renderEutanasia === 'function') renderEutanasia();
     actualizarSelectAgenda(); 
     revisarAlertasStockGlobal(); 
     renderIcons();

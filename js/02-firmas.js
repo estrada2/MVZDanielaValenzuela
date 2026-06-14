@@ -58,6 +58,26 @@ function limpiarLienzoFirma(canvasId) {
     if (canvasId === 'canvas-firma-vet') firmaVetEstablecida = false;
     actualizarIndicadorFirmaStatus();
 }
+function dibujarImagenEnCanvasFirma(canvasId, dataUrl) {
+    const canvas = $(canvasId);
+    if (!canvas || !dataUrl) return;
+    const ctx = canvas.getContext('2d');
+    const img = new Image();
+    img.onload = () => {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+    };
+    img.src = dataUrl;
+}
+function cargarResponsivaMascotaEnCanvas() {
+    const responsiva = typeof responsivaPacienteActual === 'function' ? responsivaPacienteActual() : null;
+    if (!responsiva?.firmaDueno || !responsiva?.firmaVet) return;
+    dibujarImagenEnCanvasFirma('canvas-firma', responsiva.firmaDueno);
+    dibujarImagenEnCanvasFirma('canvas-firma-vet', responsiva.firmaVet);
+    firmaDuenoEstablecida = true;
+    firmaVetEstablecida = true;
+    actualizarIndicadorFirmaStatus();
+}
 function recolectarSintomas() {
     if($('check-asintomatico')?.checked) return "Declarado sano/asintomático";
     const checkboxes = document.querySelectorAll('.sintoma-chk:checked');

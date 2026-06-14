@@ -34,6 +34,24 @@ function toggleSintomasInputsBase() {
     }
     actualizarDisclaimerDinamico();
 }
+function abrirModalRecetaConsulta() {
+    if ($('consulta-receta-modal-texto')) $('consulta-receta-modal-texto').value = $('tratamiento')?.value || '';
+    setHidden('modal-receta-consulta', false);
+    renderIcons();
+}
+function cerrarModalRecetaConsulta(guardar = false) {
+    if (guardar && $('tratamiento') && $('consulta-receta-modal-texto')) {
+        $('tratamiento').value = $('consulta-receta-modal-texto').value;
+    }
+    setHidden('modal-receta-consulta', true);
+}
+function responsivaPacienteActual() {
+    return consultaSeleccionada.petObj?.responsiva || null;
+}
+function pacienteTieneResponsivaFirmada() {
+    const responsiva = responsivaPacienteActual();
+    return Boolean(responsiva?.firmaDueno && responsiva?.firmaVet);
+}
 function actualizarDisclaimerDinamico() {
     if (!consultaSeleccionada.ownerId) return;
     if($('resp-fecha')) $('resp-fecha').innerText = new Date().toLocaleDateString('es-MX');
@@ -222,7 +240,8 @@ function validarStockFila(selectElem) {
 async function guardarConsulta(e) {
     e.preventDefault();
     if (!consultaSeleccionada.petId) { alert("Elija un paciente activo primero."); return; }
-    if (!firmaDuenoEstablecida || !firmaVetEstablecida) {
+    const yaTieneResponsiva = pacienteTieneResponsivaFirmada();
+    if (!yaTieneResponsiva && (!firmaDuenoEstablecida || !firmaVetEstablecida)) {
         alert("⛔ ERROR: La carta responsiva no está firmada por ambas partes.");
         abrirModalResponsivaFlotante();
         return;
@@ -294,12 +313,14 @@ async function guardarConsulta(e) {
     if (costoSrv === 0 && $('consulta-estado-pago')?.value === 'Pagado' && !confirm("No seleccionaste ningún servicio a cobrar. ¿Guardar la consulta con total $0.00?")) return;
     const consultaId = uid();
     let notasRapidas = typeof obtenerWhiteboardDataUrl === 'function' ? obtenerWhiteboardDataUrl() : '';
-    let firmaDueno = $('canvas-firma').toDataURL();
-    let firmaVet = $('canvas-firma-vet').toDataURL();
-    if (typeof subirImagenDataUrl === 'function') {
+    let firmaDueno = yaTieneResponsiva ? responsivaPacienteActual().firmaDueno : $('canvas-firma').toDataURL();
+    let firmaVet = yaTieneResponsiva ? responsivaPacienteActual().firmaVet : $('canvas-firma-vet').toDataURL();
+    if (typeof subirImagenDataUrl === 'function' && !yaTieneResponsiva) {
         notasRapidas = await subirImagenDataUrl(notasRapidas, 'consultas', `notas-${consultaId}`);
         firmaDueno = await subirImagenDataUrl(firmaDueno, 'firmas', `dueno-${consultaId}`);
         firmaVet = await subirImagenDataUrl(firmaVet, 'firmas', `vet-${consultaId}`);
+    } else if (typeof subirImagenDataUrl === 'function') {
+        notasRapidas = await subirImagenDataUrl(notasRapidas, 'consultas', `notas-${consultaId}`);
     }
     const nuevaConsultaObj = {
         id: consultaId, 
@@ -310,6 +331,7 @@ async function guardarConsulta(e) {
         temp: $('temp')?.value || '--', 
         motivo: $('motivo')?.value || (tipoConsulta === 'Vacunacion' ? 'Vacunación / profilaxis' : ''), 
         tratamiento: $('tratamiento')?.value || '',
+        examenFisico: $('consulta-examen-fisico')?.value || '',
         insumos: insumosAplicados,
         sintomas: sintomasTxt,
         vacunas: tipoConsulta === 'Vacunacion' ? vacunasTxt : null,
@@ -340,6 +362,15 @@ async function guardarConsulta(e) {
         if(petIdx !== -1) {
             if(!clientes[clientIdx].mascotas[petIdx].historial) {
                 clientes[clientIdx].mascotas[petIdx].historial = [];
+            }
+            if (!clientes[clientIdx].mascotas[petIdx].responsiva) {
+                clientes[clientIdx].mascotas[petIdx].responsiva = {
+                    fechaISO: new Date().toISOString(),
+                    disclaimer: textoDisclaimerIndividual,
+                    firmaDueno,
+                    firmaVet
+                };
+                consultaSeleccionada.petObj.responsiva = clientes[clientIdx].mascotas[petIdx].responsiva;
             }
             clientes[clientIdx].mascotas[petIdx].historial.unshift(nuevaConsultaObj);
             registrarAuditoria('consultas', 'Crear', `Consulta ${tipoConsulta} guardada para ${consultaSeleccionada.petObj.name}`, nuevaConsultaObj.id);
@@ -414,8 +445,8 @@ function cargarPacienteAConsulta(ownerId, petId) {
     if(dropEspecie) {
         dropEspecie.value = petObj.species.toLowerCase().includes('gat') ? 'Gato' : (petObj.species.toLowerCase().includes('perr') || petObj.species.toLowerCase().includes('can') ? 'Perro' : 'Otro');
     }
-    firmaDuenoEstablecida = false; 
-    firmaVetEstablecida = false;
+    firmaDuenoEstablecida = pacienteTieneResponsivaFirmada(); 
+    firmaVetEstablecida = pacienteTieneResponsivaFirmada();
     actualizarVistaPorTipoConsulta();
     actualizarIndicadorFirmaStatus(); 
     actualizarDisclaimerDinamico();

@@ -56,6 +56,47 @@ function fechaISOConsulta(consulta) {
     const fecha = new Date(consulta.fecha);
     return Number.isNaN(fecha.getTime()) ? new Date().toISOString() : fecha.toISOString();
 }
+function fechaISOServicioExterno(servicio) {
+    if (servicio.fechaISO && !Number.isNaN(new Date(servicio.fechaISO).getTime())) return servicio.fechaISO;
+    if (servicio.fecha) {
+        const fecha = new Date(`${servicio.fecha}T${servicio.hora || '12:00'}:00`);
+        if (!Number.isNaN(fecha.getTime())) return fecha.toISOString();
+    }
+    return new Date().toISOString();
+}
+function extrasMascotasParaAppState() {
+    const extras = {};
+    (clientes || []).forEach(cliente => {
+        (cliente.mascotas || []).forEach(mascota => {
+            const consultaExtras = {};
+            (mascota.historial || []).forEach(consulta => {
+                if (consulta.examenFisico) consultaExtras[consulta.id] = { examenFisico: consulta.examenFisico };
+            });
+            if (mascota.responsiva || Object.keys(consultaExtras).length) {
+                extras[mascota.id] = {
+                    responsiva: mascota.responsiva || null,
+                    consultaExtras
+                };
+            }
+        });
+    });
+    return extras;
+}
+function aplicarExtrasMascotas(estado, estadoExtra = {}) {
+    const extras = estadoExtra.mascotaExtras || {};
+    (estado.clientes || []).forEach(cliente => {
+        (cliente.mascotas || []).forEach(mascota => {
+            const extra = extras[mascota.id];
+            if (!extra) return;
+            mascota.responsiva = extra.responsiva || mascota.responsiva || null;
+            (mascota.historial || []).forEach(consulta => {
+                const consultaExtra = extra.consultaExtras?.[consulta.id];
+                if (consultaExtra?.examenFisico) consulta.examenFisico = consultaExtra.examenFisico;
+            });
+        });
+    });
+    return estado;
+}
 
 async function upsertTabla(nombre, registros, columnas = '*') {
     if (!registros.length) return [];
@@ -119,6 +160,32 @@ async function borrarFaltantes(nombre, legacyIds) {
         error.__syncCode = `DB-DEL-${nombre}`.toUpperCase().replace(/[^A-Z0-9_-]/g, '-');
         throw error;
     }
+}
+async function borrarRegistroPorLegacy(nombre, legacyId) {
+    let query = supabaseClient.from(nombre).delete().eq('legacy_id', legacyId);
+    query = aplicarFiltroScope(query);
+    const { error } = await query;
+    if (error) {
+        error.__syncCode = `DB-DEL-${nombre}`.toUpperCase().replace(/[^A-Z0-9_-]/g, '-');
+        throw error;
+    }
+}
+async function procesarEliminacionesPendientes() {
+    if (typeof obtenerEliminacionesPendientes !== 'function') return;
+    const pendientes = obtenerEliminacionesPendientes();
+    if (!pendientes.length) return;
+    const restantes = [];
+    for (const item of pendientes) {
+        try {
+            await borrarRegistroPorLegacy(item.tabla, item.legacyId);
+        } catch (error) {
+            restantes.push(item);
+            sincronizacionParcialPendiente = true;
+            ultimoCodigoSyncParcial = error.__syncCode || codigoErrorSync(error, `DB-DEL-${item.tabla || 'REGISTRO'}`);
+            registrarErrorSync(ultimoCodigoSyncParcial, error, `procesarEliminacionesPendientes:${item.tabla}`);
+        }
+    }
+    if (typeof guardarEliminacionesPendientes === 'function') guardarEliminacionesPendientes(restantes);
 }
 
 function mapearEstadoNormalizado(rows) {
@@ -231,10 +298,10 @@ function mapearEstadoNormalizado(rows) {
     });
 
     const clientesPorLegacy = new Map(clientesMapeados.map(cliente => [cliente.id, cliente]));
-    const agendaMapeada = (rows.agenda || []).map(row => {
+        const agendaMapeada = (rows.agenda || []).map(row => {
         const cliente = clientesPorLegacy.get((rows.clientes || []).find(c => c.id === row.cliente_id)?.legacy_id || row.cliente_id);
         const mascota = mascotasPorLegacy.get((rows.mascotas || []).find(m => m.id === row.mascota_id)?.legacy_id || row.mascota_id);
-        const servicioExternoAgenda = (rows.servicios_externos || []).find(servicio => Number(servicio.agenda_id) === Number(row.legacy_id || row.id));
+        const servicioExternoAgenda = (rows.servicios_externos || []).find(servicio => Number(servicio.agenda_id) === Number(row.id));
         return {
             id: row.legacy_id || row.id,
             fecha: row.fecha || '',
@@ -279,7 +346,7 @@ function mapearEstadoNormalizado(rows) {
             clienteNombre: row.cliente_nombre || '',
             servicioCobrado: row.servicio || '',
             direccion: row.direccion || '',
-            agendaId: row.agenda_id || null,
+            agendaId: (rows.agenda || []).find(cita => Number(cita.id) === Number(row.agenda_id))?.legacy_id || null,
             total: parseFloat(row.total || 0),
             metodoPago: row.metodo_pago || 'Efectivo',
             estadoPago: row.estado_pago || 'Pagado',
@@ -367,7 +434,8 @@ async function cargarEstadoBaseNormalizada() {
             tablaAuditLogsDisponible = false;
             rows.audit_logs = null;
         }
-        return { ok: true, estado: { ...mapearEstadoNormalizado(rows), eutanasias: estadoExtra.eutanasias || [] } };
+        const estadoNormalizado = aplicarExtrasMascotas(mapearEstadoNormalizado(rows), estadoExtra);
+        return { ok: true, estado: estadoNormalizado };
     } catch (error) {
         return { ok: false, error };
     }
@@ -468,15 +536,17 @@ async function guardarEstadoBaseNormalizada() {
         origen: cita.origen || 'Consulta',
         updated_at: new Date().toISOString()
     }));
+    let agendaGuardada = [];
     try {
-        await upsertTabla('agenda', agendaRows, 'id, legacy_id');
+        agendaGuardada = await upsertTabla('agenda', agendaRows, 'id, legacy_id');
     } catch (error) {
         console.warn('No se pudo sincronizar agenda completa; se reintentara sin citas externas sin paciente.', error);
         sincronizacionParcialPendiente = true;
         ultimoCodigoSyncParcial = error.__syncCode || codigoErrorSync(error, 'DB-UP-AGENDA');
         registrarErrorSync(ultimoCodigoSyncParcial, error, 'guardarEstadoBaseNormalizada:agenda');
-        await upsertTabla('agenda', agendaRows.filter(row => row.cliente_id || row.mascota_id), 'id, legacy_id');
+        agendaGuardada = await upsertTabla('agenda', agendaRows.filter(row => row.cliente_id || row.mascota_id), 'id, legacy_id');
     }
+    const agendaDbPorLegacy = new Map((agendaGuardada || []).map(row => [row.legacy_id, row.id]));
 
     const consultasRows = [];
     clientes.forEach(cliente => {
@@ -537,7 +607,6 @@ async function guardarEstadoBaseNormalizada() {
             });
         });
         await upsertTabla('vacunas_paciente', vacunasRows.filter(row => row.mascota_id), 'id, legacy_id');
-        await borrarFaltantes('vacunas_paciente', idsLegacy(vacunasRows));
     }
 
     const pagosRows = [];
@@ -568,13 +637,13 @@ async function guardarEstadoBaseNormalizada() {
     const serviciosExternosRows = serviciosExternos.map(servicio => ({
         ...scope,
         legacy_id: servicio.id,
-        fecha_iso: servicio.fechaISO || new Date().toISOString(),
+        fecha_iso: fechaISOServicioExterno(servicio),
         fecha_texto: servicio.fecha || '',
         cliente_nombre: servicio.clienteNombre || '',
         servicio: servicio.servicioCobrado || '',
         hora: servicio.hora || '',
         direccion: servicio.direccion || '',
-        agenda_id: agendaLegacyIds.has(servicio.agendaId) ? servicio.agendaId : null,
+        agenda_id: agendaLegacyIds.has(servicio.agendaId) ? (agendaDbPorLegacy.get(servicio.agendaId) || null) : null,
         clinica_legacy_id: servicio.clinicaId || null,
         total: parseFloat(servicio.total || 0),
         metodo_pago: servicio.metodoPago || 'Efectivo',
@@ -605,7 +674,6 @@ async function guardarEstadoBaseNormalizada() {
         }));
         try {
             await upsertTabla('clinicas_externas', clinicasRows, 'id, legacy_id');
-            await borrarFaltantes('clinicas_externas', idsLegacy(clinicasRows));
         } catch (errorClinicas) {
             tablaClinicasExternasDisponible = false;
             console.warn('No se pudo sincronizar clinicas_externas. Se conservaran en copia local.', errorClinicas);
@@ -639,23 +707,7 @@ async function guardarEstadoBaseNormalizada() {
     }));
     await upsertTabla('movimientos_inventario', movimientosRows, 'id, legacy_id');
 
-    await borrarFaltantes('pagos', idsLegacy(pagosRows));
-    await borrarFaltantes('consultas', idsLegacy(consultasRows));
-    try {
-        await borrarFaltantes('servicios_externos', idsLegacy(serviciosExternosRows));
-    } catch (error) {
-        console.warn('No se pudieron limpiar servicios externos remotos.', error);
-        sincronizacionParcialPendiente = true;
-        ultimoCodigoSyncParcial = error.__syncCode || codigoErrorSync(error, 'DB-DEL-SERVICIOS_EXTERNOS');
-        registrarErrorSync(ultimoCodigoSyncParcial, error, 'guardarEstadoBaseNormalizada:limpiar_servicios_externos');
-    }
-    await borrarFaltantes('gastos', idsLegacy(gastosRows));
-    await borrarFaltantes('movimientos_inventario', idsLegacy(movimientosInventario));
-    await borrarFaltantes('agenda', idsLegacy(agenda));
-    await borrarFaltantes('mascotas', idsLegacy(mascotasRows));
-    await borrarFaltantes('clientes', idsLegacy(clientes));
-    await borrarFaltantes('inventario', idsLegacy(inventario));
-    await borrarFaltantes('servicios', idsLegacy(finanzas));
+    await procesarEliminacionesPendientes();
 
     try {
         const extraQuery = supabaseClient.from('app_state').select('data');
@@ -663,11 +715,11 @@ async function guardarEstadoBaseNormalizada() {
         const dataActual = extraActual.data?.data || {};
         await supabaseClient.from('app_state').upsert({
             ...scopeRemoto(),
-            data: { ...dataActual, eutanasias },
+            data: { ...dataActual, mascotaExtras: extrasMascotasParaAppState() },
             updated_at: new Date().toISOString()
         }, { onConflict: 'user_id' });
     } catch (error) {
-        console.warn('No se pudo sincronizar estado extra de eutanasia.', error);
+        console.warn('No se pudo sincronizar estado extra de app_state.', error);
         sincronizacionParcialPendiente = true;
         ultimoCodigoSyncParcial = error.__syncCode || codigoErrorSync(error, 'DB-UP-APP_STATE_EXTRA');
         registrarErrorSync(ultimoCodigoSyncParcial, error, 'guardarEstadoBaseNormalizada:app_state_extra');

@@ -6,7 +6,6 @@ const STORE_KEYS = {
     agenda: 'vet_pro_agenda',
     finanzas: 'vet_pro_finanzas',
     serviciosExternos: 'vet_pro_servicios_externos',
-    eutanasias: 'vet_pro_eutanasias',
     clinicasExternas: 'vet_pro_clinicas_externas',
     gastosFinancieros: 'vet_pro_gastos_financieros',
     auditLogs: 'vet_pro_audit_logs'
@@ -31,6 +30,7 @@ let edicionLocalActivaHasta = 0;
 const STORAGE_BUCKET = 'vet-files';
 const OFFLINE_PENDING_KEY = 'vet_pro_sync_pendiente';
 const LOCAL_ACTIVE_USER_KEY = 'vet_pro_usuario_activo';
+const DELETE_QUEUE_KEY = 'vet_pro_delete_queue';
 const estaOffline = () => typeof navigator !== 'undefined' && navigator.onLine === false;
 function loadStore(key, fallback) {
     try {
@@ -49,7 +49,6 @@ function guardarStoreLocal(nombre) {
         finanzas,
         movimientosInventario,
         serviciosExternos,
-        eutanasias,
         clinicasExternas,
         gastosFinancieros,
         auditLogs
@@ -76,6 +75,26 @@ function hayCambiosPendientesOffline() {
         return localStorage.getItem(OFFLINE_PENDING_KEY) === '1';
     } catch {
         return false;
+    }
+}
+function obtenerEliminacionesPendientes() {
+    return loadStore(DELETE_QUEUE_KEY, []);
+}
+function guardarEliminacionesPendientes(lista = []) {
+    try {
+        if (lista.length) localStorage.setItem(DELETE_QUEUE_KEY, JSON.stringify(lista));
+        else localStorage.removeItem(DELETE_QUEUE_KEY);
+    } catch (error) {
+        console.warn('No se pudo guardar cola de eliminaciones.', error);
+    }
+}
+function registrarEliminacionRemota(tabla, legacyId) {
+    if (!tabla || legacyId === undefined || legacyId === null) return;
+    const lista = obtenerEliminacionesPendientes();
+    const key = `${tabla}:${legacyId}`;
+    if (!lista.some(item => item.key === key)) {
+        lista.push({ key, tabla, legacyId, fechaISO: new Date().toISOString() });
+        guardarEliminacionesPendientes(lista);
     }
 }
 function combinarPorId(remoto = [], local = []) {
@@ -131,7 +150,7 @@ function combinarAgendaExternaLocal(remoto = [], local = []) {
     return Array.from(mapa.values());
 }
 function estadoCompleto() {
-    return { clientes, inventario, agenda, finanzas, movimientosInventario, serviciosExternos, eutanasias, clinicasExternas, gastosFinancieros, auditLogs };
+    return { clientes, inventario, agenda, finanzas, movimientosInventario, serviciosExternos, clinicasExternas, gastosFinancieros, auditLogs };
 }
 function aplicarEstado(data = {}) {
     const locales = datosLocalesAnteriores();
@@ -142,7 +161,6 @@ function aplicarEstado(data = {}) {
     finanzas = data.finanzas || [];
     movimientosInventario = data.movimientosInventario || [];
     serviciosExternos = protegerLocalesPendientes ? combinarPorId(data.serviciosExternos || [], locales.serviciosExternos || []) : (data.serviciosExternos || []);
-    eutanasias = protegerLocalesPendientes ? combinarPorId(data.eutanasias || [], locales.eutanasias || []) : (data.eutanasias || []);
     clinicasExternas = protegerLocalesPendientes ? combinarPorId(data.clinicasExternas || [], locales.clinicasExternas || []) : (data.clinicasExternas || []);
     gastosFinancieros = data.gastosFinancieros || [];
     auditLogs = data.auditLogs || [];
@@ -255,7 +273,6 @@ function reiniciarEstadoEnMemoria() {
     finanzas = [];
     movimientosInventario = [];
     serviciosExternos = [];
-    eutanasias = [];
     clinicasExternas = [];
     gastosFinancieros = [];
     auditLogs = [];
@@ -500,7 +517,6 @@ function datosLocalesAnteriores() {
         finanzas: loadStore(STORE_KEYS.finanzas, []),
         movimientosInventario: [],
         serviciosExternos: loadStore(STORE_KEYS.serviciosExternos, []),
-        eutanasias: loadStore(STORE_KEYS.eutanasias, []),
         clinicasExternas: loadStore(STORE_KEYS.clinicasExternas, []),
         gastosFinancieros: loadStore(STORE_KEYS.gastosFinancieros, []),
         auditLogs: loadStore(STORE_KEYS.auditLogs, [])
@@ -586,6 +602,35 @@ async function recargarDesdeSupabaseForzado() {
         registrarErrorSync(codigo, error, 'recargarDesdeSupabaseForzado');
         actualizarEstadoSync(`Error ${codigo}`, true);
         alert(`No se pudo recargar desde Supabase. Código: ${codigo}`);
+    }
+}
+let sincronizandoFinanzasAlAbrir = false;
+async function sincronizarFinanzasAlAbrir() {
+    if (sincronizandoFinanzasAlAbrir || estaOffline() || !usuarioActivo || usuarioActivo.id === 'offline') return;
+    if (debePausarAplicacionRemota()) return;
+    sincronizandoFinanzasAlAbrir = true;
+    try {
+        actualizarEstadoSync('Actualizando finanzas...');
+        if (hayCambiosPendientesOffline()) {
+            await guardarEstadoRemoto();
+            if (hayCambiosPendientesOffline()) {
+                actualizarEstadoSync('Finanzas con cambios pendientes', true);
+                return;
+            }
+        }
+        const estadoRemoto = await cargarEstadoRemotoActual();
+        if (!estadoRemoto) return;
+        marcarCambiosPendientesOffline(false);
+        aplicarEstado(estadoRemoto);
+        guardarStoresLocales();
+        if (typeof renderFinanzas === 'function') renderFinanzas();
+        actualizarEstadoSync('Sincronizado');
+    } catch (error) {
+        const codigo = codigoErrorSync(error, 'SYNC-FIN');
+        registrarErrorSync(codigo, error, 'sincronizarFinanzasAlAbrir');
+        actualizarEstadoSync(`Error ${codigo}`, true);
+    } finally {
+        sincronizandoFinanzasAlAbrir = false;
     }
 }
 async function sincronizarCambiosPendientesOnline() {
@@ -795,7 +840,6 @@ let finanzas = loadStore(STORE_KEYS.finanzas, [
 ]);
 let movimientosInventario = [];
 let serviciosExternos = loadStore(STORE_KEYS.serviciosExternos, []);
-let eutanasias = loadStore(STORE_KEYS.eutanasias, []);
 let clinicasExternas = loadStore(STORE_KEYS.clinicasExternas, []);
 let gastosFinancieros = loadStore(STORE_KEYS.gastosFinancieros, []);
 let auditLogs = loadStore(STORE_KEYS.auditLogs, []);
@@ -804,7 +848,7 @@ let clienteActivoSubpaginaId = null;
 let firmaDuenoEstablecida = false;
 let firmaVetEstablecida = false;
 function exportarAICloud() {
-    const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify({ clientes, inventario, agenda, finanzas, serviciosExternos, eutanasias, clinicasExternas, gastosFinancieros }));
+    const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify({ clientes, inventario, agenda, finanzas, serviciosExternos, clinicasExternas, gastosFinancieros }));
     const downloadAnchor = document.createElement('a');
     downloadAnchor.setAttribute("href", dataStr);
     downloadAnchor.setAttribute("download", `VetHomePro_iCloudBackup_${new Date().toISOString().split('T')[0]}.json`);
@@ -825,7 +869,6 @@ function importarDesdeICloud(event) {
                 agenda = importado.agenda || agenda;
                 finanzas = importado.finanzas || finanzas;
                 serviciosExternos = importado.serviciosExternos || serviciosExternos;
-                eutanasias = importado.eutanasias || eutanasias;
                 clinicasExternas = importado.clinicasExternas || clinicasExternas;
                 gastosFinancieros = importado.gastosFinancieros || gastosFinancieros;
                 saveAllStores();
@@ -837,7 +880,7 @@ function importarDesdeICloud(event) {
     lector.readAsText(file);
 }
 function switchTab(tabId) {
-    ['dashboard', 'clientes', 'agenda', 'servicios-externos', 'eutanasia', 'nueva-consulta', 'inventario', 'finanzas'].forEach(id => {
+    ['dashboard', 'clientes', 'agenda', 'servicios-externos', 'nueva-consulta', 'inventario', 'finanzas'].forEach(id => {
         $(`view-${id}`)?.classList.add('hidden');
         $(`nav-${id}`)?.classList.remove('bg-amber-500', 'text-slate-950', 'font-bold');
         $(`nav-${id}`)?.classList.add('text-blue-100', 'font-medium');
@@ -848,15 +891,17 @@ function switchTab(tabId) {
     $(`nav-${tabId}`)?.classList.add('bg-amber-500', 'text-slate-950', 'font-bold');
     $(`nav-mobile-${tabId}`)?.classList.add('text-amber-300');
     $(`nav-mobile-${tabId}`)?.classList.remove('text-blue-200');
-    const titles = { 'dashboard': 'Inicio', 'clientes': 'Clientes y Mascotas', 'agenda': 'Agenda de Visitas', 'servicios-externos': 'Servicios Externos', 'eutanasia': 'Eutanasia', 'nueva-consulta': 'Nueva Consulta y Responsiva', 'inventario': 'Control de Stock', 'finanzas': 'Finanzas y Servicios' };
+    const titles = { 'dashboard': 'Inicio', 'clientes': 'Clientes y Mascotas', 'agenda': 'Agenda de Visitas', 'servicios-externos': 'Servicios Externos', 'nueva-consulta': 'Nueva Consulta y Responsiva', 'inventario': 'Control de Stock', 'finanzas': 'Finanzas y Servicios' };
     if ($('page-title')) {
         $('page-title').innerText = titles[tabId];
     }
     if (tabId === 'dashboard' && typeof renderDashboard === 'function') renderDashboard();
     if (tabId === 'agenda' && typeof renderHorariosRecomendados === 'function') renderHorariosRecomendados();
-    if (tabId === 'finanzas') renderFinanzas();
+    if (tabId === 'finanzas') {
+        renderFinanzas();
+        if (typeof sincronizarFinanzasAlAbrir === 'function') sincronizarFinanzasAlAbrir();
+    }
     if (tabId === 'servicios-externos' && typeof renderServiciosExternos === 'function') renderServiciosExternos();
-    if (tabId === 'eutanasia' && typeof renderEutanasia === 'function') renderEutanasia();
     if (tabId === 'inventario') renderInventario();
 }
 function abrirModalResponsivaFlotante() {
@@ -865,11 +910,13 @@ function abrirModalResponsivaFlotante() {
         return;
     }
     $('modal-responsiva').classList.remove('hidden');
+    actualizarDisclaimerDinamico();
     setTimeout(() => {
         if (typeof ajustarDimensionesLienzo === "function") {
             ajustarDimensionesLienzo('canvas-firma');
             ajustarDimensionesLienzo('canvas-firma-vet');
         }
+        if (typeof cargarResponsivaMascotaEnCanvas === 'function') cargarResponsivaMascotaEnCanvas();
     }, 150);
 }
 function cerrarModalResponsivaFlotante() {
@@ -879,8 +926,9 @@ function cerrarModalResponsivaFlotante() {
 function actualizarIndicadorFirmaStatus() {
     const indicator = $('badge-firma-status');
     if (!indicator) return;
-    if (firmaDuenoEstablecida && firmaVetEstablecida) {
-        indicator.innerText = "Responsiva Firmada";
+    const responsivaGuardada = typeof pacienteTieneResponsivaFirmada === 'function' && pacienteTieneResponsivaFirmada();
+    if ((firmaDuenoEstablecida && firmaVetEstablecida) || responsivaGuardada) {
+        indicator.innerText = responsivaGuardada ? "Responsiva en Expediente" : "Responsiva Firmada";
         indicator.className = "text-xs bg-teal-100 text-teal-800 px-2.5 py-1 rounded-md font-bold uppercase tracking-wider";
     } else {
         indicator.innerText = "Falta Firma Responsiva";

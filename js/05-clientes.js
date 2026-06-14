@@ -270,6 +270,7 @@ function eliminarVacunaManual(ownerId, petId, vacunaId) {
     const owner = clientes.find(c => c.id === ownerId);
     const pet = owner?.mascotas.find(m => m.id === petId);
     if (!pet) return;
+    registrarEliminacionRemota('vacunas_paciente', vacunaId);
     pet.vacunasManuales = vacunasManualesPaciente(pet).filter(vacuna => vacuna.id !== vacunaId);
     saveStore('clientes');
     renderHistorialClinicoActivo();
@@ -451,6 +452,7 @@ function renderCardConsultaHistorial(owner, pet, consulta) {
         : `
             <p class="text-xs text-slate-800"><b>Motivo:</b> ${consulta.motivo || 'Sin motivo registrado'}</p>
             <p class="text-xs text-slate-800"><b>Signos reportados:</b> <span class="italic text-gray-600">"${consulta.sintomas || 'Asintomático'}"</span></p>
+            <p class="text-xs text-slate-800"><b>Examen físico:</b> ${consulta.examenFisico || 'Sin hallazgos registrados'}</p>
         `;
     return `
         <article class="clinical-timeline-item">
@@ -494,6 +496,7 @@ function renderCardConsultaHistorial(owner, pet, consulta) {
                         <p><b>Servicio:</b> ${consulta.servicioCobrado || 'Sin servicio'}</p>
                     </div>
                     <div class="space-y-1.5">${detalleHTML}</div>
+                    ${consulta.examenFisico ? `<p class="text-xs text-slate-900 bg-slate-50 p-2.5 rounded-lg border border-slate-200 text-justify"><b>Examen físico:</b> ${consulta.examenFisico}</p>` : ''}
                     <p class="text-xs text-slate-900 bg-amber-50 p-2.5 rounded-lg border border-amber-200 text-justify"><b>Receta/Cuidados:</b> ${consulta.tratamiento || 'Sin indicaciones registradas'}</p>
                     ${consulta.notasRapidas ? `
                         <div class="bg-indigo-50 p-3 rounded-lg border border-indigo-200 space-y-2">
@@ -555,6 +558,20 @@ function renderHistorialClinicoActivo() {
     const avatar = pet.photo
         ? `<img src="${pet.photo}" class="w-16 h-16 rounded-xl object-cover border border-slate-200">`
         : `<div class="w-16 h-16 rounded-xl bg-blue-50 text-blue-500 flex items-center justify-center border border-blue-100"><i data-lucide="paw-print" class="w-7 h-7"></i></div>`;
+    const responsivaMascota = pet.responsiva?.firmaDueno && pet.responsiva?.firmaVet
+        ? `
+            <section class="bg-teal-50 border border-teal-100 rounded-xl p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div>
+                    <p class="text-xs font-black text-teal-900 uppercase">Responsiva firmada</p>
+                    <p class="text-[11px] text-teal-700">Guardada en expediente desde ${formatoFechaCorta(new Date(pet.responsiva.fechaISO || Date.now()))}. Se reutiliza en consultas posteriores.</p>
+                </div>
+                <div class="flex gap-2">
+                    <img src="${pet.responsiva.firmaDueno}" class="h-10 max-w-28 object-contain bg-white border rounded-lg px-2">
+                    <img src="${pet.responsiva.firmaVet}" class="h-10 max-w-28 object-contain bg-white border rounded-lg px-2">
+                </div>
+            </section>
+        `
+        : `<section class="bg-amber-50 border border-amber-100 rounded-xl p-3 text-xs text-amber-800"><b>Responsiva pendiente:</b> se guardará automáticamente al firmar la primera consulta de este paciente.</section>`;
     contenedor.innerHTML = `
         <section class="clinical-profile">
             <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
@@ -606,6 +623,7 @@ function renderHistorialClinicoActivo() {
             </div>
         </section>
         ${ultimaVacuna ? `<section class="bg-blue-50 border border-blue-100 rounded-xl p-3 text-xs text-blue-900"><b>Últimas vacunas:</b> ${ultimaVacuna.vacunas} · ${formatoFechaCorta(fechaConsultaObj(ultimaVacuna))}</section>` : ''}
+        ${responsivaMascota}
         ${renderVacunasYRefuerzos(owner, pet)}
         ${renderEstudiosClinicos(owner, pet)}
         <section class="clinical-tabs">
@@ -651,6 +669,7 @@ function abrirModalEditarConsulta(ownerId, petId, consultaId) {
     $('editar-consulta-vacunas').value = consulta.vacunas || '';
     $('editar-consulta-desparasitante').value = consulta.desparasitante || '';
     $('editar-consulta-sintomas').value = consulta.sintomas || '';
+    $('editar-consulta-examen-fisico').value = consulta.examenFisico || '';
     $('editar-consulta-tratamiento').value = consulta.tratamiento || '';
     $('editar-consulta-servicio').value = consulta.servicioCobrado || '';
     $('editar-consulta-total').value = consulta.costoTotal || 0;
@@ -677,6 +696,7 @@ function guardarEdicionConsulta(event) {
     consulta.vacunas = $('editar-consulta-vacunas')?.value || null;
     consulta.desparasitante = $('editar-consulta-desparasitante')?.value || null;
     consulta.sintomas = $('editar-consulta-sintomas')?.value || '';
+    consulta.examenFisico = $('editar-consulta-examen-fisico')?.value || '';
     consulta.tratamiento = $('editar-consulta-tratamiento')?.value || '';
     consulta.servicioCobrado = $('editar-consulta-servicio')?.value || 'Sin servicio registrado';
     consulta.costoTotal = parseFloat($('editar-consulta-total')?.value || 0);
@@ -695,6 +715,8 @@ function eliminarConsultaHistorial(ownerId, petId, consultaId) {
     if (!confirm('¿Borrar esta consulta del expediente? Esta acción también la quitará de finanzas.')) return;
     const { pet } = buscarConsultaHistorial(ownerId, petId, consultaId);
     if (!pet) return;
+    registrarEliminacionRemota('pagos', consultaId);
+    registrarEliminacionRemota('consultas', consultaId);
     pet.historial = (pet.historial || []).filter(consulta => consulta.id !== consultaId);
     registrarAuditoria('consultas', 'Borrar', `Consulta borrada del expediente de ${pet.name}`, consultaId);
     saveStore('clientes');
@@ -1084,11 +1106,11 @@ function salvarMascotaData(oId, pId, nm, sp, ag, spy, b64) {
     clientes = clientes.map(c => {
         if(c.id === oId) {
             if(pId) {
-                c.mascotas = c.mascotas.map(m => m.id===parseInt(pId) ? {...m, name:nm, species:sp, age:ag, spayed:spy, photo:b64||m.photo, estudios: estudiosPaciente(m), vacunasManuales: vacunasManualesPaciente(m)} : m);
+                c.mascotas = c.mascotas.map(m => m.id===parseInt(pId) ? {...m, name:nm, species:sp, age:ag, spayed:spy, photo:b64||m.photo, estudios: estudiosPaciente(m), vacunasManuales: vacunasManualesPaciente(m), responsiva: m.responsiva || null} : m);
                 registrarAuditoria('mascotas', 'Editar', `Paciente actualizado: ${nm}`, pId);
             } else {
                 const nuevoId = uid();
-                c.mascotas.push({ id: nuevoId, name:nm, species:sp, age:ag, spayed:spy, photo:b64, estudios:[], vacunasManuales:[], historial:[] });
+                c.mascotas.push({ id: nuevoId, name:nm, species:sp, age:ag, spayed:spy, photo:b64, estudios:[], vacunasManuales:[], historial:[], responsiva: null });
                 registrarAuditoria('mascotas', 'Crear', `Paciente registrado: ${nm}`, nuevoId);
             }
         }
