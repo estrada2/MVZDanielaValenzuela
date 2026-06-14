@@ -79,9 +79,6 @@
                     <button onclick="switchTab('servicios-externos')" id="nav-servicios-externos" class="w-full flex items-center gap-3 px-4 py-3 hover:bg-white/10 text-blue-100 hover:text-white rounded-xl text-left font-medium transition-all">
                         <i data-lucide="briefcase-medical" class="w-5 h-5"></i> Servicios Externos
                     </button>
-                    <button onclick="switchTab('eutanasia')" id="nav-eutanasia" class="w-full flex items-center gap-3 px-4 py-3 hover:bg-white/10 text-blue-100 hover:text-white rounded-xl text-left font-medium transition-all">
-                        <i data-lucide="heart-handshake" class="w-5 h-5"></i> Eutanasia
-                    </button>
                     <button onclick="switchTab('inventario')" id="nav-inventario" class="w-full flex items-center gap-3 px-4 py-3 hover:bg-white/10 text-blue-100 hover:text-white rounded-xl text-left font-medium transition-all">
                         <i data-lucide="package" class="w-5 h-5"></i> Control de Stock
                     </button>
@@ -447,7 +444,7 @@
                             </div>
 
                             <div class="bg-slate-50 p-4 rounded-xl border border-gray-200 space-y-3">
-                                <label class="block text-xs font-bold text-gray-700 uppercase border-b pb-1">Reporte de Síntomas</label>
+                                <label class="block text-xs font-bold text-gray-700 uppercase border-b pb-1">Reporte de signos/anamnesis</label>
                                 <div class="flex items-center gap-2 mb-2">
                                     <input type="checkbox" id="check-asintomatico" checked onchange="toggleSintomasInputsBase()" class="w-4 h-4 text-blue-600 rounded">
                                     <label for="check-asintomatico" class="text-sm font-semibold text-emerald-700">✓ Paciente aparentemente Sano / Asintomático</label>
@@ -496,6 +493,11 @@
                                     <textarea id="sintomas-detalles" oninput="actualizarDisclaimerDinamico()" rows="2" class="w-full mt-2 px-3 py-2 border border-gray-200 rounded-xl text-xs outline-none" placeholder="Otros síntomas, detalles de pipí/agua, etc..."></textarea>
                                 </div>
                             </div>
+                        </div>
+
+                        <div id="seccion-examen-fisico" class="bg-white p-4 rounded-xl border border-slate-200 space-y-2">
+                            <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider">Examen físico</label>
+                            <textarea id="consulta-examen-fisico" rows="3" class="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm outline-none" placeholder="Hallazgos de exploración física, mucosas, hidratación, auscultación, palpación, dolor, etc."></textarea>
                         </div>
 
                         <div id="seccion-campos-seguimiento" class="hidden bg-amber-50/50 p-4 rounded-xl border border-amber-200 space-y-3">
@@ -595,9 +597,17 @@
                             <div id="contenedor-filas-medicamentos" class="space-y-2"></div>
                         </div>
 
-                        <div>
-                            <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Indicaciones Médicas y Cuidados en Casa</label>
-                            <textarea id="tratamiento" rows="3" class="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm outline-none" placeholder="Receta y recomendaciones para el propietario..."></textarea>
+                        <div class="bg-white p-4 rounded-xl border border-slate-200 space-y-3">
+                            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                                <div>
+                                    <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider">Receta / indicaciones médicas</label>
+                                    <p class="text-[11px] text-slate-500">Se edita en una ventana aparte para no mover el formulario.</p>
+                                </div>
+                                <button type="button" onclick="abrirModalRecetaConsulta()" class="btn-soft text-blue-700">
+                                    <i data-lucide="file-pen-line" class="w-4 h-4"></i> Escribir receta
+                                </button>
+                            </div>
+                            <textarea id="tratamiento" rows="2" class="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm outline-none bg-slate-50" placeholder="Receta y recomendaciones para el propietario..."></textarea>
                         </div>
 
                         <div class="border border-indigo-200 bg-indigo-50/50 p-4 rounded-xl space-y-3">
@@ -773,7 +783,7 @@
                 </div>
             </section>
 
-            <section id="view-servicios-externos" class="hidden space-y-6">
+            <section id="view-servicios-externos" class="hidden flex flex-col gap-6">
                 <div class="app-panel flex flex-col lg:flex-row lg:items-center justify-between gap-4">
                     <div class="flex items-start gap-3">
                         <div class="w-11 h-11 rounded-xl bg-blue-50 text-blue-700 border border-blue-100 flex items-center justify-center shrink-0">
@@ -788,7 +798,7 @@
                         <i data-lucide="bar-chart-3" class="w-4 h-4"></i> Ver finanzas
                     </button>
                 </div>
-                <section class="app-card overflow-hidden">
+                <section class="app-card overflow-hidden order-2">
                     <div class="p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white">
                         <div class="flex items-start gap-3">
                             <div class="w-10 h-10 rounded-xl bg-indigo-50 text-indigo-700 border border-indigo-100 flex items-center justify-center shrink-0">
@@ -824,7 +834,7 @@
                         <div class="min-h-[260px] max-h-[420px] overflow-y-auto space-y-2 p-1" id="lista-clinicas-externas"></div>
                     </div>
                 </section>
-                <section class="app-card overflow-hidden">
+                <section class="app-card overflow-hidden order-1">
                     <div class="p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-slate-900 text-white">
                         <div class="flex items-start gap-3">
                             <div class="w-10 h-10 rounded-xl bg-white/10 text-white flex items-center justify-center shrink-0">
@@ -903,178 +913,6 @@
                         </div>
                     </form>
                 </section>
-            </section>
-
-            <section id="view-eutanasia" class="hidden space-y-6">
-                <div class="app-panel flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-                    <div class="flex items-start gap-3">
-                        <div class="w-11 h-11 rounded-xl bg-slate-900 text-white border border-slate-800 flex items-center justify-center shrink-0">
-                            <i data-lucide="heart-handshake" class="w-5 h-5"></i>
-                        </div>
-                        <div>
-                            <h3 class="text-lg font-black text-slate-900">Eutanasia Humanitaria</h3>
-                            <p class="text-xs text-gray-500 max-w-2xl">Llena consentimiento e información médica, guarda el expediente administrativo y registra el ingreso en Finanzas.</p>
-                        </div>
-                    </div>
-                    <button type="button" onclick="limpiarFormularioEutanasia()" class="btn-soft">
-                        <i data-lucide="file-plus-2" class="w-4 h-4"></i> Nuevo formato
-                    </button>
-                </div>
-                <div class="grid grid-cols-1 xl:grid-cols-[minmax(340px,0.92fr)_minmax(0,1.08fr)] gap-6">
-                    <form id="form-eutanasia" class="app-card p-5 sm:p-6 space-y-4" onsubmit="guardarEutanasia(event)">
-                        <input type="hidden" id="eutanasia-id">
-                        <div>
-                            <p class="section-kicker">Capturar información</p>
-                            <h3 class="section-title">Formatos y cobro</h3>
-                        </div>
-                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                            <div>
-                                <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Fecha</label>
-                                <input type="date" id="eutanasia-fecha" required class="w-full px-3 py-2 border rounded-xl text-sm outline-none">
-                            </div>
-                            <div>
-                                <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Hora</label>
-                                <input type="time" id="eutanasia-hora" class="w-full px-3 py-2 border rounded-xl text-sm outline-none">
-                            </div>
-                            <div>
-                                <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Tamaño</label>
-                                <select id="eutanasia-tamano" required onchange="actualizarCostoEutanasia()" class="w-full px-3 py-2 border rounded-xl text-sm bg-white outline-none">
-                                    <option value="">Seleccionar...</option>
-                                    <option value="Chico">Chico </option>
-                                    <option value="Mediano">Mediano </option>
-                                    <option value="Mediano/Grande">Mediano/Grande </option>
-                                    <option value="Grande">Grande </option>
-                                    <option value="Extra grande/Gigante">Extra grande/Gigante </option>
-                                </select>
-                            </div>
-                            <div>
-                                <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Costo</label>
-                                <input type="number" id="eutanasia-costo" required min="0" step="0.01" class="w-full px-3 py-2 border rounded-xl text-sm outline-none">
-                            </div>
-                        </div>
-                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                            <div>
-                                <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Método de pago</label>
-                                <select id="eutanasia-metodo" class="w-full px-3 py-2 border rounded-xl text-sm bg-white outline-none">
-                                    <option>Efectivo</option>
-                                    <option>Transferencia</option>
-                                    <option>Tarjeta</option>
-                                    <option>Crédito</option>
-                                </select>
-                            </div>
-                            <div>
-                                <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Estado de pago</label>
-                                <select id="eutanasia-estado-pago" class="w-full px-3 py-2 border rounded-xl text-sm bg-white outline-none">
-                                    <option>Pagado</option>
-                                    <option>Pendiente</option>
-                                </select>
-                            </div>
-                        </div>
-                        <div class="border-t border-slate-100 pt-4 space-y-3">
-                            <h4 class="text-xs font-black text-slate-900 uppercase">Datos del propietario</h4>
-                            <input type="text" id="eutanasia-propietario" required placeholder="Nombre completo" class="w-full px-3 py-2 border rounded-xl text-sm outline-none">
-                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                                <input type="tel" id="eutanasia-telefono" placeholder="Teléfono" class="w-full px-3 py-2 border rounded-xl text-sm outline-none">
-                                <input type="text" id="eutanasia-identificacion" placeholder="Identificación oficial" class="w-full px-3 py-2 border rounded-xl text-sm outline-none">
-                            </div>
-                            <textarea id="eutanasia-domicilio" rows="2" placeholder="Domicilio" class="w-full px-3 py-2 border rounded-xl text-sm outline-none"></textarea>
-                        </div>
-                        <div class="border-t border-slate-100 pt-4 space-y-3">
-                            <h4 class="text-xs font-black text-slate-900 uppercase">Datos del paciente</h4>
-                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                                <input type="text" id="eutanasia-paciente" required placeholder="Nombre del paciente" class="w-full px-3 py-2 border rounded-xl text-sm outline-none">
-                                <input type="text" id="eutanasia-especie" placeholder="Especie" class="w-full px-3 py-2 border rounded-xl text-sm outline-none">
-                                <input type="text" id="eutanasia-raza" placeholder="Raza" class="w-full px-3 py-2 border rounded-xl text-sm outline-none">
-                                <input type="text" id="eutanasia-sexo" placeholder="Sexo" class="w-full px-3 py-2 border rounded-xl text-sm outline-none">
-                                <input type="text" id="eutanasia-edad" placeholder="Edad" class="w-full px-3 py-2 border rounded-xl text-sm outline-none">
-                                <input type="text" id="eutanasia-color" placeholder="Color o señas particulares" class="w-full px-3 py-2 border rounded-xl text-sm outline-none">
-                            </div>
-                        </div>
-                        <div class="border-t border-slate-100 pt-4 space-y-3">
-                            <h4 class="text-xs font-black text-slate-900 uppercase">Información médica</h4>
-                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                                <input type="text" id="eutanasia-veterinario" value="Daniela Valenzuela" placeholder="Nombre del médico veterinario" class="w-full px-3 py-2 border rounded-xl text-sm outline-none">
-                                <input type="text" id="eutanasia-cedula" placeholder="Cédula profesional" class="w-full px-3 py-2 border rounded-xl text-sm outline-none">
-                            </div>
-                            <textarea id="eutanasia-diagnostico" rows="3" required placeholder="Diagnóstico, condición clínica y/o signología principal" class="w-full px-3 py-2 border rounded-xl text-sm outline-none"></textarea>
-                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm">
-                                <label class="chip-checkbox"><input type="checkbox" class="hidden eutanasia-motivo" value="Enfermedad terminal"><div class="border rounded-xl px-3 py-2">Enfermedad terminal</div></label>
-                                <label class="chip-checkbox"><input type="checkbox" class="hidden eutanasia-motivo" value="Enfermedad irreversible"><div class="border rounded-xl px-3 py-2">Enfermedad irreversible</div></label>
-                                <label class="chip-checkbox"><input type="checkbox" class="hidden eutanasia-motivo" value="Dolor o sufrimiento no controlable"><div class="border rounded-xl px-3 py-2">Dolor no controlable</div></label>
-                                <label class="chip-checkbox"><input type="checkbox" class="hidden eutanasia-motivo" value="Trauma severo incompatible con calidad de vida"><div class="border rounded-xl px-3 py-2">Trauma severo</div></label>
-                                <label class="chip-checkbox"><input type="checkbox" class="hidden eutanasia-motivo" value="Deterioro grave e irreversible"><div class="border rounded-xl px-3 py-2">Deterioro irreversible</div></label>
-                            </div>
-                            <input type="text" id="eutanasia-motivo-otro" placeholder="Otro motivo médico" class="w-full px-3 py-2 border rounded-xl text-sm outline-none">
-                            <textarea id="eutanasia-observaciones" rows="3" placeholder="Observaciones médicas relevantes" class="w-full px-3 py-2 border rounded-xl text-sm outline-none"></textarea>
-                            <select id="eutanasia-destino" class="w-full px-3 py-2 border rounded-xl text-sm bg-white outline-none">
-                                <option>Cremación individual</option>
-                                <option>Cremación colectiva</option>
-                                <option>Entrega del cuerpo al propietario</option>
-                                <option>Otro</option>
-                            </select>
-                            <input type="text" id="eutanasia-destino-otro" placeholder="Especificar otro destino" class="w-full px-3 py-2 border rounded-xl text-sm outline-none">
-                        </div>
-                        <div class="border-t border-slate-100 pt-4 space-y-3">
-                            <div class="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
-                                <div>
-                                    <p class="section-kicker">Lectura para propietario</p>
-                                    <h4 class="text-sm font-black text-slate-900">Consentimiento informado y autorización</h4>
-                                </div>
-                                <button type="button" onclick="abrirLecturaEutanasia()" class="btn-soft text-xs">
-                                    <i data-lucide="maximize-2" class="w-4 h-4"></i> Ver grande
-                                </button>
-                            </div>
-                            <div class="bg-white border border-slate-200 rounded-2xl p-4 max-h-[360px] overflow-y-auto text-sm leading-relaxed text-slate-700 space-y-3 shadow-inner">
-                                <p class="font-black text-slate-900 text-base">CONSENTIMIENTO INFORMADO Y AUTORIZACIÓN PARA EUTANASIA HUMANITARIA</p>
-                                <p>El propietario o responsable declara que ha sido informado sobre la condición médica y el pronóstico de su mascota.</p>
-                                <p>Comprende que la eutanasia es un procedimiento humanitario e irreversible que ocasionará el fallecimiento del paciente.</p>
-                                <p>Ha tenido la oportunidad de realizar preguntas y aclarar sus dudas antes de autorizar el procedimiento.</p>
-                                <p>Entiende que la recomendación de eutanasia se basa en criterios médicos y de bienestar animal, con el objetivo de evitar sufrimiento significativo o irreversible.</p>
-                                <p>El procedimiento se llevará a cabo conforme a la legislación vigente en materia de bienestar animal y a la NOM-033-SAG/ZOO-2014, Métodos para dar muerte a los animales domésticos y silvestres, así como demás disposiciones federales, estatales y municipales aplicables.</p>
-                                <p>El propietario libera al Médico Veterinario y al establecimiento de cualquier responsabilidad derivada de información falsa, incompleta u ocultada respecto al paciente.</p>
-                                <p>Autoriza voluntariamente la realización del procedimiento y confirma el destino de los restos seleccionado en este formato.</p>
-                            </div>
-                            <label class="flex items-start gap-3 bg-blue-50 border border-blue-100 rounded-2xl p-3 cursor-pointer">
-                                <input type="checkbox" id="eutanasia-consentimiento-leido" class="mt-1 w-4 h-4 text-blue-600 rounded" required>
-                                <span class="text-sm text-blue-950 leading-snug">
-                                    <b>El propietario leyó y comprendió el consentimiento.</b><br>
-                                    Confirmo que se resolvieron sus dudas antes de firmar.
-                                </span>
-                            </label>
-                        </div>
-                        <div class="border-t border-slate-100 pt-4 space-y-3">
-                            <h4 class="text-xs font-black text-slate-900 uppercase">Firmas</h4>
-                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                                <div class="border border-slate-200 rounded-2xl bg-slate-50 p-3">
-                                    <div class="flex items-center justify-between mb-2">
-                                        <label class="text-[10px] font-black text-slate-500 uppercase">Propietario</label>
-                                        <button type="button" onclick="limpiarLienzoFirma('canvas-eutanasia-propietario')" class="text-[10px] font-bold text-rose-600">Limpiar</button>
-                                    </div>
-                                   <canvas id="canvas-eutanasia-propietario" width="320" height="120" class="signature-canvas w-full bg-white border border-slate-200 rounded-xl"></canvas>
-                                </div>
-                                <div class="border border-slate-200 rounded-2xl bg-slate-50 p-3">
-                                    <div class="flex items-center justify-between mb-2">
-                                        <label class="text-[10px] font-black text-slate-500 uppercase">Médico veterinario</label>
-                                        <button type="button" onclick="limpiarLienzoFirma('canvas-eutanasia-vet')" class="text-[10px] font-bold text-rose-600">Limpiar</button>
-                                    </div>
-                                    <canvas id="canvas-eutanasia-vet" width="320" height="120" class="signature-canvas w-full bg-white border border-slate-200 rounded-xl"></canvas>
-                                </div>
-                            </div>
-                        </div>
-                        <button type="submit" id="btn-eutanasia-guardar" class="w-full bg-slate-900 hover:bg-slate-800 text-white font-bold py-3 rounded-xl text-sm">Guardar formatos e ingreso</button>
-                    </form>
-                    <div class="app-card p-5 sm:p-6 min-h-[420px]">
-                        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
-                            <div>
-                                <p class="section-kicker">Revisar información</p>
-                                <h3 class="section-title">Formatos guardados</h3>
-                            </div>
-                            <input type="text" id="buscador-eutanasia" oninput="renderEutanasia()" placeholder="Buscar propietario o paciente..." class="px-3 py-2 border rounded-xl text-sm outline-none">
-                        </div>
-                        <div id="lista-eutanasia" class="space-y-2.5"></div>
-                    </div>
-                </div>
-                <div id="eutanasia-print-template" class="hidden"></div>
             </section>
 
             <section id="view-finanzas" class="hidden space-y-6">
@@ -1182,10 +1020,11 @@
                             <div>
                                 <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Categoría / clasificación</label>
                                 <select id="gasto-categoria" class="w-full px-3 py-2 border rounded-xl text-sm bg-white outline-none">
-                                    <option>Gasto operativo</option>
+                                    <option>Insumos</option>
                                     <option>Gasolina</option>
-                                    <option>Casetas</option>
+                                    <option>Medicamentos</option>
                                     <option>Estacionamiento</option>
+                                    <option>Comida</option>
                                     <option>Otro</option>
                                 </select>
                             </div>
@@ -1220,14 +1059,48 @@
                         </form>
                     </details>
                     <div class="lg:col-span-2 app-panel flex flex-col h-[520px]">
-                        <p class="section-kicker mb-1">Configuración</p>
-                        <h3 class="section-title mb-3">Tarifario de Servicios Registrados</h3>
+                        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-3">
+                            <div>
+                                <p class="section-kicker mb-1">Configuración</p>
+                                <h3 class="section-title">Tarifario de Servicios Registrados</h3>
+                            </div>
+                            <select id="orden-finanzas-servicios" onchange="renderFinanzas()" class="px-3 py-2 border rounded-xl text-xs bg-white outline-none">
+                                <option value="recientes">Más recientes</option>
+                                <option value="az">A-Z</option>
+                                <option value="za">Z-A</option>
+                                <option value="precio-asc">Menor precio</option>
+                                <option value="precio-desc">Mayor precio</option>
+                            </select>
+                        </div>
                         <div class="flex-1 overflow-y-auto space-y-2.5 p-1 rounded-xl" id="lista-finanzas"></div>
                     </div>
                 </div>
             </section>
         </div>
     </main>
+
+    <div id="modal-receta-consulta" class="fixed inset-0 bg-slate-950/70 z-[65] flex items-center justify-center p-3 sm:p-4 hidden backdrop-blur-xs">
+        <div class="modal-mobile-sheet bg-white rounded-2xl max-w-2xl w-full h-[78vh] flex flex-col shadow-2xl overflow-hidden border border-slate-200">
+            <div class="p-4 border-b bg-slate-900 text-white flex items-center justify-between shrink-0">
+                <div>
+                    <h3 class="text-base font-black flex items-center gap-2">
+                        <i data-lucide="file-pen-line" class="w-5 h-5 text-amber-300"></i> Receta e indicaciones
+                    </h3>
+                    <p class="text-xs text-slate-300">Escribe la receta completa sin mover el formulario de consulta.</p>
+                </div>
+                <button type="button" onclick="cerrarModalRecetaConsulta(false)" class="text-white/70 hover:text-white p-1">
+                    <i data-lucide="x" class="w-5 h-5"></i>
+                </button>
+            </div>
+            <div class="flex-1 min-h-0 p-4 bg-slate-50">
+                <textarea id="consulta-receta-modal-texto" class="w-full h-full resize-none px-4 py-3 border border-slate-200 rounded-2xl text-sm outline-none bg-white leading-relaxed" placeholder="Medicamento, dosis, frecuencia, duración, cuidados en casa y signos de alarma..."></textarea>
+            </div>
+            <div class="p-4 border-t bg-white flex gap-2 shrink-0">
+                <button type="button" onclick="cerrarModalRecetaConsulta(false)" class="px-4 py-2.5 bg-slate-100 text-slate-700 font-bold rounded-xl text-sm">Cancelar</button>
+                <button type="button" onclick="cerrarModalRecetaConsulta(true)" class="flex-1 bg-slate-900 hover:bg-slate-800 text-white font-bold py-2.5 rounded-xl text-sm">Guardar receta</button>
+            </div>
+        </div>
+    </div>
 
     <div id="modal-agenda" class="fixed inset-0 bg-slate-950/70 z-[60] flex items-center justify-center p-3 sm:p-4 hidden backdrop-blur-xs">
         <div class="modal-mobile-sheet bg-white rounded-2xl max-w-lg w-full h-[88vh] flex flex-col shadow-2xl overflow-hidden border border-slate-200">
@@ -1551,6 +1424,10 @@
                         <textarea id="editar-consulta-sintomas" rows="2" class="w-full px-3 py-2 border rounded-xl text-sm outline-none"></textarea>
                     </div>
                     <div>
+                        <label class="block text-[10px] font-semibold text-gray-500 uppercase mb-1">Examen físico</label>
+                        <textarea id="editar-consulta-examen-fisico" rows="2" class="w-full px-3 py-2 border rounded-xl text-sm outline-none"></textarea>
+                    </div>
+                    <div>
                         <label class="block text-[10px] font-semibold text-gray-500 uppercase mb-1">Tratamiento / Indicaciones</label>
                         <textarea id="editar-consulta-tratamiento" rows="3" class="w-full px-3 py-2 border rounded-xl text-sm outline-none"></textarea>
                     </div>
@@ -1867,55 +1744,12 @@
         </div>
     </div>
 
-    <div id="modal-lectura-eutanasia" class="fixed inset-0 bg-slate-950/75 z-[75] flex items-center justify-center p-3 sm:p-4 hidden backdrop-blur-xs">
-        <div class="modal-mobile-sheet bg-white rounded-2xl max-w-3xl w-full h-[88vh] flex flex-col shadow-2xl overflow-hidden border border-slate-200">
-            <div class="p-4 sm:p-5 border-b border-slate-100 flex items-start justify-between gap-3">
-                <div>
-                    <p class="section-kicker">Lectura para propietario</p>
-                    <h3 class="text-lg font-black text-slate-900">Consentimiento para eutanasia humanitaria</h3>
-                </div>
-                <button type="button" onclick="cerrarLecturaEutanasia()" class="h-9 w-9 rounded-xl border border-slate-200 flex items-center justify-center text-slate-500">
-                    <i data-lucide="x" class="w-4 h-4"></i>
-                </button>
-            </div>
-            <div class="flex-1 overflow-y-auto p-5 sm:p-8 text-slate-800 leading-relaxed space-y-5 text-base sm:text-lg">
-                <p>El propietario o responsable declara que ha sido informado sobre la condición médica y el pronóstico del paciente.</p>
-                <p>Comprende que la eutanasia es un procedimiento humanitario e irreversible que ocasionará el fallecimiento de la mascota.</p>
-                <p>Confirma que tuvo oportunidad de realizar preguntas, aclarar dudas y decidir voluntariamente autorizar el procedimiento.</p>
-                <p>Entiende que la recomendación se basa en criterios médicos y de bienestar animal, con el objetivo de evitar sufrimiento significativo o irreversible.</p>
-                <p>El procedimiento se realizará conforme a la legislación vigente en materia de bienestar animal, incluyendo la NOM-033-SAG/ZOO-2014 y disposiciones aplicables.</p>
-                <p>El propietario libera al médico veterinario de responsabilidad derivada de información falsa, incompleta u ocultada respecto al paciente.</p>
-                <div class="bg-blue-50 border border-blue-100 rounded-2xl p-4 text-blue-950">
-                    <p class="font-black text-base sm:text-lg">Antes de firmar</p>
-                    <p class="text-sm sm:text-base mt-1">Verifica nombre del propietario, datos del paciente, motivo médico, destino de los restos y que todas las dudas hayan sido resueltas.</p>
-                </div>
-            </div>
-            <div class="p-4 border-t border-slate-100 bg-slate-50 flex justify-end">
-                <button type="button" onclick="cerrarLecturaEutanasia()" class="btn-primary">Continuar a firmas</button>
-            </div>
-        </div>
-    </div>
-
-    <div id="update-banner" class="hidden fixed left-4 right-4 bottom-[calc(5rem+env(safe-area-inset-bottom))] md:left-auto md:right-6 md:bottom-6 md:w-80 z-[80] bg-slate-950 text-white rounded-2xl shadow-2xl border border-white/10 p-4">
-        <div class="flex items-start gap-3">
-            <div class="w-9 h-9 rounded-xl bg-blue-500 flex items-center justify-center shrink-0">
-                <i data-lucide="refresh-cw" class="w-4 h-4"></i>
-            </div>
-            <div class="min-w-0">
-                <p class="text-sm font-black">Actualización disponible</p>
-                <p class="text-xs text-slate-300 mt-0.5">Hay una versión nueva de VetHome Pro.</p>
-                <button type="button" onclick="location.reload()" class="mt-3 bg-white text-slate-950 text-xs font-bold px-3 py-2 rounded-xl">Actualizar ahora</button>
-            </div>
-        </div>
-    </div>
-
     <nav class="mobile-bottom-nav md:hidden fixed bottom-0 left-0 right-0 bg-slate-900 border-t border-blue-900 text-white min-h-16 flex items-center justify-around px-2 z-20 shadow-lg">
         <button onclick="abrirPanelCuentaMovil()" id="nav-mobile-cuenta" class="flex flex-col items-center text-blue-200"><i data-lucide="user-circle-2" class="w-5 h-5"></i><span class="text-[10px] mt-1">Cuenta</span></button>
         <button onclick="switchTab('dashboard')" id="nav-mobile-dashboard" class="flex flex-col items-center text-amber-300"><i data-lucide="layout-dashboard" class="w-5 h-5"></i><span class="text-[10px] mt-1">Inicio</span></button>
         <button onclick="switchTab('clientes')" id="nav-mobile-clientes" class="flex flex-col items-center text-blue-200"><i data-lucide="users" class="w-5 h-5"></i><span class="text-[10px] mt-1">Clientes</span></button>
         <button onclick="switchTab('agenda')" id="nav-mobile-agenda" class="flex flex-col items-center text-blue-200"><i data-lucide="calendar" class="w-5 h-5"></i><span class="text-[10px] mt-1">Agenda</span></button>
         <button onclick="switchTab('servicios-externos')" id="nav-mobile-servicios-externos" class="flex flex-col items-center text-blue-200"><i data-lucide="briefcase-medical" class="w-5 h-5"></i><span class="text-[10px] mt-1">Externos</span></button>
-        <button onclick="switchTab('eutanasia')" id="nav-mobile-eutanasia" class="flex flex-col items-center text-blue-200"><i data-lucide="heart-handshake" class="w-5 h-5"></i><span class="text-[10px] mt-1">Eutanasia</span></button>
         <button onclick="switchTab('inventario')" id="nav-mobile-inventario" class="flex flex-col items-center text-blue-200"><i data-lucide="package" class="w-5 h-5"></i><span class="text-[10px] mt-1">Stock</span></button>
         <button onclick="switchTab('finanzas')" id="nav-mobile-finanzas" class="flex flex-col items-center text-blue-200"><i data-lucide="dollar-sign" class="w-5 h-5"></i><span class="text-[10px] mt-1">Finanzas</span></button>
     </nav>
@@ -1930,7 +1764,6 @@
     <script src="js/05-clientes.js"></script>
     <script src="js/06-agenda.js"></script>
     <script src="js/07-inventario-finanzas.js"></script>
-    <script src="js/09-eutanasia.js"></script>
     <script src="js/08-main.js"></script>
 
 </body>
