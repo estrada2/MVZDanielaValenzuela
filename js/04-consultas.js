@@ -342,6 +342,7 @@ async function guardarConsulta(e) {
         metodoPago: $('consulta-metodo-pago')?.value || 'Efectivo',
         estadoPago: $('consulta-estado-pago')?.value || 'Pagado',
         notaPago: $('consulta-nota-pago')?.value || '',
+        agendaId: typeof citaActivaId !== 'undefined' ? citaActivaId : null,
         abonos: $('consulta-estado-pago')?.value === 'Pagado'
             ? [{ id: uid(), fechaISO: new Date().toISOString(), monto: parseFloat(costoSrv.toFixed(2)), metodo: $('consulta-metodo-pago')?.value || 'Efectivo' }]
             : [],

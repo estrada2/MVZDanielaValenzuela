@@ -416,6 +416,7 @@ function renderAgendaRow(a, hoy = fechaLocalISO(), compacto = false) {
     const puedeAtender = estado === 'Confirmada';
     const puedeCancelar = ['Programada', 'Confirmada'].includes(estado);
     const puedeReagendar = ['Programada', 'Confirmada'].includes(estado);
+    const requiereCompletarConsulta = estado === 'Atendida' && a.petId && !agendaTieneConsultaGuardada(a.id);
     return `
         <article class="agenda-row ${esHoy ? 'today' : ''} ${compacto ? 'compact' : ''}">
             <div class="agenda-row-main">
@@ -437,6 +438,7 @@ function renderAgendaRow(a, hoy = fechaLocalISO(), compacto = false) {
                 <div class="agenda-actions">
                     ${puedeConfirmar ? `<button type="button" onclick="cambiarEstadoCita(${a.id}, 'Confirmada')" class="agenda-action primary">Confirmar</button>` : ''}
                     ${puedeAtender && a.petId ? `<button type="button" onclick="atenderCita(${a.id})" class="agenda-action primary">Atender</button>` : ''}
+                    ${requiereCompletarConsulta ? `<button type="button" onclick="atenderCita(${a.id})" class="agenda-action primary">Completar consulta</button>` : ''}
                     ${puedeAtender && esServicioExterno ? `<button type="button" onclick="marcarServicioExternoAtendido(${a.id})" class="agenda-action primary">Atender</button>` : ''}
                     ${tel ? `<a href="https://wa.me/52${tel}" target="_blank" rel="noopener" class="agenda-action green" title="WhatsApp">WhatsApp</a>` : ''}
                     <button onclick="abrirNavegacionMaps('${direccion.replace(/'/g, "\\'")}')" class="agenda-action blue" title="Maps">Maps</button>
@@ -453,6 +455,9 @@ function renderAgendaRow(a, hoy = fechaLocalISO(), compacto = false) {
                 </div>
             </details>
         </article>`;
+}
+function agendaTieneConsultaGuardada(agendaId) {
+    return clientes.some(cliente => (cliente.mascotas || []).some(mascota => (mascota.historial || []).some(consulta => Number(consulta.agendaId) === Number(agendaId))));
 }
 function renderAgendaCalendarioMes(citas) {
     const base = new Date(`${fechaAgendaSeleccionada || fechaLocalISO()}T12:00:00`);
@@ -749,10 +754,7 @@ function atenderCita(id) {
     const cita = agenda.find(item => item.id === id);
     const clienteId = cita?.clienteId || cita?.ownerId;
     if (!clienteId || !cita?.petId) return;
-    cita.estado = 'Atendida';
     citaActivaId = id;
-    saveStore('agenda');
-    if (typeof renderDashboard === 'function') renderDashboard();
     cargarPacienteAConsulta(clienteId, cita.petId);
 }
 function marcarServicioExternoAtendido(agendaId) {
@@ -768,8 +770,24 @@ function marcarServicioExternoAtendido(agendaId) {
         return;
     }
     cita.estado = 'Atendida';
-    const servicio = (serviciosExternos || []).find(item => item.agendaId === agendaId);
-    if (servicio) servicio.estadoAgenda = 'Atendida';
+    let servicio = (serviciosExternos || []).find(item => item.agendaId === agendaId);
+    if (!servicio && cita.clinicaId && typeof clinicaExternaPorId === 'function') {
+        const clinica = clinicaExternaPorId(cita.clinicaId);
+        sincronizarServicioExternoDesdeAgenda(cita, clinica, cita.notas || cita.petName || 'Servicio externo', 0);
+        servicio = (serviciosExternos || []).find(item => item.agendaId === agendaId);
+    }
+    if (servicio) {
+        servicio.estadoAgenda = 'Atendida';
+        if ((servicio.estadoPago || 'Pendiente') === 'Pendiente' && parseFloat(servicio.total || 0) > 0) {
+            setTimeout(() => {
+                if (confirm('Servicio externo atendido. ¿Registrar cobro ahora para que aparezca como ingreso?')) {
+                    marcarServicioExternoPagado(servicio.id);
+                } else {
+                    renderGananciasConsultas();
+                }
+            }, 150);
+        }
+    }
     registrarAuditoria('agenda', 'Atender', `Servicio externo atendido: ${cita.clienteNombre || cita.notas || agendaId}`, agendaId);
     saveStore('agenda');
     if (servicio) saveStore('serviciosExternos');

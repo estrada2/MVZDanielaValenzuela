@@ -171,6 +171,27 @@ async function upsertPagosCompatible(registros) {
     }
 }
 
+async function upsertServiciosCatalogoCompatible(registros) {
+    try {
+        return await upsertTabla('servicios', registros, 'id, legacy_id');
+    } catch (error) {
+        const mensaje = `${error?.message || ''} ${error?.details || ''} ${error?.hint || ''}`;
+        const pareceColumnaOpcional = /workspace_id|activo/i.test(mensaje)
+            || error?.code === 'PGRST204'
+            || error?.code === '42703';
+        if (!pareceColumnaOpcional) throw error;
+        console.warn('Reintentando servicios con columnas compatibles.', error);
+        const registrosCompatibles = registros.map(registro => ({
+            user_id: registro.user_id,
+            legacy_id: registro.legacy_id,
+            nombre: registro.nombre,
+            precio: registro.precio,
+            updated_at: registro.updated_at
+        }));
+        return upsertTabla('servicios', registrosCompatibles, 'id, legacy_id');
+    }
+}
+
 async function upsertTablaManual(nombre, registros, columnas = '*') {
     const guardados = [];
     for (const registro of registros) {
@@ -317,6 +338,7 @@ function mapearEstadoNormalizado(rows) {
             notasRapidas: row.notas_rapidas || '',
             vacunasControlStock: row.vacunas_control_stock,
             seguimiento: row.seguimiento || {},
+            agendaId: row.seguimiento?.agendaId || null,
             firmaDueno: row.firma_dueno || '',
             firmaVet: row.firma_vet || ''
         };
@@ -564,7 +586,7 @@ async function guardarEstadoBaseNormalizada() {
         activo: true,
         updated_at: new Date().toISOString()
     }));
-    await upsertTabla('servicios', serviciosRows, 'id, legacy_id');
+    await upsertServiciosCatalogoCompatible(serviciosRows);
 
     const inventarioRows = inventario.map(item => ({
         ...scope,
@@ -633,7 +655,7 @@ async function guardarEstadoBaseNormalizada() {
                     notas_rapidas: consulta.notasRapidas || '',
                     insumos: consulta.insumos || [],
                     vacunas_control_stock: consulta.vacunasControlStock || null,
-                    seguimiento: consulta.seguimiento || {},
+                    seguimiento: { ...(consulta.seguimiento || {}), agendaId: consulta.agendaId || consulta.seguimiento?.agendaId || null },
                     firma_dueno: consulta.firmaDueno || '',
                     firma_vet: consulta.firmaVet || '',
                     updated_at: new Date().toISOString()
