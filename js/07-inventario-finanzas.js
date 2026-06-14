@@ -506,10 +506,16 @@ function renderListaIngresos(consultas) {
                     ${abonado && con.estadoPago !== 'Pagado' ? `<p class="text-[10px] text-emerald-700 font-bold">Abonado: $${formatoMoneda(abonado)}</p>` : ''}
                     ${saldo && con.estadoPago === 'Pendiente' ? `<p class="text-[10px] text-rose-700 font-bold">Saldo: $${formatoMoneda(saldo)}</p>` : ''}
                     ${con.costoInsumos ? `<p class="text-[10px] text-blue-600 font-bold">Costo insumos: $${formatoMoneda(con.costoInsumos)}</p>` : ''}
-                    ${con.estadoPago === 'Pendiente' ? (con.origenFinanciero === 'Externo'
-                        ? `<button type="button" onclick="marcarServicioExternoPagado(${con.id})" class="btn-soft text-emerald-700">Marcar pagado</button>`
-                        : `<button type="button" onclick="marcarConsultaPagada(${con.ownerId}, ${con.petId}, ${con.id})" class="btn-soft text-emerald-700">Marcar pagado</button>`
-                    ) : ''}
+                    <div class="flex flex-wrap justify-end gap-1">
+                        ${con.estadoPago === 'Pendiente' ? (con.origenFinanciero === 'Externo'
+                            ? `<button type="button" onclick="marcarServicioExternoPagado(${con.id})" class="btn-soft text-emerald-700">Marcar pagado</button>`
+                            : `<button type="button" onclick="marcarConsultaPagada(${con.ownerId}, ${con.petId}, ${con.id})" class="btn-soft text-emerald-700">Marcar pagado</button>`
+                        ) : ''}
+                        ${con.origenFinanciero === 'Externo' ? `
+                            <button type="button" onclick="editarMovimientoFinancieroExterno(${con.id})" class="btn-soft text-amber-700">Editar</button>
+                            <button type="button" onclick="eliminarMovimientoFinancieroExterno(${con.id})" class="btn-soft text-rose-700">Eliminar</button>
+                        ` : ''}
+                    </div>
                 </div>
             </div>`;
     }).join('');
@@ -938,6 +944,65 @@ function eliminarServicioExterno(id) {
     renderGananciasConsultas();
     if (typeof renderDashboard === 'function') renderDashboard();
 }
+function editarMovimientoFinancieroExterno(id) {
+    const item = serviciosExternos.find(s => s.id === id);
+    if (!item) return;
+    const fechaActual = item.fecha || fechaLocalInputFinanzas(parseFechaConsulta(item) || new Date());
+    const fecha = prompt('Fecha del movimiento (YYYY-MM-DD):', fechaActual);
+    if (fecha === null) return;
+    const hora = prompt('Hora (HH:mm, opcional):', item.hora || '');
+    if (hora === null) return;
+    const clienteNombre = prompt('Cliente / clínica / origen:', item.clienteNombre || '');
+    if (clienteNombre === null) return;
+    const servicioCobrado = prompt('Servicio cobrado:', item.servicioCobrado || '');
+    if (servicioCobrado === null) return;
+    const totalTexto = prompt('Monto total:', String(item.total || 0));
+    if (totalTexto === null) return;
+    const total = redondearCentavos(totalTexto);
+    if (!Number.isFinite(total) || total < 0) {
+        alert('El monto no es válido.');
+        return;
+    }
+    const estadoPago = prompt('Estado de pago (Pagado o Pendiente):', item.estadoPago || 'Pagado');
+    if (estadoPago === null) return;
+    const metodoPago = prompt('Método de pago:', item.metodoPago || 'Efectivo');
+    if (metodoPago === null) return;
+    const notaPago = prompt('Nota:', item.notaPago || '');
+    if (notaPago === null) return;
+    const fechaEditada = fecha ? new Date(`${fecha}T${hora || '12:00'}`) : new Date(item.fechaISO || Date.now());
+    if (Number.isNaN(fechaEditada.getTime())) {
+        alert('La fecha u hora no es válida.');
+        return;
+    }
+    const fechaISO = fechaEditada.toISOString();
+    const estadoNormalizado = /^pend/i.test(estadoPago) ? 'Pendiente' : /^cort/i.test(estadoPago) ? 'Cortesía' : 'Pagado';
+    const itemActualizado = {
+        ...item,
+        fecha,
+        hora,
+        fechaISO,
+        clienteNombre: clienteNombre.trim() || 'Movimiento financiero',
+        servicioCobrado: servicioCobrado.trim() || 'Ingreso',
+        total,
+        estadoPago: estadoNormalizado,
+        metodoPago: metodoPago.trim() || 'Efectivo',
+        notaPago: notaPago.trim()
+    };
+    if (estadoNormalizado === 'Pagado') {
+        itemActualizado.abonos = [{ id: uid(), fechaISO: new Date().toISOString(), monto: total, metodo: itemActualizado.metodoPago }];
+    } else {
+        itemActualizado.abonos = (item.abonos || []).filter(abono => redondearCentavos(abono.monto) > 0);
+    }
+    serviciosExternos = serviciosExternos.map(servicio => servicio.id === id ? itemActualizado : servicio);
+    registrarAuditoria('servicios_externos', 'Editar finanzas', `${itemActualizado.servicioCobrado}: $${formatoMoneda(itemActualizado.total)}`, id);
+    saveStore('serviciosExternos');
+    renderGananciasConsultas();
+    if (typeof renderServiciosExternos === 'function') renderServiciosExternos();
+    if (typeof renderDashboard === 'function') renderDashboard();
+}
+function eliminarMovimientoFinancieroExterno(id) {
+    eliminarServicioExterno(id);
+}
 function marcarServicioExternoPagado(id) {
     const item = serviciosExternos.find(s => s.id === id);
     if (!item) return;
@@ -1136,19 +1201,112 @@ function fechaISODesdeCSV(valor) {
     if (ampmNorm.includes('a') && horaNum === 12) horaNum = 0;
     return new Date(Number(anio), Number(mes) - 1, Number(dia), horaNum, Number(minuto), Number(segundo)).toISOString();
 }
-function keyMovimientoImportado(item) {
+function normalizarTextoFinanzas(valor) {
+    return String(valor || '')
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/\s+/g, ' ')
+        .trim()
+        .toLowerCase();
+}
+function claveFechaMinutoFinanzas(item) {
+    const fecha = item.fechaObj || parseFechaConsulta(item) || (item.fechaISO ? new Date(item.fechaISO) : null);
+    if (!fecha || Number.isNaN(fecha.getTime())) return '';
+    const horas = String(fecha.getHours()).padStart(2, '0');
+    const minutos = String(fecha.getMinutes()).padStart(2, '0');
+    return `${fechaLocalInputFinanzas(fecha)}T${horas}:${minutos}`;
+}
+function keyMovimientoFinanzas(item) {
     return [
-        item.fechaISO?.slice(0, 16) || '',
-        item.clienteNombre || '',
-        item.servicioCobrado || '',
+        claveFechaMinutoFinanzas(item),
+        normalizarTextoFinanzas(item.clienteNombre),
+        normalizarTextoFinanzas(item.servicioCobrado),
         Number(item.total || 0).toFixed(2),
-        item.tipo || ''
-    ].join('|').toLowerCase();
+        normalizarTextoFinanzas(item.tipo)
+    ].join('|');
+}
+function movimientoEsImportadoCSV(item) {
+    const nota = normalizarTextoFinanzas(item.notaPago);
+    const tipo = normalizarTextoFinanzas(item.tipo);
+    const sinVinculoAgenda = !item.agendaId && !item.clinicaId;
+    return item.origenImportacion === 'CSV Finanzas'
+        || nota.includes('importado de csv')
+        || nota.includes('csv')
+        || (sinVinculoAgenda && ['inicial', 'seguimiento', 'vacunacion', 'consulta'].includes(tipo));
+}
+function obtenerKeysConsultasClinicasFinanzas() {
+    return new Set(clientes.flatMap(c => (c.mascotas || []).flatMap(m => (m.historial || []).map(con => keyMovimientoFinanzas({
+        ...con,
+        clienteNombre: c.owner,
+        mascotaNombre: m.name,
+        fechaObj: parseFechaConsulta(con),
+        total: parseFloat(con.costoTotal) || 0,
+        servicioCobrado: con.servicioCobrado || '',
+        tipo: con.tipo || ''
+    })))));
+}
+function limpiarDuplicadosFinanzas(silencioso = false) {
+    const keysConsultas = obtenerKeysConsultasClinicasFinanzas();
+    const vistosExternos = new Map();
+    const conservados = [];
+    const removidos = [];
+    (serviciosExternos || []).forEach(item => {
+        const normalizado = {
+            ...item,
+            fechaObj: parseFechaConsulta(item),
+            total: parseFloat(item.total) || 0,
+            clienteNombre: item.clienteNombre || 'Servicio externo',
+            servicioCobrado: item.servicioCobrado || '',
+            tipo: item.tipo || 'Servicio externo'
+        };
+        const key = keyMovimientoFinanzas(normalizado);
+        if (!key || normalizado.total <= 0) {
+            conservados.push(item);
+            return;
+        }
+        if (keysConsultas.has(key) && movimientoEsImportadoCSV(item)) {
+            removidos.push(item);
+            return;
+        }
+        const previo = vistosExternos.get(key);
+        if (!previo) {
+            vistosExternos.set(key, item);
+            conservados.push(item);
+            return;
+        }
+        const itemImportado = movimientoEsImportadoCSV(item);
+        const previoImportado = movimientoEsImportadoCSV(previo);
+        if (!previoImportado && itemImportado) {
+            removidos.push(item);
+            return;
+        }
+        if (previoImportado && !itemImportado) {
+            removidos.push(previo);
+            const indicePrevio = conservados.findIndex(servicio => servicio.id === previo.id);
+            if (indicePrevio >= 0) conservados[indicePrevio] = item;
+            vistosExternos.set(key, item);
+            return;
+        }
+        removidos.push(item);
+    });
+    if (!removidos.length) {
+        if (!silencioso) alert('No encontré duplicados financieros para limpiar.');
+        return 0;
+    }
+    removidos.forEach(item => registrarEliminacionRemota('servicios_externos', item.id));
+    serviciosExternos = conservados;
+    registrarAuditoria('servicios_externos', 'Limpiar duplicados', `Movimientos duplicados removidos: ${removidos.length}`);
+    saveStore('serviciosExternos');
+    renderGananciasConsultas();
+    if (typeof renderServiciosExternos === 'function') renderServiciosExternos();
+    if (typeof renderDashboard === 'function') renderDashboard();
+    if (!silencioso) alert(`Listo: eliminé ${removidos.length} movimiento(s) duplicado(s).`);
+    return removidos.length;
 }
 function importarIngresosDesdeCSV(filas) {
     const headers = filas[0].map(h => String(h || '').trim());
     const idx = nombre => headers.findIndex(h => h.toLowerCase() === nombre.toLowerCase());
-    const existentes = new Set((serviciosExternos || []).map(keyMovimientoImportado));
+    const existentes = new Set(obtenerConsultasFinanzas().map(keyMovimientoFinanzas));
     let creados = 0;
     filas.slice(1).forEach(row => {
         const fechaISO = fechaISODesdeCSV(row[idx('Fecha')]);
@@ -1167,12 +1325,13 @@ function importarIngresosDesdeCSV(filas) {
             notaPago: row[idx('Nota')] || `Importado de CSV · ${row[idx('Mascota')] || 'Sin expediente'}`,
             clinicaId: null,
             abonos: [],
-            tipo: row[idx('Tipo')] || 'Ingreso importado'
+            tipo: row[idx('Tipo')] || 'Ingreso importado',
+            origenImportacion: 'CSV Finanzas'
         };
         if (item.estadoPago === 'Pagado' && item.total > 0) {
             item.abonos = [{ id: uid(), fechaISO, monto: item.total, metodo: item.metodoPago }];
         }
-        const key = keyMovimientoImportado(item);
+        const key = keyMovimientoFinanzas({ ...item, fechaObj: new Date(fechaISO) });
         if (existentes.has(key) || !item.total) return;
         existentes.add(key);
         serviciosExternos.unshift(item);
@@ -1226,8 +1385,10 @@ function importarRespaldoFinanzasCSV(event) {
             if (filas.length < 2) throw new Error('CSV vacío');
             const headers = filas[0].map(h => String(h || '').trim().toLowerCase());
             let creados = 0;
+            let limpiados = 0;
             if (headers.includes('total') && headers.includes('servicios')) {
                 creados = importarIngresosDesdeCSV(filas);
+                limpiados = limpiarDuplicadosFinanzas(true);
             } else if (headers.includes('monto')) {
                 creados = importarGastosDesdeCSV(filas);
             } else {
@@ -1236,7 +1397,11 @@ function importarRespaldoFinanzasCSV(event) {
             }
             renderGananciasConsultas();
             if (typeof renderDashboard === 'function') renderDashboard();
-            alert(creados ? `Importación completada: ${creados} movimientos nuevos.` : 'No se importaron movimientos nuevos; parecen estar duplicados o vacíos.');
+            if (creados || limpiados) {
+                alert(`Importación completada: ${creados} movimiento(s) nuevo(s), ${limpiados} duplicado(s) limpiado(s).`);
+            } else {
+                alert('No se importaron movimientos nuevos; parecen estar duplicados o vacíos.');
+            }
         } catch (error) {
             console.error('Error importando CSV financiero.', error);
             alert('No pude importar este CSV. Revisa que sea el respaldo exportado desde Finanzas.');
