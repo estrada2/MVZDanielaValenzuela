@@ -135,16 +135,17 @@ function crearPropietarioDesdeAgenda(nombre) {
 function sincronizarServicioExternoDesdeAgenda(cita, clinica, servicio, total) {
     if (!cita || !clinica) return;
     const existente = (serviciosExternos || []).find(item => item.agendaId === cita.id);
+    const totalNumerico = parseFloat(total ?? cita.totalServicioExterno ?? cita.costoServicioExterno ?? existente?.total ?? 0) || 0;
     const item = {
         id: existente?.id || uid(),
         fecha: cita.fecha,
         hora: cita.hora,
-        fechaISO: existente?.fechaISO || new Date(`${cita.fecha}T12:00:00`).toISOString(),
+        fechaISO: existente?.fechaISO || new Date(`${cita.fecha}T${cita.hora || '12:00'}`).toISOString(),
         clienteNombre: clinica.nombre || cita.clienteNombre || 'Servicio externo',
         servicioCobrado: servicio || cita.notas || 'Servicio externo',
         direccion: cita.direccion || clinica.direccion || '',
         agendaId: cita.id,
-        total: parseFloat(total || 0),
+        total: totalNumerico,
         metodoPago: existente?.metodoPago || 'Efectivo',
         estadoPago: existente?.estadoPago || 'Pendiente',
         notaPago: existente?.notaPago || '',
@@ -675,6 +676,7 @@ function guardarCita(e) {
             petName: servicio,
             direccion: $('agenda-direccion').value || clinica.direccion || '',
             notas: servicio,
+            totalServicioExterno: total,
             estado: editId ? (agenda.find(item => item.id === parseInt(editId))?.estado || 'Programada') : 'Programada',
             origen: 'Servicio externo'
         };
@@ -816,7 +818,7 @@ function marcarServicioExternoAtendido(agendaId) {
     let servicio = (serviciosExternos || []).find(item => item.agendaId === agendaId);
     if (!servicio && cita.clinicaId && typeof clinicaExternaPorId === 'function') {
         const clinica = clinicaExternaPorId(cita.clinicaId);
-        sincronizarServicioExternoDesdeAgenda(cita, clinica, cita.notas || cita.petName || 'Servicio externo', 0);
+        sincronizarServicioExternoDesdeAgenda(cita, clinica, cita.notas || cita.petName || 'Servicio externo', cita.totalServicioExterno || cita.costoServicioExterno || 0);
         servicio = (serviciosExternos || []).find(item => item.agendaId === agendaId);
     }
     if (servicio) {

@@ -417,6 +417,31 @@ function montoCobradoFinanzas(item) {
 }
 function normalizarServiciosExternosParaFinanzas() {
     let cambios = false;
+    (agenda || []).forEach(cita => {
+        const esExterno = (cita.origen || '') === 'Servicio externo' || cita.clinicaId;
+        if (!esExterno) return;
+        const existente = (serviciosExternos || []).find(servicio => Number(servicio.agendaId) === Number(cita.id));
+        if (existente) return;
+        const clinica = typeof clinicaExternaPorId === 'function' ? clinicaExternaPorId(cita.clinicaId) : null;
+        serviciosExternos = [{
+            id: uid(),
+            fecha: cita.fecha,
+            hora: cita.hora || '',
+            fechaISO: new Date(`${cita.fecha}T${cita.hora || '12:00'}`).toISOString(),
+            clienteNombre: cita.clienteNombre || clinica?.nombre || 'Servicio externo',
+            servicioCobrado: cita.notas || cita.petName || 'Servicio externo',
+            direccion: cita.direccion || clinica?.direccion || '',
+            agendaId: cita.id,
+            total: redondearCentavos(cita.totalServicioExterno || cita.costoServicioExterno || 0),
+            metodoPago: 'Efectivo',
+            estadoPago: 'Pendiente',
+            notaPago: '',
+            abonos: [],
+            clinicaId: cita.clinicaId || null,
+            tipo: 'Servicio externo'
+        }, ...(serviciosExternos || [])];
+        cambios = true;
+    });
     (serviciosExternos || []).forEach(servicio => {
         const total = redondearCentavos(servicio.total || 0);
         const abonado = totalAbonos(servicio);
@@ -1033,6 +1058,20 @@ function eliminarMovimientoFinancieroExterno(id) {
 function marcarServicioExternoPagado(id) {
     const item = serviciosExternos.find(s => s.id === id);
     if (!item) return;
+    if (redondearCentavos(item.total || 0) <= 0) {
+        const totalTexto = prompt('Este servicio externo no tiene monto registrado. Ingresa el monto total:', '0.00');
+        if (totalTexto === null) return;
+        const totalNuevo = redondearCentavos(totalTexto);
+        if (!Number.isFinite(totalNuevo) || totalNuevo <= 0) {
+            alert('Ingresa un monto válido para poder registrarlo en Finanzas.');
+            return;
+        }
+        item.total = totalNuevo;
+        if (item.agendaId) {
+            const cita = agenda.find(agendaItem => Number(agendaItem.id) === Number(item.agendaId));
+            if (cita) cita.totalServicioExterno = totalNuevo;
+        }
+    }
     const metodo = prompt('Método de pago:', item.metodoPago || 'Efectivo');
     if (metodo === null) return;
     const saldo = saldoPendiente(item);
