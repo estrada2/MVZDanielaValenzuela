@@ -415,6 +415,22 @@ function montoCobradoFinanzas(item) {
     if (abonado) return abonado;
     return (item.estadoPago || 'Pagado') === 'Pagado' ? total : 0;
 }
+function normalizarServiciosExternosParaFinanzas() {
+    let cambios = false;
+    (serviciosExternos || []).forEach(servicio => {
+        const total = redondearCentavos(servicio.total || 0);
+        const abonado = totalAbonos(servicio);
+        if ((servicio.estadoPago || 'Pendiente') === 'Pagado' && total > 0 && !servicio.abonos?.length) {
+            servicio.abonos = [{ id: uid(), fechaISO: servicio.fechaISO || new Date().toISOString(), monto: total, metodo: servicio.metodoPago || 'Efectivo' }];
+            cambios = true;
+        }
+        if ((servicio.estadoPago || 'Pendiente') !== 'Pagado' && total > 0 && abonado >= total - 0.05) {
+            servicio.estadoPago = 'Pagado';
+            cambios = true;
+        }
+    });
+    if (cambios) saveStore('serviciosExternos');
+}
 function obtenerGastosFiltrados() {
     return (gastosFinancieros || [])
         .map(gasto => ({ ...gasto, fechaObj: parseFechaConsulta(gasto), monto: parseFloat(gasto.monto || 0) }))
@@ -422,6 +438,7 @@ function obtenerGastosFiltrados() {
         .sort((a, b) => (b.fechaObj?.getTime() || 0) - (a.fechaObj?.getTime() || 0));
 }
 function obtenerConsultasFinanzas() {
+    normalizarServiciosExternosParaFinanzas();
     const consultas = clientes.flatMap(c => (c.mascotas || []).flatMap(m => (m.historial || []).map(con => ({
         ...con,
         origenFinanciero: 'Consulta',
