@@ -113,6 +113,36 @@ async function upsertTabla(nombre, registros, columnas = '*') {
     return data || [];
 }
 
+async function upsertServiciosExternosCompatible(registros) {
+    try {
+        return await upsertTabla('servicios_externos', registros, 'id, legacy_id');
+    } catch (error) {
+        const mensaje = `${error?.message || ''} ${error?.details || ''} ${error?.hint || ''}`;
+        const pareceColumnaOpcional = /workspace_id|clinica_legacy_id|tipo|abonos/i.test(mensaje)
+            || error?.code === 'PGRST204'
+            || error?.code === '42703';
+        if (!pareceColumnaOpcional) throw error;
+        console.warn('Reintentando servicios_externos con columnas compatibles.', error);
+        const registrosCompatibles = registros.map(registro => ({
+            user_id: registro.user_id,
+            legacy_id: registro.legacy_id,
+            fecha_iso: registro.fecha_iso,
+            fecha_texto: registro.fecha_texto,
+            hora: registro.hora,
+            cliente_nombre: registro.cliente_nombre,
+            servicio: registro.servicio,
+            direccion: registro.direccion,
+            agenda_id: registro.agenda_id,
+            total: registro.total,
+            metodo_pago: registro.metodo_pago,
+            estado_pago: registro.estado_pago,
+            nota: registro.nota,
+            updated_at: registro.updated_at
+        }));
+        return upsertTabla('servicios_externos', registrosCompatibles, 'id, legacy_id');
+    }
+}
+
 async function upsertTablaManual(nombre, registros, columnas = '*') {
     const guardados = [];
     for (const registro of registros) {
@@ -654,7 +684,7 @@ async function guardarEstadoBaseNormalizada() {
         updated_at: new Date().toISOString()
     }));
     try {
-        await upsertTabla('servicios_externos', serviciosExternosRows, 'id, legacy_id');
+        await upsertServiciosExternosCompatible(serviciosExternosRows);
     } catch (error) {
         console.warn('No se pudo sincronizar servicios externos; se conserva en local.', error);
         sincronizacionParcialPendiente = true;

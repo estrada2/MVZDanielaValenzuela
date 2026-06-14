@@ -353,6 +353,16 @@ function estaEnFiltro(fechaConsulta, ahora = new Date()) {
         return true;
     }
     if (filtroGananciasActivo === 'dia') return fechaConsulta.toDateString() === ahora.toDateString();
+    if (filtroGananciasActivo === 'semana') {
+        const inicioSemana = new Date(ahora);
+        const diaSemana = inicioSemana.getDay() || 7;
+        inicioSemana.setHours(0, 0, 0, 0);
+        inicioSemana.setDate(inicioSemana.getDate() - diaSemana + 1);
+        const finSemana = new Date(inicioSemana);
+        finSemana.setDate(inicioSemana.getDate() + 6);
+        finSemana.setHours(23, 59, 59, 999);
+        return fechaConsulta >= inicioSemana && fechaConsulta <= finSemana;
+    }
     if (filtroGananciasActivo === 'mes') {
         const mesSeleccionado = Number($('finanzas-mes')?.value ?? ahora.getMonth());
         const anioSeleccionado = Number($('finanzas-anio')?.value || ahora.getFullYear());
@@ -1116,7 +1126,11 @@ function filtrarGanancias(tipoFiltro) {
     if (tipoFiltro === 'mes' && $('finanzas-mes') && $('finanzas-mes').value === '') {
         $('finanzas-mes').value = String(new Date().getMonth());
     }
-    const filtros = ['dia', 'mes', 'todo', 'personalizado'];
+    if (['dia', 'semana', 'mes', 'todo'].includes(tipoFiltro)) {
+        if ($('finanzas-filtro-estado')) $('finanzas-filtro-estado').value = 'todos';
+        if ($('finanzas-filtro-origen')) $('finanzas-filtro-origen').value = 'todos';
+    }
+    const filtros = ['dia', 'semana', 'mes', 'todo', 'personalizado'];
     filtros.forEach(f => {
         const btn = $(`btn-filtro-${f}`);
         if (btn) {
