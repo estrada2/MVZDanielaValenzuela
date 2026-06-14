@@ -703,6 +703,13 @@ function guardarEdicionConsulta(event) {
     consulta.metodoPago = $('editar-consulta-metodo')?.value || 'Efectivo';
     consulta.estadoPago = $('editar-consulta-estado')?.value || 'Pagado';
     consulta.notaPago = $('editar-consulta-nota-pago')?.value || '';
+    if (consulta.estadoPago === 'Pagado') {
+        consulta.abonos = [{ id: uid(), fechaISO: new Date().toISOString(), monto: consulta.costoTotal, metodo: consulta.metodoPago }];
+    } else if (consulta.estadoPago === 'Pendiente') {
+        consulta.abonos = (consulta.abonos || []).filter(abono => (parseFloat(abono.monto) || 0) > 0 && (parseFloat(abono.monto) || 0) < consulta.costoTotal);
+    } else {
+        consulta.abonos = [];
+    }
     consulta.editadoEn = new Date().toISOString();
     registrarAuditoria('consultas', 'Editar', `Consulta editada: ${consulta.tipo || 'Consulta'} (${consulta.servicioCobrado || 'Sin servicio'})`, consulta.id);
     saveStore('clientes');
@@ -715,7 +722,6 @@ function eliminarConsultaHistorial(ownerId, petId, consultaId) {
     if (!confirm('¿Borrar esta consulta del expediente? Esta acción también la quitará de finanzas.')) return;
     const { pet } = buscarConsultaHistorial(ownerId, petId, consultaId);
     if (!pet) return;
-    registrarEliminacionRemota('pagos', consultaId);
     registrarEliminacionRemota('consultas', consultaId);
     pet.historial = (pet.historial || []).filter(consulta => consulta.id !== consultaId);
     registrarAuditoria('consultas', 'Borrar', `Consulta borrada del expediente de ${pet.name}`, consultaId);

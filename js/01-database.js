@@ -143,6 +143,34 @@ async function upsertServiciosExternosCompatible(registros) {
     }
 }
 
+async function upsertPagosCompatible(registros) {
+    try {
+        return await upsertTabla('pagos', registros, 'id, legacy_id');
+    } catch (error) {
+        const mensaje = `${error?.message || ''} ${error?.details || ''} ${error?.hint || ''}`;
+        const pareceColumnaOpcional = /workspace_id|abonos/i.test(mensaje)
+            || error?.code === 'PGRST204'
+            || error?.code === '42703';
+        if (!pareceColumnaOpcional) throw error;
+        console.warn('Reintentando pagos con columnas compatibles.', error);
+        const registrosCompatibles = registros.map(registro => ({
+            user_id: registro.user_id,
+            legacy_id: registro.legacy_id,
+            consulta_id: registro.consulta_id,
+            cliente_id: registro.cliente_id,
+            mascota_id: registro.mascota_id,
+            servicio_cobrado: registro.servicio_cobrado,
+            total: registro.total,
+            metodo_pago: registro.metodo_pago,
+            estado_pago: registro.estado_pago,
+            nota_pago: registro.nota_pago,
+            fecha_iso: registro.fecha_iso,
+            updated_at: registro.updated_at
+        }));
+        return upsertTabla('pagos', registrosCompatibles, 'id, legacy_id');
+    }
+}
+
 async function upsertTablaManual(nombre, registros, columnas = '*') {
     const guardados = [];
     for (const registro of registros) {
@@ -205,7 +233,11 @@ async function procesarEliminacionesPendientes() {
     const pendientes = obtenerEliminacionesPendientes();
     if (!pendientes.length) return;
     const restantes = [];
+    const consultasPendientes = new Set(pendientes.filter(item => item.tabla === 'consultas').map(item => String(item.legacyId)));
     for (const item of pendientes) {
+        if (item.tabla === 'pagos' && consultasPendientes.has(String(item.legacyId))) {
+            continue;
+        }
         try {
             await borrarRegistroPorLegacy(item.tabla, item.legacyId);
         } catch (error) {
@@ -661,7 +693,7 @@ async function guardarEstadoBaseNormalizada() {
             });
         });
     });
-    await upsertTabla('pagos', pagosRows.filter(row => row.consulta_id), 'id, legacy_id');
+    await upsertPagosCompatible(pagosRows.filter(row => row.consulta_id));
 
     const agendaLegacyIds = new Set(agenda.map(cita => cita.id));
     const serviciosExternosRows = serviciosExternos.map(servicio => ({
