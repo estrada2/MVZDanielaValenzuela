@@ -925,6 +925,7 @@
                         </div>
                         <div class="flex bg-slate-100 p-1 rounded-xl border border-gray-200 w-full sm:w-auto overflow-x-auto">
                             <button type="button" onclick="filtrarGanancias('dia')" id="btn-filtro-dia" class="px-3 py-1.5 text-xs font-bold rounded-lg transition-all text-slate-700 bg-white shadow-3xs">Día</button>
+                            <button type="button" onclick="filtrarGanancias('semana')" id="btn-filtro-semana" class="px-3 py-1.5 text-xs font-bold rounded-lg transition-all text-slate-600 hover:text-slate-900">Semana</button>
                             <button type="button" onclick="filtrarGanancias('mes')" id="btn-filtro-mes" class="px-3 py-1.5 text-xs font-bold rounded-lg transition-all text-slate-600 hover:text-slate-900">Mes</button>
                             <button type="button" onclick="filtrarGanancias('todo')" id="btn-filtro-todo" class="px-3 py-1.5 text-xs font-bold rounded-lg transition-all text-slate-600 hover:text-slate-900">Todo</button>
                             <button type="button" onclick="filtrarGanancias('personalizado')" id="btn-filtro-personalizado" class="px-3 py-1.5 text-xs font-bold rounded-lg transition-all text-slate-600 hover:text-slate-900">Rango</button>
@@ -982,6 +983,9 @@
                             <input type="file" id="finanzas-import-csv" accept=".csv,text/csv" onchange="importarRespaldoFinanzasCSV(event)" class="hidden">
                             <button type="button" onclick="document.getElementById('finanzas-import-csv').click()" class="bg-white border border-slate-200 text-slate-700 text-xs font-bold px-3 py-2 rounded-xl flex items-center justify-center gap-2">
                                 <i data-lucide="upload" class="w-4 h-4"></i> Importar respaldo CSV
+                            </button>
+                            <button type="button" onclick="limpiarDuplicadosFinanzas()" class="bg-white border border-amber-200 text-amber-800 text-xs font-bold px-3 py-2 rounded-xl flex items-center justify-center gap-2">
+                                <i data-lucide="copy-x" class="w-4 h-4"></i> Limpiar duplicados
                             </button>
                             <button type="button" onclick="exportarIngresosCSV()" class="bg-slate-900 text-white text-xs font-bold px-3 py-2 rounded-xl flex items-center justify-center gap-2">
                                 <i data-lucide="download" class="w-4 h-4"></i> Exportar CSV
