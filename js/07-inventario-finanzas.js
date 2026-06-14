@@ -355,8 +355,17 @@ function estaEnFiltro(fechaConsulta, ahora = new Date()) {
     if (filtroGananciasActivo === 'dia') return fechaConsulta.toDateString() === ahora.toDateString();
     if (filtroGananciasActivo === 'mes') {
         const mesSeleccionado = Number($('finanzas-mes')?.value ?? ahora.getMonth());
-        return fechaConsulta.getMonth() === mesSeleccionado && fechaConsulta.getFullYear() === ahora.getFullYear();
+        const anioSeleccionado = Number($('finanzas-anio')?.value || ahora.getFullYear());
+        return fechaConsulta.getMonth() === mesSeleccionado && fechaConsulta.getFullYear() === anioSeleccionado;
     }
+    return true;
+}
+function cumpleFiltrosFinanzas(con) {
+    if (!estaEnFiltro(con.fechaObj)) return false;
+    const estado = $('finanzas-filtro-estado')?.value || 'todos';
+    const origen = $('finanzas-filtro-origen')?.value || 'todos';
+    if (estado !== 'todos' && con.estadoPago !== estado) return false;
+    if (origen !== 'todos' && con.origenFinanciero !== origen) return false;
     return true;
 }
 function costoInsumosConsulta(con) {
@@ -440,7 +449,8 @@ function renderGananciasConsultas() {
         $('finanzas-mes').value = String(new Date().getMonth());
         $('finanzas-mes').dataset.inicializado = 'true';
     }
-    const consultasFiltradas = obtenerConsultasFinanzas().filter(con => estaEnFiltro(con.fechaObj));
+    if ($('finanzas-anio') && !$('finanzas-anio').value) $('finanzas-anio').value = String(new Date().getFullYear());
+    const consultasFiltradas = obtenerConsultasFinanzas().filter(cumpleFiltrosFinanzas);
     const cobradas = consultasFiltradas.filter(con => con.estadoPago === 'Pagado');
     const pendientes = consultasFiltradas.filter(con => con.estadoPago === 'Pendiente');
     const totalAcumulado = consultasFiltradas.reduce((acc, con) => {
@@ -1055,7 +1065,7 @@ function filtrarGanancias(tipoFiltro) {
     renderGananciasConsultas();
 }
 function exportarIngresosCSV() {
-    const consultas = obtenerConsultasFinanzas().filter(con => estaEnFiltro(con.fechaObj));
+    const consultas = obtenerConsultasFinanzas().filter(cumpleFiltrosFinanzas);
     if (!consultas.length) {
         alert("No hay ingresos para exportar en este periodo.");
         return;
@@ -1082,6 +1092,159 @@ function exportarIngresosCSV() {
     document.body.appendChild(link);
     link.click();
     link.remove();
+}
+function parseCSVFinanzas(texto) {
+    const filas = [];
+    let fila = [];
+    let campo = '';
+    let entreComillas = false;
+    for (let i = 0; i < texto.length; i++) {
+        const char = texto[i];
+        const next = texto[i + 1];
+        if (char === '"' && entreComillas && next === '"') {
+            campo += '"';
+            i++;
+        } else if (char === '"') {
+            entreComillas = !entreComillas;
+        } else if (char === ',' && !entreComillas) {
+            fila.push(campo);
+            campo = '';
+        } else if ((char === '\n' || char === '\r') && !entreComillas) {
+            if (char === '\r' && next === '\n') i++;
+            fila.push(campo);
+            if (fila.some(valor => String(valor).trim() !== '')) filas.push(fila);
+            fila = [];
+            campo = '';
+        } else {
+            campo += char;
+        }
+    }
+    fila.push(campo);
+    if (fila.some(valor => String(valor).trim() !== '')) filas.push(fila);
+    return filas;
+}
+function fechaISODesdeCSV(valor) {
+    const texto = String(valor || '').trim();
+    const fechaDirecta = new Date(texto);
+    if (!Number.isNaN(fechaDirecta.getTime())) return fechaDirecta.toISOString();
+    const match = texto.match(/(\d{1,2})\/(\d{1,2})\/(\d{4})(?:,\s*(\d{1,2}):(\d{2})(?::(\d{2}))?\s*(a\.m\.|p\.m\.)?)?/i);
+    if (!match) return new Date().toISOString();
+    let [, dia, mes, anio, hora = '12', minuto = '00', segundo = '00', ampm = ''] = match;
+    let horaNum = Number(hora);
+    const ampmNorm = ampm.toLowerCase();
+    if (ampmNorm.includes('p') && horaNum < 12) horaNum += 12;
+    if (ampmNorm.includes('a') && horaNum === 12) horaNum = 0;
+    return new Date(Number(anio), Number(mes) - 1, Number(dia), horaNum, Number(minuto), Number(segundo)).toISOString();
+}
+function keyMovimientoImportado(item) {
+    return [
+        item.fechaISO?.slice(0, 16) || '',
+        item.clienteNombre || '',
+        item.servicioCobrado || '',
+        Number(item.total || 0).toFixed(2),
+        item.tipo || ''
+    ].join('|').toLowerCase();
+}
+function importarIngresosDesdeCSV(filas) {
+    const headers = filas[0].map(h => String(h || '').trim());
+    const idx = nombre => headers.findIndex(h => h.toLowerCase() === nombre.toLowerCase());
+    const existentes = new Set((serviciosExternos || []).map(keyMovimientoImportado));
+    let creados = 0;
+    filas.slice(1).forEach(row => {
+        const fechaISO = fechaISODesdeCSV(row[idx('Fecha')]);
+        const item = {
+            id: uid(),
+            fechaISO,
+            fecha: fechaLocalInputFinanzas(new Date(fechaISO)),
+            hora: new Date(fechaISO).toTimeString().slice(0, 5),
+            clienteNombre: row[idx('Cliente')] || 'Movimiento importado',
+            servicioCobrado: row[idx('Servicios')] || row[idx('Tipo')] || 'Ingreso importado',
+            direccion: '',
+            agendaId: null,
+            total: redondearCentavos(row[idx('Total')] || 0),
+            metodoPago: row[idx('Metodo')] || 'No especificado',
+            estadoPago: row[idx('Estado de pago')] || 'Pagado',
+            notaPago: row[idx('Nota')] || `Importado de CSV · ${row[idx('Mascota')] || 'Sin expediente'}`,
+            clinicaId: null,
+            abonos: [],
+            tipo: row[idx('Tipo')] || 'Ingreso importado'
+        };
+        if (item.estadoPago === 'Pagado' && item.total > 0) {
+            item.abonos = [{ id: uid(), fechaISO, monto: item.total, metodo: item.metodoPago }];
+        }
+        const key = keyMovimientoImportado(item);
+        if (existentes.has(key) || !item.total) return;
+        existentes.add(key);
+        serviciosExternos.unshift(item);
+        creados++;
+    });
+    if (creados) {
+        registrarAuditoria('servicios_externos', 'Importar', `Ingresos importados desde CSV: ${creados}`);
+        saveStore('serviciosExternos');
+    }
+    return creados;
+}
+function importarGastosDesdeCSV(filas) {
+    const headers = filas[0].map(h => String(h || '').trim());
+    const idx = nombre => headers.findIndex(h => h.toLowerCase() === nombre.toLowerCase());
+    const iFecha = idx('Fecha');
+    const iCategoria = idx('Categoria') >= 0 ? idx('Categoria') : idx('Categoría');
+    const iDescripcion = idx('Descripcion') >= 0 ? idx('Descripcion') : idx('Descripción');
+    const iMonto = idx('Monto');
+    const existentes = new Set((gastosFinancieros || []).map(gasto => `${gasto.fechaISO?.slice(0, 10)}|${gasto.descripcion}|${Number(gasto.monto || 0).toFixed(2)}`.toLowerCase()));
+    let creados = 0;
+    filas.slice(1).forEach(row => {
+        const fechaISO = fechaISODesdeCSV(row[iFecha]);
+        const item = {
+            id: uid(),
+            fechaISO,
+            fecha: fechaLocalInputFinanzas(new Date(fechaISO)),
+            categoria: row[iCategoria] || 'Gasto operativo',
+            descripcion: row[iDescripcion] || 'Gasto importado',
+            monto: redondearCentavos(row[iMonto] || 0)
+        };
+        const key = `${item.fechaISO.slice(0, 10)}|${item.descripcion}|${Number(item.monto || 0).toFixed(2)}`.toLowerCase();
+        if (existentes.has(key) || !item.monto) return;
+        existentes.add(key);
+        gastosFinancieros.unshift(item);
+        creados++;
+    });
+    if (creados) {
+        registrarAuditoria('gastos', 'Importar', `Gastos importados desde CSV: ${creados}`);
+        saveStore('gastosFinancieros');
+    }
+    return creados;
+}
+function importarRespaldoFinanzasCSV(event) {
+    const input = event.target;
+    const file = input.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = e => {
+        try {
+            const filas = parseCSVFinanzas(e.target.result || '');
+            if (filas.length < 2) throw new Error('CSV vacío');
+            const headers = filas[0].map(h => String(h || '').trim().toLowerCase());
+            let creados = 0;
+            if (headers.includes('total') && headers.includes('servicios')) {
+                creados = importarIngresosDesdeCSV(filas);
+            } else if (headers.includes('monto')) {
+                creados = importarGastosDesdeCSV(filas);
+            } else {
+                alert('No reconozco este CSV. Para ingresos debe incluir Total y Servicios; para gastos debe incluir Monto.');
+                return;
+            }
+            renderGananciasConsultas();
+            if (typeof renderDashboard === 'function') renderDashboard();
+            alert(creados ? `Importación completada: ${creados} movimientos nuevos.` : 'No se importaron movimientos nuevos; parecen estar duplicados o vacíos.');
+        } catch (error) {
+            console.error('Error importando CSV financiero.', error);
+            alert('No pude importar este CSV. Revisa que sea el respaldo exportado desde Finanzas.');
+        } finally {
+            input.value = '';
+        }
+    };
+    reader.readAsText(file);
 }
 function exportarCorteDelDia() {
     const filtroOriginal = filtroGananciasActivo;
