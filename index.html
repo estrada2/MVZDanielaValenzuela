@@ -916,48 +916,80 @@
             </section>
 
             <section id="view-finanzas" class="hidden space-y-6">
-                <div class="app-panel space-y-4">
-                    <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+                <div class="app-panel space-y-5">
+                    <div class="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
                         <div>
-                            <h3 class="text-base font-bold text-slate-900">Tracking de Ingresos</h3>
-                            <p class="text-xs text-gray-500">Consulta ingresos por periodo, ticket promedio y servicios cobrados.</p>
+                            <p class="section-kicker">Panel financiero</p>
+                            <h3 class="section-title">Tracking de ingresos</h3>
+                            <p class="text-xs text-gray-500">Consulta ingresos, gastos, utilidad y saldos por periodo operativo.</p>
                         </div>
-                        <div class="flex bg-slate-100 p-1 rounded-xl border border-gray-200">
+                        <div class="flex bg-slate-100 p-1 rounded-xl border border-gray-200 w-full sm:w-auto overflow-x-auto">
                             <button type="button" onclick="filtrarGanancias('dia')" id="btn-filtro-dia" class="px-3 py-1.5 text-xs font-bold rounded-lg transition-all text-slate-700 bg-white shadow-3xs">Día</button>
                             <button type="button" onclick="filtrarGanancias('mes')" id="btn-filtro-mes" class="px-3 py-1.5 text-xs font-bold rounded-lg transition-all text-slate-600 hover:text-slate-900">Mes</button>
                             <button type="button" onclick="filtrarGanancias('todo')" id="btn-filtro-todo" class="px-3 py-1.5 text-xs font-bold rounded-lg transition-all text-slate-600 hover:text-slate-900">Todo</button>
                             <button type="button" onclick="filtrarGanancias('personalizado')" id="btn-filtro-personalizado" class="px-3 py-1.5 text-xs font-bold rounded-lg transition-all text-slate-600 hover:text-slate-900">Rango</button>
                         </div>
                     </div>
-                    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-7 gap-3">
-                        <select id="finanzas-mes" onchange="filtrarGanancias('mes')" class="px-3 py-2 border rounded-xl text-sm bg-white outline-none">
-                            <option value="0">Enero</option>
-                            <option value="1">Febrero</option>
-                            <option value="2">Marzo</option>
-                            <option value="3">Abril</option>
-                            <option value="4">Mayo</option>
-                            <option value="5">Junio</option>
-                            <option value="6">Julio</option>
-                            <option value="7">Agosto</option>
-                            <option value="8">Septiembre</option>
-                            <option value="9">Octubre</option>
-                            <option value="10">Noviembre</option>
-                            <option value="11">Diciembre</option>
-                        </select>
-                        <input type="date" id="finanzas-fecha-inicio" onchange="filtrarGanancias('personalizado')" class="px-3 py-2 border rounded-xl text-sm outline-none">
-                        <input type="date" id="finanzas-fecha-fin" onchange="filtrarGanancias('personalizado')" class="px-3 py-2 border rounded-xl text-sm outline-none">
-                        <button type="button" onclick="sincronizarDispositivoActual()" class="bg-blue-600 text-white text-xs font-bold px-3 py-2 rounded-xl flex items-center justify-center gap-2">
-                            <i data-lucide="cloud-upload" class="w-4 h-4"></i> Subir cambios
-                        </button>
-                        <button type="button" onclick="recargarDesdeSupabaseForzado()" class="bg-white border border-blue-200 text-blue-700 text-xs font-bold px-3 py-2 rounded-xl flex items-center justify-center gap-2">
-                            <i data-lucide="cloud-download" class="w-4 h-4"></i> Actualizar nube
-                        </button>
-                        <button type="button" onclick="exportarIngresosCSV()" class="bg-slate-900 text-white text-xs font-bold px-3 py-2 rounded-xl flex items-center justify-center gap-2">
-                            <i data-lucide="download" class="w-4 h-4"></i> Exportar CSV
-                        </button>
-                        <button type="button" onclick="exportarCorteDelDia()" class="bg-emerald-600 text-white text-xs font-bold px-3 py-2 rounded-xl flex items-center justify-center gap-2">
-                            <i data-lucide="clipboard-list" class="w-4 h-4"></i> Corte del día
-                        </button>
+                    <div class="bg-slate-50 border border-slate-200 rounded-2xl p-4 space-y-3">
+                        <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-6 gap-3">
+                            <div>
+                                <label class="block text-[10px] font-black text-slate-500 uppercase mb-1">Mes</label>
+                                <select id="finanzas-mes" onchange="filtrarGanancias('mes')" class="w-full px-3 py-2 border rounded-xl text-sm bg-white outline-none">
+                                    <option value="0">Enero</option>
+                                    <option value="1">Febrero</option>
+                                    <option value="2">Marzo</option>
+                                    <option value="3">Abril</option>
+                                    <option value="4">Mayo</option>
+                                    <option value="5">Junio</option>
+                                    <option value="6">Julio</option>
+                                    <option value="7">Agosto</option>
+                                    <option value="8">Septiembre</option>
+                                    <option value="9">Octubre</option>
+                                    <option value="10">Noviembre</option>
+                                    <option value="11">Diciembre</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-[10px] font-black text-slate-500 uppercase mb-1">Año</label>
+                                <input type="number" id="finanzas-anio" onchange="renderGananciasConsultas()" min="2020" max="2100" class="w-full px-3 py-2 border rounded-xl text-sm bg-white outline-none">
+                            </div>
+                            <div>
+                                <label class="block text-[10px] font-black text-slate-500 uppercase mb-1">Desde</label>
+                                <input type="date" id="finanzas-fecha-inicio" onchange="filtrarGanancias('personalizado')" class="w-full px-3 py-2 border rounded-xl text-sm outline-none bg-white">
+                            </div>
+                            <div>
+                                <label class="block text-[10px] font-black text-slate-500 uppercase mb-1">Hasta</label>
+                                <input type="date" id="finanzas-fecha-fin" onchange="filtrarGanancias('personalizado')" class="w-full px-3 py-2 border rounded-xl text-sm outline-none bg-white">
+                            </div>
+                            <div>
+                                <label class="block text-[10px] font-black text-slate-500 uppercase mb-1">Estado</label>
+                                <select id="finanzas-filtro-estado" onchange="renderGananciasConsultas()" class="w-full px-3 py-2 border rounded-xl text-sm bg-white outline-none">
+                                    <option value="todos">Todos</option>
+                                    <option value="Pagado">Pagados</option>
+                                    <option value="Pendiente">Pendientes</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-[10px] font-black text-slate-500 uppercase mb-1">Origen</label>
+                                <select id="finanzas-filtro-origen" onchange="renderGananciasConsultas()" class="w-full px-3 py-2 border rounded-xl text-sm bg-white outline-none">
+                                    <option value="todos">Todos</option>
+                                    <option value="Consulta">Consultas</option>
+                                    <option value="Externo">Externos</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="flex flex-col sm:flex-row gap-2 sm:justify-end">
+                            <input type="file" id="finanzas-import-csv" accept=".csv,text/csv" onchange="importarRespaldoFinanzasCSV(event)" class="hidden">
+                            <button type="button" onclick="document.getElementById('finanzas-import-csv').click()" class="bg-white border border-slate-200 text-slate-700 text-xs font-bold px-3 py-2 rounded-xl flex items-center justify-center gap-2">
+                                <i data-lucide="upload" class="w-4 h-4"></i> Importar respaldo CSV
+                            </button>
+                            <button type="button" onclick="exportarIngresosCSV()" class="bg-slate-900 text-white text-xs font-bold px-3 py-2 rounded-xl flex items-center justify-center gap-2">
+                                <i data-lucide="download" class="w-4 h-4"></i> Exportar CSV
+                            </button>
+                            <button type="button" onclick="exportarCorteDelDia()" class="bg-emerald-600 text-white text-xs font-bold px-3 py-2 rounded-xl flex items-center justify-center gap-2">
+                                <i data-lucide="clipboard-list" class="w-4 h-4"></i> Corte del día
+                            </button>
+                        </div>
                     </div>
                     <div class="grid grid-cols-1 md:grid-cols-5 gap-4 pt-2">
                         <div class="bg-slate-900 border border-slate-900 p-4 rounded-xl">
@@ -1745,7 +1777,6 @@
     </div>
 
     <nav class="mobile-bottom-nav md:hidden fixed bottom-0 left-0 right-0 bg-slate-900 border-t border-blue-900 text-white min-h-16 flex items-center justify-around px-2 z-20 shadow-lg">
-        <button onclick="abrirPanelCuentaMovil()" id="nav-mobile-cuenta" class="flex flex-col items-center text-blue-200"><i data-lucide="user-circle-2" class="w-5 h-5"></i><span class="text-[10px] mt-1">Cuenta</span></button>
         <button onclick="switchTab('dashboard')" id="nav-mobile-dashboard" class="flex flex-col items-center text-amber-300"><i data-lucide="layout-dashboard" class="w-5 h-5"></i><span class="text-[10px] mt-1">Inicio</span></button>
         <button onclick="switchTab('clientes')" id="nav-mobile-clientes" class="flex flex-col items-center text-blue-200"><i data-lucide="users" class="w-5 h-5"></i><span class="text-[10px] mt-1">Clientes</span></button>
         <button onclick="switchTab('agenda')" id="nav-mobile-agenda" class="flex flex-col items-center text-blue-200"><i data-lucide="calendar" class="w-5 h-5"></i><span class="text-[10px] mt-1">Agenda</span></button>
