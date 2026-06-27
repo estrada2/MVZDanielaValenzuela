@@ -1078,8 +1078,11 @@ function abrirModalMascota(oId, pId=null) {
         $('m-age').value = m.age; 
         $('m-spayed').checked = m.spayed;
         $('titulo-modal-mascota').innerHTML = `<i data-lucide="edit" class="text-amber-600 w-5 h-5"></i> Editar Paciente`;
+        $('mascota-responsiva-opcion')?.classList.add('hidden');
     } else {
         $('titulo-modal-mascota').innerHTML = `<i data-lucide="dog" class="text-blue-600 w-5 h-5"></i> Registrar Paciente`;
+        $('mascota-responsiva-opcion')?.classList.remove('hidden');
+        if ($('m-firmar-responsiva')) $('m-firmar-responsiva').checked = true;
     }
     $('modal-agregar-mascota').classList.remove('hidden');
     renderIcons();
@@ -1109,6 +1112,8 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 });
 function salvarMascotaData(oId, pId, nm, sp, ag, spy, b64) {
+    let mascotaGuardadaId = pId ? parseInt(pId) : null;
+    const firmarAlRegistrar = !pId && Boolean($('m-firmar-responsiva')?.checked);
     clientes = clientes.map(c => {
         if(c.id === oId) {
             if(pId) {
@@ -1116,6 +1121,7 @@ function salvarMascotaData(oId, pId, nm, sp, ag, spy, b64) {
                 registrarAuditoria('mascotas', 'Editar', `Paciente actualizado: ${nm}`, pId);
             } else {
                 const nuevoId = uid();
+                mascotaGuardadaId = nuevoId;
                 c.mascotas.push({ id: nuevoId, name:nm, species:sp, age:ag, spayed:spy, photo:b64, estudios:[], vacunasManuales:[], historial:[], responsiva: null });
                 registrarAuditoria('mascotas', 'Crear', `Paciente registrado: ${nm}`, nuevoId);
             }
@@ -1126,4 +1132,19 @@ function salvarMascotaData(oId, pId, nm, sp, ag, spy, b64) {
     cerrarModalMascota(); 
     renderSubpaginaMascotas(); 
     actualizarSelectAgenda();
+    if (firmarAlRegistrar && mascotaGuardadaId) {
+        setTimeout(() => abrirResponsivaDesdeAltaMascota(oId, mascotaGuardadaId), 120);
+    }
+}
+
+function abrirResponsivaDesdeAltaMascota(ownerId, petId) {
+    const ownerObj = clientes.find(cliente => cliente.id === ownerId);
+    const petObj = ownerObj?.mascotas?.find(mascota => mascota.id === petId);
+    if (!ownerObj || !petObj) return;
+    consultaSeleccionada = { ownerId, petId, ownerObj, petObj };
+    firmaDuenoEstablecida = false;
+    firmaVetEstablecida = false;
+    limpiarLienzoFirma('canvas-firma');
+    limpiarLienzoFirma('canvas-firma-vet');
+    abrirModalResponsivaFlotante();
 }

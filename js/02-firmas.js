@@ -78,6 +78,45 @@ function cargarResponsivaMascotaEnCanvas() {
     firmaVetEstablecida = true;
     actualizarIndicadorFirmaStatus();
 }
+async function guardarResponsivaPaciente() {
+    if (!consultaSeleccionada?.ownerId || !consultaSeleccionada?.petId) {
+        alert('Selecciona una mascota antes de guardar la responsiva.');
+        return;
+    }
+    if (!firmaDuenoEstablecida || !firmaVetEstablecida) {
+        alert('La responsiva requiere la firma del propietario y del médico veterinario.');
+        return;
+    }
+    const owner = clientes.find(cliente => cliente.id === consultaSeleccionada.ownerId);
+    const pet = owner?.mascotas?.find(mascota => mascota.id === consultaSeleccionada.petId);
+    if (!owner || !pet) return;
+    if (pet.responsiva?.firmaDueno && pet.responsiva?.firmaVet) {
+        const reemplazar = confirm('Esta mascota ya tiene una responsiva firmada. ¿Deseas reemplazarla por las firmas actuales?');
+        if (!reemplazar) return;
+    }
+    const referencia = uid();
+    let firmaDueno = $('canvas-firma')?.toDataURL() || '';
+    let firmaVet = $('canvas-firma-vet')?.toDataURL() || '';
+    if (typeof subirImagenDataUrl === 'function') {
+        firmaDueno = await subirImagenDataUrl(firmaDueno, 'firmas', `responsiva-dueno-${referencia}`);
+        firmaVet = await subirImagenDataUrl(firmaVet, 'firmas', `responsiva-vet-${referencia}`);
+    }
+    pet.responsiva = {
+        fechaISO: new Date().toISOString(),
+        disclaimer: `${TEXTO_DECLARACION_RESPONSIVA} ${TEXTO_CONSENTIMIENTO_RESPONSIVA}`,
+        firmaDueno,
+        firmaVet
+    };
+    consultaSeleccionada.petObj = pet;
+    firmaDuenoEstablecida = true;
+    firmaVetEstablecida = true;
+    registrarAuditoria('responsivas', 'Firmar', `Responsiva guardada para ${pet.name}`, pet.id);
+    saveStore('clientes');
+    cerrarModalResponsivaFlotante();
+    if (typeof renderHistorialClinicoActivo === 'function') renderHistorialClinicoActivo();
+    if (typeof renderSubpaginaMascotas === 'function') renderSubpaginaMascotas();
+    alert('Responsiva guardada en el expediente de la mascota.');
+}
 function recolectarSintomas() {
     if($('check-asintomatico')?.checked) return "Declarado sano/asintomático";
     const checkboxes = document.querySelectorAll('.sintoma-chk:checked');

@@ -99,12 +99,16 @@ function autocompletarDireccionAgenda() {
         if ($('agenda-direccion')) $('agenda-direccion').value = clinica?.direccion || '';
         if ($('agenda-clinica-servicio')) $('agenda-clinica-servicio').value = '';
         if ($('agenda-clinica-costo')) $('agenda-clinica-costo').value = '';
+        if ($('agenda-clinica-estado-pago')) $('agenda-clinica-estado-pago').value = 'Pendiente';
+        if ($('agenda-clinica-metodo-pago')) $('agenda-clinica-metodo-pago').value = 'Efectivo';
         renderIcons();
         return;
     }
     $('agenda-clinica-detalle')?.classList.add('hidden');
     if ($('agenda-clinica-servicio')) $('agenda-clinica-servicio').value = '';
     if ($('agenda-clinica-costo')) $('agenda-clinica-costo').value = '';
+    if ($('agenda-clinica-estado-pago')) $('agenda-clinica-estado-pago').value = 'Pendiente';
+    if ($('agenda-clinica-metodo-pago')) $('agenda-clinica-metodo-pago').value = 'Efectivo';
     const ownerId = parseInt(selectVal.split('|')[0]);
     const tgt = clientes.find(c => c.id === ownerId);
     if(tgt) $('agenda-direccion').value = tgt.address;
@@ -136,6 +140,8 @@ function sincronizarServicioExternoDesdeAgenda(cita, clinica, servicio, total) {
     if (!cita || !clinica) return;
     const existente = (serviciosExternos || []).find(item => item.agendaId === cita.id);
     const totalNumerico = parseFloat(total ?? cita.totalServicioExterno ?? cita.costoServicioExterno ?? existente?.total ?? 0) || 0;
+    const estadoPago = cita.estadoPagoExterno || existente?.estadoPago || 'Pendiente';
+    const metodoPago = cita.metodoPagoExterno || existente?.metodoPago || 'Efectivo';
     const item = {
         id: existente?.id || uid(),
         fecha: cita.fecha,
@@ -146,10 +152,12 @@ function sincronizarServicioExternoDesdeAgenda(cita, clinica, servicio, total) {
         direccion: cita.direccion || clinica.direccion || '',
         agendaId: cita.id,
         total: totalNumerico,
-        metodoPago: existente?.metodoPago || 'Efectivo',
-        estadoPago: existente?.estadoPago || 'Pendiente',
+        metodoPago,
+        estadoPago,
         notaPago: existente?.notaPago || '',
-        abonos: existente?.abonos || [],
+        abonos: estadoPago === 'Pagado'
+            ? [{ id: existente?.abonos?.[0]?.id || uid(), fechaISO: existente?.abonos?.[0]?.fechaISO || new Date().toISOString(), monto: totalNumerico, metodo: metodoPago }]
+            : (existente?.estadoPago === 'Pagado' ? [] : (existente?.abonos || [])),
         clinicaId: clinica.id,
         tipo: 'Servicio externo'
     };
@@ -169,7 +177,7 @@ const AGENDA_SEPARACION_MINUTOS = 30;
 function capturarFormularioAgendaActivo() {
     const form = $('form-agenda');
     if (!form) return null;
-    const tieneDatos = ['edit-agenda-id', 'agenda-fecha', 'agenda-hora', 'agenda-cliente-select', 'agenda-direccion', 'agenda-notes', 'agenda-clinica-servicio', 'agenda-clinica-costo']
+    const tieneDatos = ['edit-agenda-id', 'agenda-fecha', 'agenda-hora', 'agenda-cliente-select', 'agenda-direccion', 'agenda-notes', 'agenda-clinica-servicio', 'agenda-clinica-costo', 'agenda-clinica-estado-pago', 'agenda-clinica-metodo-pago']
         .some(id => String($(id)?.value || '').trim());
     if (!tieneDatos) return null;
     return {
@@ -181,7 +189,9 @@ function capturarFormularioAgendaActivo() {
         direccion: $('agenda-direccion')?.value || '',
         notas: $('agenda-notes')?.value || '',
         clinicaServicio: $('agenda-clinica-servicio')?.value || '',
-        clinicaCosto: $('agenda-clinica-costo')?.value || ''
+        clinicaCosto: $('agenda-clinica-costo')?.value || '',
+        clinicaEstadoPago: $('agenda-clinica-estado-pago')?.value || 'Pendiente',
+        clinicaMetodoPago: $('agenda-clinica-metodo-pago')?.value || 'Efectivo'
     };
 }
 function restaurarFormularioAgendaActivo(snapshot) {
@@ -195,6 +205,8 @@ function restaurarFormularioAgendaActivo(snapshot) {
     if ($('agenda-notes')) $('agenda-notes').value = snapshot.notas;
     if ($('agenda-clinica-servicio')) $('agenda-clinica-servicio').value = snapshot.clinicaServicio;
     if ($('agenda-clinica-costo')) $('agenda-clinica-costo').value = snapshot.clinicaCosto;
+    if ($('agenda-clinica-estado-pago')) $('agenda-clinica-estado-pago').value = snapshot.clinicaEstadoPago || 'Pendiente';
+    if ($('agenda-clinica-metodo-pago')) $('agenda-clinica-metodo-pago').value = snapshot.clinicaMetodoPago || 'Efectivo';
     if (snapshot.cliente?.startsWith('clinic|')) $('agenda-clinica-detalle')?.classList.remove('hidden');
     if (snapshot.editId && $('btn-cancelar-agenda')) {
         $('titulo-form-agenda').innerHTML = `<i data-lucide="calendar-range" class="text-amber-600 w-5 h-5"></i> Reagendar Visita`;
@@ -385,7 +397,7 @@ function cerrarModalAgenda() {
     $('modal-agenda')?.classList.add('hidden');
 }
 function bloquearCamposReagendaAgenda(activo) {
-    ['agenda-cliente-buscar', 'agenda-direccion', 'agenda-notes', 'agenda-clinica-servicio', 'agenda-clinica-costo'].forEach(id => {
+    ['agenda-cliente-buscar', 'agenda-direccion', 'agenda-notes', 'agenda-clinica-servicio', 'agenda-clinica-costo', 'agenda-clinica-estado-pago', 'agenda-clinica-metodo-pago'].forEach(id => {
         const campo = $(id);
         if (!campo) return;
         campo.disabled = activo;
@@ -450,6 +462,7 @@ function renderAgendaRow(a, hoy = fechaLocalISO(), compacto = false) {
                 <div class="action-menu-popover row-action-panel">
                     ${puedeConfirmar ? `<button type="button" onclick="cambiarEstadoCita(${a.id}, 'Confirmada')"><i data-lucide="check" class="w-4 h-4 text-emerald-700"></i> Confirmar cita</button>` : ''}
                     ${puedeReagendar ? `<button type="button" onclick="iniciarEdicionAgenda(${a.id})"><i data-lucide="calendar-range" class="w-4 h-4 text-blue-700"></i> Reagendar</button>` : ''}
+                    ${esServicioExterno && estado !== 'Cancelada' ? `<button type="button" onclick="iniciarEdicionAgenda(${a.id}, 'editar-externo')"><i data-lucide="edit-3" class="w-4 h-4 text-amber-700"></i> Editar servicio</button>` : ''}
                     <button type="button" onclick="crearRecordatorioApple(${a.id})"><i data-lucide="list-todo" class="w-4 h-4 text-amber-700"></i> Enviar a Reminders</button>
                     ${puedeCancelar ? `<button type="button" onclick="cambiarEstadoCita(${a.id}, 'Cancelada')" class="text-rose-700"><i data-lucide="x-circle" class="w-4 h-4"></i> Cancelar cita</button>` : ''}
                     <button type="button" onclick="eliminarCita(${a.id})" class="text-rose-700"><i data-lucide="trash-2" class="w-4 h-4"></i> Eliminar</button>
@@ -616,6 +629,7 @@ function renderAgenda() {
 function guardarCita(e) {
     e.preventDefault();
     const editId = $('edit-agenda-id').value;
+    const editMode = $('edit-agenda-mode')?.value || 'reagendar';
     const fecha = $('agenda-fecha').value;
     const hora = $('agenda-hora').value;
     const conflicto = conflictoHorarioAgenda(fecha, hora, editId);
@@ -623,7 +637,7 @@ function guardarCita(e) {
         alert(`Ya hay una visita activa muy cerca de ese horario.\n\nCita existente: ${horaCita(conflicto)} hrs · ${conflicto.clienteNombre || 'Cliente'} ${conflicto.petName ? `(${conflicto.petName})` : ''}\n\nAgenda la siguiente visita al menos ${AGENDA_SEPARACION_MINUTOS} minutos después.`);
         return;
     }
-    if (editId) {
+    if (editId && editMode === 'reagendar') {
         const idEditando = parseInt(editId);
         agenda = agenda.map(item => item.id === idEditando ? { ...item, fecha, hora, estado: 'Programada' } : item);
         const servicioExterno = (serviciosExternos || []).find(item => item.agendaId === idEditando);
@@ -665,6 +679,12 @@ function guardarCita(e) {
         }
         const servicio = $('agenda-clinica-servicio')?.value.trim() || $('agenda-notes')?.value.trim() || 'Servicio externo';
         const total = parseFloat($('agenda-clinica-costo')?.value || 0);
+        const estadoPagoExterno = $('agenda-clinica-estado-pago')?.value || 'Pendiente';
+        const metodoPagoExterno = $('agenda-clinica-metodo-pago')?.value || 'Efectivo';
+        if (total <= 0) {
+            alert('Ingresa el costo del servicio externo para registrarlo en Finanzas.');
+            return;
+        }
         const citaBase = {
             id: editId ? parseInt(editId) : uid(),
             clienteId: null,
@@ -677,6 +697,8 @@ function guardarCita(e) {
             direccion: $('agenda-direccion').value || clinica.direccion || '',
             notas: servicio,
             totalServicioExterno: total,
+            estadoPagoExterno,
+            metodoPagoExterno,
             estado: editId ? (agenda.find(item => item.id === parseInt(editId))?.estado || 'Programada') : 'Programada',
             origen: 'Servicio externo'
         };
@@ -744,11 +766,12 @@ function preguntarCrearReminderAutomatico(idCita) {
     const quiere = confirm('Cita guardada. ¿Crear recordatorio en Apple Reminders ahora?');
     if (quiere) crearRecordatorioApple(idCita);
 }
-function iniciarEdicionAgenda(id) {
+function iniciarEdicionAgenda(id, modo = 'reagendar') {
     const target = agenda.find(item => item.id === id);
     if (!target) return;
     abrirModalAgenda(target.fecha || fechaAgendaSeleccionada || fechaLocalISO());
     $('edit-agenda-id').value = target.id;
+    if ($('edit-agenda-mode')) $('edit-agenda-mode').value = modo;
     $('agenda-fecha').value = target.fecha;
     $('agenda-hora').value = target.hora;
     if ((target.origen || '') === 'Servicio externo' && target.clinicaId) {
@@ -759,6 +782,8 @@ function iniciarEdicionAgenda(id) {
         const servicioExterno = (serviciosExternos || []).find(item => item.agendaId === target.id);
         if ($('agenda-clinica-servicio')) $('agenda-clinica-servicio').value = servicioExterno?.servicioCobrado || target.notas || target.petName || '';
         if ($('agenda-clinica-costo')) $('agenda-clinica-costo').value = servicioExterno?.total || '';
+        if ($('agenda-clinica-estado-pago')) $('agenda-clinica-estado-pago').value = servicioExterno?.estadoPago || target.estadoPagoExterno || 'Pendiente';
+        if ($('agenda-clinica-metodo-pago')) $('agenda-clinica-metodo-pago').value = servicioExterno?.metodoPago || target.metodoPagoExterno || 'Efectivo';
     } else {
         const clientVal = target.clienteId || target.ownerId;
         $('agenda-cliente-select').value = target.petId ? `${clientVal}|${target.petId}` : `${clientVal}|`;
@@ -767,10 +792,13 @@ function iniciarEdicionAgenda(id) {
     }
     $('agenda-direccion').value = target.direccion || target.address || '';
     $('agenda-notes').value = (target.notas || target.notes) === 'Sin notas' ? '' : (target.notas || target.notes);
-    $('titulo-form-agenda').innerHTML = `<i data-lucide="calendar-range" class="text-amber-600 w-5 h-5"></i> Reagendar Visita`;
-    $('btn-guardar-agenda').innerText = "Guardar Reagenda";
+    const editandoExterno = modo === 'editar-externo' && ((target.origen || '') === 'Servicio externo' || target.clinicaId);
+    $('titulo-form-agenda').innerHTML = editandoExterno
+        ? `<i data-lucide="edit-3" class="text-amber-600 w-5 h-5"></i> Editar Servicio Externo`
+        : `<i data-lucide="calendar-range" class="text-amber-600 w-5 h-5"></i> Reagendar Visita`;
+    $('btn-guardar-agenda').innerText = editandoExterno ? 'Guardar cambios' : 'Guardar Reagenda';
     $('btn-cancelar-agenda').classList.remove('hidden');
-    bloquearCamposReagendaAgenda(true);
+    bloquearCamposReagendaAgenda(!editandoExterno);
     renderHorariosRecomendados();
     renderIcons();
 }
@@ -859,6 +887,7 @@ function gestionarServicioExternoAgenda(agendaId) {
 }
 function cancelarEdicionAgenda() {
     $('edit-agenda-id').value = ''; 
+    if ($('edit-agenda-mode')) $('edit-agenda-mode').value = 'reagendar';
     bloquearCamposReagendaAgenda(false);
     $('form-agenda').reset();
     if ($('agenda-fecha')) $('agenda-fecha').value = fechaAgendaSeleccionada || fechaLocalISO();
@@ -875,6 +904,8 @@ function cancelarEdicionAgenda() {
     $('agenda-clinica-detalle')?.classList.add('hidden');
     if ($('agenda-clinica-servicio')) $('agenda-clinica-servicio').value = '';
     if ($('agenda-clinica-costo')) $('agenda-clinica-costo').value = '';
+    if ($('agenda-clinica-estado-pago')) $('agenda-clinica-estado-pago').value = 'Pendiente';
+    if ($('agenda-clinica-metodo-pago')) $('agenda-clinica-metodo-pago').value = 'Efectivo';
     cerrarModalAgenda();
     renderHorariosRecomendados();
     renderIcons();
@@ -898,12 +929,16 @@ function datosRecordatorioCita(cita) {
     const fecha = normalizarFechaCita(cita);
     const hora = horaCita(cita);
     const fechaRecordatorio = `${fecha} ${hora}`;
-    const titulo = `VetHome: ${mascota} - ${cliente} | ${fechaRecordatorio}`;
-    const detalle = [
-        `Actividad: ${notas}`,
-        `Lugar: ${direccion}`
-    ].join('\n');
-    return { titulo, detalle, fecha, hora, fechaRecordatorio, direccion, notas, cliente, mascota };
+    const fechaDate = new Date(`${fecha}T${hora || '12:00'}:00`);
+    const dateISO = Number.isNaN(fechaDate.getTime()) ? '' : fechaDate.toISOString();
+    const esServicioExterno = (cita.origen || '') === 'Servicio externo' || Boolean(cita.clinicaId);
+    const actividad = notas !== 'Sin notas' ? notas : mascota;
+    const tituloBase = esServicioExterno
+        ? `${actividad} - ${cliente}`
+        : `${mascota} - ${cliente}`;
+    const titulo = `${tituloBase} | ${hora} hrs`;
+    const detalle = '';
+    return { titulo, detalle, fecha, hora, fechaRecordatorio, dateISO, direccion, notas, cliente, mascota };
 }
 async function copiarTextoSeguro(texto) {
     try {
@@ -918,8 +953,15 @@ async function crearRecordatorioApple(idCita) {
     const cita = agenda.find(item => item.id === idCita);
     if (!cita) return;
     const datos = datosRecordatorioCita(cita);
+    if (!datos.dateISO) {
+        alert('La cita no tiene una fecha y hora válidas para crear el recordatorio.');
+        return;
+    }
     const shortcutName = 'VetHome Recordatorio';
-    const textoPlano = `${datos.titulo}\n\n${datos.detalle}`;
+    const textoPlano = JSON.stringify({
+        title: datos.titulo,
+        dateISO: datos.dateISO
+    });
     const shortcutUrl = `shortcuts://x-callback-url/run-shortcut?name=${encodeURIComponent(shortcutName)}&input=text&text=${encodeURIComponent(textoPlano)}`;
     if (!esDispositivoAppleMovil()) {
         const copiado = await copiarTextoSeguro(textoPlano);
@@ -929,9 +971,9 @@ async function crearRecordatorioApple(idCita) {
         return;
     }
     await copiarTextoSeguro(textoPlano);
-    if (!localStorage.getItem('vethome_reminders_shortcut_hint')) {
-        alert('Beta Apple Reminders: el atajo "VetHome Recordatorio" solo debe recibir Texto y agregar la Entrada del atajo a Recordatorios. También copié los datos por si necesitas pegarlos manualmente.');
-        localStorage.setItem('vethome_reminders_shortcut_hint', '1');
+    if (!localStorage.getItem('vethome_reminders_shortcut_hint_v2')) {
+        alert('El atajo "VetHome Recordatorio" debe convertir la Entrada en diccionario, obtener title y dateISO, y crear el recordatorio usando title con alerta en dateISO.');
+        localStorage.setItem('vethome_reminders_shortcut_hint_v2', '1');
     }
     window.location.href = shortcutUrl;
 }

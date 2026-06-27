@@ -277,6 +277,7 @@ function renderFinanzas() {
             </div>
         </div>`).join('');
     renderServiciosExternos();
+    renderGananciasConsultas();
     renderIcons();
 }
 function guardarServicio(e) {
@@ -444,10 +445,12 @@ function normalizarServiciosExternosParaFinanzas() {
                 direccion: cita.direccion || clinica?.direccion || '',
                 agendaId: cita.id,
                 total: redondearCentavos(cita.totalServicioExterno || cita.costoServicioExterno || 0),
-                metodoPago: 'Efectivo',
-                estadoPago: 'Pendiente',
+                metodoPago: cita.metodoPagoExterno || 'Efectivo',
+                estadoPago: cita.estadoPagoExterno || 'Pendiente',
                 notaPago: '',
-                abonos: [],
+                abonos: (cita.estadoPagoExterno || 'Pendiente') === 'Pagado'
+                    ? [{ id: uid(), fechaISO: fechaISOFinanzasSegura(cita.fecha, cita.hora), monto: redondearCentavos(cita.totalServicioExterno || cita.costoServicioExterno || 0), metodo: cita.metodoPagoExterno || 'Efectivo' }]
+                    : [],
                 clinicaId: cita.clinicaId || null,
                 tipo: 'Servicio externo'
             }, ...(serviciosExternos || [])];

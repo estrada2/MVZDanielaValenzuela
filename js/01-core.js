@@ -752,6 +752,7 @@ async function sincronizarFinanzasAlAbrir() {
         aplicarEstado(estadoRemoto);
         guardarStoresLocales();
         if (typeof renderFinanzas === 'function') renderFinanzas();
+        if (typeof renderGananciasConsultas === 'function') renderGananciasConsultas();
         actualizarEstadoSync('Sincronizado');
     } catch (error) {
         const codigo = codigoErrorSync(error, 'SYNC-FIN');
