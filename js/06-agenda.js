@@ -921,6 +921,14 @@ function abrirNavegacionMaps(direccion) {
 function esDispositivoAppleMovil() {
     return /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
 }
+function horaRecordatorio12Horas(hora24) {
+    const [horaTexto = '0', minutos = '00'] = String(hora24 || '00:00').split(':');
+    const horaNumero = Number(horaTexto);
+    if (!Number.isFinite(horaNumero)) return hora24 || '';
+    const periodo = horaNumero >= 12 ? 'PM' : 'AM';
+    const hora12 = horaNumero % 12 || 12;
+    return `${hora12}:${String(minutos).padStart(2, '0')} ${periodo}`;
+}
 function datosRecordatorioCita(cita) {
     const cliente = cita.clienteNombre || cita.ownerName || 'Cliente';
     const mascota = cita.petName && cita.petName !== 'N/A' ? cita.petName : 'Paciente';
@@ -936,7 +944,7 @@ function datosRecordatorioCita(cita) {
     const tituloBase = esServicioExterno
         ? `${actividad} - ${cliente}`
         : `${mascota} - ${cliente}`;
-    const titulo = `${tituloBase} | ${hora} hrs`;
+    const titulo = `${tituloBase} | ${horaRecordatorio12Horas(hora)}`;
     const detalle = '';
     return { titulo, detalle, fecha, hora, fechaRecordatorio, dateISO, direccion, notas, cliente, mascota };
 }
