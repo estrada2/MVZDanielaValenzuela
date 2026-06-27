@@ -22,6 +22,9 @@ let workspaceSoportado = false;
 let realtimeChannel = null;
 let syncTimer = null;
 let remotePollingTimer = null;
+let ultimoRefrescoRemotoAt = 0;
+let refrescoRemotoEnCurso = false;
+let visibilitySyncRegistrado = false;
 let guardandoRemoto = false;
 let guardadoPendiente = false;
 let sincronizacionParcialPendiente = false;
@@ -29,9 +32,20 @@ let ultimoCodigoSyncParcial = '';
 let edicionLocalActivaHasta = 0;
 const STORAGE_BUCKET = 'vet-files';
 const OFFLINE_PENDING_KEY = 'vet_pro_sync_pendiente';
+const PENDING_STORES_KEY = 'vet_pro_sync_stores';
+const PENDING_RECORDS_KEY = 'vet_pro_sync_records';
 const LOCAL_ACTIVE_USER_KEY = 'vet_pro_usuario_activo';
+const DEVICE_ID_KEY = 'vet_pro_device_id';
 const DELETE_QUEUE_KEY = 'vet_pro_delete_queue';
 const estaOffline = () => typeof navigator !== 'undefined' && navigator.onLine === false;
+function obtenerDeviceId() {
+    let id = localStorage.getItem(DEVICE_ID_KEY);
+    if (!id) {
+        id = globalThis.crypto?.randomUUID?.() || `device-${uid()}`;
+        localStorage.setItem(DEVICE_ID_KEY, id);
+    }
+    return id;
+}
 function loadStore(key, fallback) {
     try {
         return JSON.parse(localStorage.getItem(key)) || fallback;
@@ -70,6 +84,77 @@ function marcarCambiosPendientesOffline(pendiente = true) {
         console.warn('No se pudo actualizar estado offline.', error);
     }
 }
+function obtenerStoresPendientes() {
+    try {
+        const lista = JSON.parse(localStorage.getItem(PENDING_STORES_KEY) || '[]');
+        return new Set(Array.isArray(lista) ? lista.filter(nombre => STORE_KEYS[nombre]) : []);
+    } catch {
+        return new Set();
+    }
+}
+function obtenerRegistrosPendientes() {
+    try {
+        const data = JSON.parse(localStorage.getItem(PENDING_RECORDS_KEY) || '{}');
+        return data && typeof data === 'object' ? data : {};
+    } catch {
+        return {};
+    }
+}
+function datosStoreActual(nombre) {
+    return {
+        clientes,
+        inventario,
+        agenda,
+        finanzas,
+        serviciosExternos,
+        clinicasExternas,
+        gastosFinancieros,
+        auditLogs
+    }[nombre] || [];
+}
+function detectarIdsModificados(nombre) {
+    const anteriores = loadStore(STORE_KEYS[nombre], []);
+    const actuales = datosStoreActual(nombre);
+    const mapaAnterior = new Map((anteriores || []).map(item => [String(item?.id), JSON.stringify(item)]));
+    return (actuales || [])
+        .filter(item => item?.id !== undefined && mapaAnterior.get(String(item.id)) !== JSON.stringify(item))
+        .map(item => item.id);
+}
+function marcarRegistrosPendientes(nombre, ids = []) {
+    if (!STORE_KEYS[nombre] || !ids.length) return;
+    const pendientes = obtenerRegistrosPendientes();
+    const actuales = new Set(pendientes[nombre] || []);
+    ids.forEach(id => actuales.add(id));
+    pendientes[nombre] = Array.from(actuales);
+    localStorage.setItem(PENDING_RECORDS_KEY, JSON.stringify(pendientes));
+}
+function marcarStorePendiente(nombre) {
+    if (!STORE_KEYS[nombre]) return;
+    const pendientes = obtenerStoresPendientes();
+    pendientes.add(nombre);
+    localStorage.setItem(PENDING_STORES_KEY, JSON.stringify(Array.from(pendientes)));
+    marcarCambiosPendientesOffline(true);
+}
+function marcarTodosStoresPendientes() {
+    localStorage.setItem(PENDING_STORES_KEY, JSON.stringify(Object.keys(STORE_KEYS)));
+    localStorage.removeItem(PENDING_RECORDS_KEY);
+    marcarCambiosPendientesOffline(true);
+}
+function limpiarStoresSincronizados(stores) {
+    const pendientes = obtenerStoresPendientes();
+    (stores || []).forEach(nombre => pendientes.delete(nombre));
+    if (pendientes.size) {
+        localStorage.setItem(PENDING_STORES_KEY, JSON.stringify(Array.from(pendientes)));
+        marcarCambiosPendientesOffline(true);
+    } else {
+        localStorage.removeItem(PENDING_STORES_KEY);
+        marcarCambiosPendientesOffline(false);
+    }
+    const registros = obtenerRegistrosPendientes();
+    (stores || []).forEach(nombre => delete registros[nombre]);
+    if (Object.keys(registros).length) localStorage.setItem(PENDING_RECORDS_KEY, JSON.stringify(registros));
+    else localStorage.removeItem(PENDING_RECORDS_KEY);
+}
 function hayCambiosPendientesOffline() {
     try {
         return localStorage.getItem(OFFLINE_PENDING_KEY) === '1';
@@ -102,6 +187,16 @@ function combinarPorId(remoto = [], local = []) {
     (remoto || []).forEach(item => mapa.set(item.id, item));
     (local || []).forEach(item => {
         if (!mapa.has(item.id)) mapa.set(item.id, item);
+    });
+    return Array.from(mapa.values());
+}
+function combinarConRegistrosPendientes(remoto = [], local = [], idsPendientes = null) {
+    const mapa = new Map((remoto || []).map(item => [String(item.id), item]));
+    const protegerTodos = !Array.isArray(idsPendientes) || !idsPendientes.length;
+    const protegidos = new Set((idsPendientes || []).map(String));
+    (local || []).forEach(item => {
+        const key = String(item.id);
+        if (protegerTodos || protegidos.has(key) || !mapa.has(key)) mapa.set(key, item);
     });
     return Array.from(mapa.values());
 }
@@ -155,14 +250,29 @@ function estadoCompleto() {
 function aplicarEstado(data = {}) {
     const locales = datosLocalesAnteriores();
     const protegerLocalesPendientes = hayCambiosPendientesOffline();
-    clientes = protegerLocalesPendientes ? combinarClientesPorId(data.clientes || [], locales.clientes || []) : (data.clientes || []);
-    inventario = data.inventario || [];
-    agenda = protegerLocalesPendientes ? combinarAgendaExternaLocal(data.agenda || [], locales.agenda || []) : (data.agenda || []);
-    finanzas = data.finanzas || [];
+    const registrosPendientes = protegerLocalesPendientes ? obtenerRegistrosPendientes() : {};
+    clientes = protegerLocalesPendientes
+        ? combinarConRegistrosPendientes(data.clientes || [], locales.clientes || [], registrosPendientes.clientes)
+        : (data.clientes || []);
+    inventario = protegerLocalesPendientes
+        ? combinarConRegistrosPendientes(data.inventario || [], locales.inventario || [], registrosPendientes.inventario)
+        : (data.inventario || []);
+    agenda = protegerLocalesPendientes
+        ? combinarConRegistrosPendientes(data.agenda || [], locales.agenda || [], registrosPendientes.agenda)
+        : (data.agenda || []);
+    finanzas = protegerLocalesPendientes
+        ? combinarConRegistrosPendientes(data.finanzas || [], locales.finanzas || [], registrosPendientes.finanzas)
+        : (data.finanzas || []);
     movimientosInventario = data.movimientosInventario || [];
-    serviciosExternos = protegerLocalesPendientes ? combinarPorId(data.serviciosExternos || [], locales.serviciosExternos || []) : (data.serviciosExternos || []);
-    clinicasExternas = protegerLocalesPendientes ? combinarPorId(data.clinicasExternas || [], locales.clinicasExternas || []) : (data.clinicasExternas || []);
-    gastosFinancieros = data.gastosFinancieros || [];
+    serviciosExternos = protegerLocalesPendientes
+        ? combinarConRegistrosPendientes(data.serviciosExternos || [], locales.serviciosExternos || [], registrosPendientes.serviciosExternos)
+        : (data.serviciosExternos || []);
+    clinicasExternas = protegerLocalesPendientes
+        ? combinarConRegistrosPendientes(data.clinicasExternas || [], locales.clinicasExternas || [], registrosPendientes.clinicasExternas)
+        : (data.clinicasExternas || []);
+    gastosFinancieros = protegerLocalesPendientes
+        ? combinarConRegistrosPendientes(data.gastosFinancieros || [], locales.gastosFinancieros || [], registrosPendientes.gastosFinancieros)
+        : (data.gastosFinancieros || []);
     auditLogs = data.auditLogs || [];
 }
 function codigoErrorSync(error, prefijo = 'SYNC') {
@@ -265,6 +375,10 @@ window.addEventListener('online', () => {
 });
 function limpiarDatosLocalesAnteriores() {
     Object.values(STORE_KEYS).forEach(key => localStorage.removeItem(key));
+    localStorage.removeItem(PENDING_STORES_KEY);
+    localStorage.removeItem(PENDING_RECORDS_KEY);
+    localStorage.removeItem(OFFLINE_PENDING_KEY);
+    localStorage.removeItem(DELETE_QUEUE_KEY);
 }
 function reiniciarEstadoEnMemoria() {
     clientes = [];
@@ -425,13 +539,18 @@ async function guardarEstadoRemoto() {
         return;
     }
     guardandoRemoto = true;
+    let storesPendientes = obtenerStoresPendientes();
+    const registrosPendientes = obtenerRegistrosPendientes();
+    if (!storesPendientes.size && hayCambiosPendientesOffline()) {
+        storesPendientes = new Set(Object.keys(STORE_KEYS));
+    }
     sincronizacionParcialPendiente = false;
     ultimoCodigoSyncParcial = '';
     actualizarEstadoSync('Guardando...');
     let error = null;
     try {
         if (modoDatosRemotos === 'normalizado' && typeof guardarEstadoBaseNormalizada === 'function') {
-            await guardarEstadoBaseNormalizada();
+            await guardarEstadoBaseNormalizada(storesPendientes, registrosPendientes);
         } else {
             const resultado = await supabaseClient.from('app_state').upsert({
                 ...scopeRemoto(),
@@ -457,12 +576,14 @@ async function guardarEstadoRemoto() {
         actualizarEstadoSync(ultimoCodigoSyncParcial ? `Parcial ${ultimoCodigoSyncParcial}` : 'Sincronizado parcial', true);
     } else {
         guardarStoresLocales();
-        marcarCambiosPendientesOffline(false);
+        if (!guardadoPendiente) limpiarStoresSincronizados(storesPendientes);
         actualizarEstadoSync('Sincronizado');
     }
     if (guardadoPendiente) {
         guardadoPendiente = false;
         programarGuardadoRemoto();
+    } else if (typeof procesarRecargaNormalizadaPendiente === 'function') {
+        procesarRecargaNormalizadaPendiente();
     }
 }
 function registrarAuditoria(tabla, accion, resumen, registroId = '') {
@@ -499,14 +620,17 @@ function programarGuardadoRemoto() {
         actualizarEstadoSync('Offline · cambios pendientes', true);
         return;
     }
-    syncTimer = setTimeout(guardarEstadoRemoto, 250);
+    syncTimer = setTimeout(guardarEstadoRemoto, 1200);
 }
 function saveStore(nombre) {
+    marcarRegistrosPendientes(nombre, detectarIdsModificados(nombre));
     guardarStoreLocal(nombre);
+    marcarStorePendiente(nombre);
     programarGuardadoRemoto();
 }
 function saveAllStores() {
     guardarStoresLocales();
+    marcarTodosStoresPendientes();
     programarGuardadoRemoto();
 }
 function datosLocalesAnteriores() {
@@ -527,8 +651,9 @@ function tieneDatos(data) {
 }
 async function refrescarEstadoDesdeRemotoSilencioso() {
     if (estaOffline()) return;
-    if (!usuarioActivo || guardandoRemoto || document.visibilityState === 'hidden') return;
+    if (!usuarioActivo || guardandoRemoto || refrescoRemotoEnCurso || document.visibilityState === 'hidden') return;
     if (debePausarAplicacionRemota()) return;
+    refrescoRemotoEnCurso = true;
     try {
         let estadoRemoto = null;
         if (modoDatosRemotos === 'normalizado' && typeof cargarEstadoBaseNormalizada === 'function') {
@@ -545,8 +670,11 @@ async function refrescarEstadoDesdeRemotoSilencioso() {
         }
         if (!estadoRemoto) return;
         aplicarEstadoRemoto(estadoRemoto, 'Se refrescó la información más reciente de Supabase.');
+        ultimoRefrescoRemotoAt = Date.now();
     } catch (error) {
         console.warn('No se pudo refrescar estado remoto en segundo plano.', error);
+    } finally {
+        refrescoRemotoEnCurso = false;
     }
 }
 async function cargarEstadoRemotoActual() {
@@ -663,9 +791,14 @@ async function sincronizarCambiosPendientesOnline() {
 }
 function iniciarRefrescoRemotoAutomatico() {
     clearInterval(remotePollingTimer);
-    remotePollingTimer = setInterval(refrescarEstadoDesdeRemotoSilencioso, 60000);
+    remotePollingTimer = setInterval(refrescarEstadoDesdeRemotoSilencioso, 15 * 60 * 1000);
+    if (visibilitySyncRegistrado) return;
+    visibilitySyncRegistrado = true;
     document.addEventListener('visibilitychange', () => {
-        if (document.visibilityState === 'visible' && !debePausarAplicacionRemota()) refrescarEstadoDesdeRemotoSilencioso();
+        const refrescoVencido = Date.now() - ultimoRefrescoRemotoAt > 60000;
+        if (document.visibilityState === 'visible' && refrescoVencido && !debePausarAplicacionRemota()) {
+            refrescarEstadoDesdeRemotoSilencioso();
+        }
     });
 }
 function escucharCambiosRemotos() {

@@ -2,9 +2,12 @@
 // Traduce el estado local de la app hacia tablas Supabase y reconstruye el estado al leerlas.
 let modoDatosRemotos = 'app_state';
 let normalizedReloadTimer = null;
+let recargaNormalizadaPendiente = false;
+const tablasRealtimePendientes = new Set();
 let tablaVacunasPacienteDisponible = false;
 let tablaAuditLogsDisponible = false;
 let tablaClinicasExternasDisponible = false;
+let tablaSyncEventsDisponible = false;
 
 const TABLAS_NORMALIZADAS = [
     'clientes',
@@ -511,13 +514,14 @@ async function cargarEstadoBaseNormalizada() {
             rows.clinicas_externas = null;
         }
         try {
-            const auditoria = await aplicarFiltroScope(supabaseClient.from('audit_logs').select('*').order('created_at', { ascending: false }).limit(100));
-            tablaAuditLogsDisponible = !auditoria.error;
-            if (!auditoria.error) rows.audit_logs = auditoria.data || [];
-        } catch (errorAuditoria) {
-            tablaAuditLogsDisponible = false;
-            rows.audit_logs = null;
+            const syncEvents = await aplicarFiltroScope(supabaseClient.from('sync_events').select('user_id').limit(1));
+            tablaSyncEventsDisponible = !syncEvents.error;
+        } catch (_) {
+            tablaSyncEventsDisponible = false;
         }
+        // La auditoría se conserva en Supabase para diagnóstico, pero no se descarga
+        // en cada sincronización porque no forma parte de la interfaz operativa.
+        rows.audit_logs = null;
         const estadoNormalizado = aplicarExtrasMascotas(mapearEstadoNormalizado(rows), estadoExtra);
         return { ok: true, estado: estadoNormalizado };
     } catch (error) {
@@ -525,293 +529,292 @@ async function cargarEstadoBaseNormalizada() {
     }
 }
 
-async function guardarEstadoBaseNormalizada() {
-    const userId = usuarioActivo.id;
+function filtrarRegistrosPendientes(lista, nombreStore, registrosPendientes = {}) {
+    const ids = registrosPendientes?.[nombreStore];
+    if (!Array.isArray(ids) || !ids.length) return lista || [];
+    const permitidos = new Set(ids.map(String));
+    return (lista || []).filter(item => permitidos.has(String(item?.id)));
+}
+
+async function cargarMapaIdsRemotos(tabla) {
+    const resultado = await aplicarFiltroScope(supabaseClient.from(tabla).select('id, legacy_id'));
+    if (resultado.error) throw resultado.error;
+    return new Map((resultado.data || []).map(row => [row.legacy_id, row.id]));
+}
+
+async function guardarEstadoBaseNormalizada(storesPendientes = new Set(), registrosPendientes = {}) {
+    const syncAll = !storesPendientes?.size;
+    const debe = nombre => syncAll || storesPendientes.has(nombre);
     const scope = scopeRemoto();
-    const clientesRows = clientes.map(cliente => ({
-        ...scope,
-        legacy_id: cliente.id,
-        nombre: cliente.owner || '',
-        telefono: cliente.phone || '',
-        email: cliente.email || '',
-        direccion: cliente.address || '',
-        notas: cliente.ownerNotes || '',
-        id_photo: cliente.ownerIdFile || '',
-        updated_at: new Date().toISOString()
-    }));
-    const clientesGuardados = await upsertTabla('clientes', clientesRows, 'id, legacy_id');
-    const clienteDbPorLegacy = new Map(clientesGuardados.map(row => [row.legacy_id, row.id]));
+    const ahora = new Date().toISOString();
+    const syncClientes = debe('clientes');
+    const syncAgenda = debe('agenda');
+    const syncInventario = debe('inventario');
+    const syncCatalogo = debe('finanzas');
+    const syncExternos = debe('serviciosExternos');
+    const syncClinicas = debe('clinicasExternas');
+    const syncGastos = debe('gastosFinancieros');
 
-    const mascotasRows = clientes.flatMap(cliente => (cliente.mascotas || []).map(mascota => ({
-        ...scope,
-        legacy_id: mascota.id,
-        cliente_id: clienteDbPorLegacy.get(cliente.id),
-        nombre: textoONulo(mascota.name),
-        especie: textoONulo(mascota.species),
-        raza: textoONulo(mascota.raza),
-        edad: numeroONulo(mascota.age),
-        peso: numeroONulo(mascota.peso),
-        esterilizado: textoBooleano(mascota.spayed),
-        foto: textoONulo(mascota.photo),
-        estudios: mascota.estudios || [],
-        vacunas_manuales: mascota.vacunasManuales || [],
-        updated_at: new Date().toISOString()
-    }))).filter(row => row.cliente_id);
-    let mascotasGuardadas = [];
-    try {
-        mascotasGuardadas = await upsertTabla('mascotas', mascotasRows, 'id, legacy_id');
-    } catch (errorMascotas) {
-        ultimoCodigoSyncParcial = errorMascotas.__syncCode || codigoErrorSync(errorMascotas, 'DB-UP-MASCOTAS');
-        registrarErrorSync(ultimoCodigoSyncParcial, errorMascotas, 'guardarEstadoBaseNormalizada:mascotas');
-        sincronizacionParcialPendiente = true;
-        const guardadas = [];
-        for (const row of mascotasRows) {
-            try {
-                const resultado = await upsertTabla('mascotas', [row], 'id, legacy_id');
-                guardadas.push(...resultado);
-            } catch (errorMascotaIndividual) {
-                const codigoIndividual = errorMascotaIndividual.__syncCode || codigoErrorSync(errorMascotaIndividual, 'DB-UP-MASCOTAS-ROW');
-                registrarErrorSync(codigoIndividual, errorMascotaIndividual, `mascota legacy_id=${row.legacy_id} nombre=${row.nombre}`);
-            }
+    let clienteDbPorLegacy = (syncClientes || syncAgenda) ? await cargarMapaIdsRemotos('clientes') : new Map();
+    let mascotaDbPorLegacy = (syncClientes || syncAgenda) ? await cargarMapaIdsRemotos('mascotas') : new Map();
+    let agendaDbPorLegacy = syncExternos ? await cargarMapaIdsRemotos('agenda') : new Map();
+    let consultaDbPorLegacy = syncClientes ? await cargarMapaIdsRemotos('consultas') : new Map();
+
+    const clientesSeleccionados = syncClientes ? filtrarRegistrosPendientes(clientes, 'clientes', registrosPendientes) : [];
+    if (syncClientes) {
+        const clientesRows = clientesSeleccionados.map(cliente => ({
+            ...scope,
+            legacy_id: cliente.id,
+            nombre: cliente.owner || '',
+            telefono: cliente.phone || '',
+            email: cliente.email || '',
+            direccion: cliente.address || '',
+            notas: cliente.ownerNotes || '',
+            id_photo: cliente.ownerIdFile || '',
+            updated_at: ahora
+        }));
+        const guardados = await upsertTabla('clientes', clientesRows, 'id, legacy_id');
+        guardados.forEach(row => clienteDbPorLegacy.set(row.legacy_id, row.id));
+
+        const mascotasRows = clientesSeleccionados.flatMap(cliente => (cliente.mascotas || []).map(mascota => ({
+            ...scope,
+            legacy_id: mascota.id,
+            cliente_id: clienteDbPorLegacy.get(cliente.id),
+            nombre: textoONulo(mascota.name),
+            especie: textoONulo(mascota.species),
+            raza: textoONulo(mascota.raza),
+            edad: numeroONulo(mascota.age),
+            peso: numeroONulo(mascota.peso),
+            esterilizado: textoBooleano(mascota.spayed),
+            foto: textoONulo(mascota.photo),
+            estudios: mascota.estudios || [],
+            vacunas_manuales: mascota.vacunasManuales || [],
+            updated_at: ahora
+        }))).filter(row => row.cliente_id);
+        const mascotasGuardadas = await upsertTabla('mascotas', mascotasRows, 'id, legacy_id');
+        mascotasGuardadas.forEach(row => mascotaDbPorLegacy.set(row.legacy_id, row.id));
+
+        const consultasRows = clientesSeleccionados.flatMap(cliente => (cliente.mascotas || []).flatMap(mascota =>
+            (mascota.historial || []).map(consulta => ({
+                ...scope,
+                legacy_id: consulta.id,
+                cliente_id: clienteDbPorLegacy.get(cliente.id) || null,
+                mascota_id: mascotaDbPorLegacy.get(mascota.id) || null,
+                fecha_iso: fechaISOConsulta(consulta),
+                fecha_texto: consulta.fecha || '',
+                tipo: consulta.tipo || '',
+                peso: consulta.peso || '',
+                temperatura: consulta.temp || '',
+                motivo: consulta.motivo || '',
+                tratamiento: consulta.tratamiento || '',
+                sintomas: consulta.sintomas || '',
+                vacunas: consulta.vacunas,
+                desparasitante: consulta.desparasitante,
+                disclaimer: consulta.disclaimer || '',
+                notas_rapidas: consulta.notasRapidas || '',
+                insumos: consulta.insumos || [],
+                vacunas_control_stock: consulta.vacunasControlStock || null,
+                seguimiento: { ...(consulta.seguimiento || {}), agendaId: consulta.agendaId || consulta.seguimiento?.agendaId || null },
+                firma_dueno: consulta.firmaDueno || '',
+                firma_vet: consulta.firmaVet || '',
+                updated_at: ahora
+            }))
+        ));
+        const consultasGuardadas = await upsertTabla('consultas', consultasRows.filter(row => row.mascota_id), 'id, legacy_id');
+        consultasGuardadas.forEach(row => consultaDbPorLegacy.set(row.legacy_id, row.id));
+
+        const pagosRows = clientesSeleccionados.flatMap(cliente => (cliente.mascotas || []).flatMap(mascota =>
+            (mascota.historial || []).map(consulta => ({
+                ...scope,
+                legacy_id: consulta.id,
+                consulta_id: consultaDbPorLegacy.get(consulta.id) || null,
+                cliente_id: clienteDbPorLegacy.get(cliente.id) || null,
+                mascota_id: mascotaDbPorLegacy.get(mascota.id) || null,
+                servicio_cobrado: consulta.servicioCobrado || 'Sin servicio registrado',
+                total: parseFloat(consulta.costoTotal || 0),
+                metodo_pago: consulta.metodoPago || 'Efectivo',
+                estado_pago: consulta.estadoPago || 'Pagado',
+                nota_pago: consulta.notaPago || '',
+                abonos: consulta.abonos || [],
+                fecha_iso: fechaISOConsulta(consulta),
+                updated_at: ahora
+            }))
+        ));
+        await upsertPagosCompatible(pagosRows.filter(row => row.consulta_id));
+
+        if (tablaVacunasPacienteDisponible) {
+            const vacunasRows = clientesSeleccionados.flatMap(cliente => (cliente.mascotas || []).flatMap(mascota =>
+                (mascota.vacunasManuales || []).map(vacuna => ({
+                    ...scope,
+                    legacy_id: vacuna.id,
+                    cliente_id: clienteDbPorLegacy.get(cliente.id) || null,
+                    mascota_id: mascotaDbPorLegacy.get(mascota.id) || null,
+                    consulta_id: vacuna.consultaId ? consultaDbPorLegacy.get(vacuna.consultaId) || null : null,
+                    nombre: vacuna.nombre || 'Vacuna manual',
+                    fecha_aplicacion: vacuna.fecha || null,
+                    fecha_refuerzo: vacuna.fechaRefuerzo || null,
+                    lote: vacuna.lote || '',
+                    laboratorio: vacuna.laboratorio || '',
+                    desparasitante: vacuna.desparasitante || '',
+                    nota: vacuna.nota || '',
+                    origen: vacuna.origen || 'Manual',
+                    updated_at: ahora
+                }))
+            ));
+            await upsertTabla('vacunas_paciente', vacunasRows.filter(row => row.mascota_id), 'id, legacy_id');
         }
-        mascotasGuardadas = guardadas;
-    }
-    const mascotaDbPorLegacy = new Map(mascotasGuardadas.map(row => [row.legacy_id, row.id]));
-
-    const serviciosRows = finanzas.map(servicio => ({
-        ...scope,
-        legacy_id: servicio.id,
-        nombre: servicio.nombre || '',
-        precio: parseFloat(servicio.precio || 0),
-        activo: true,
-        updated_at: new Date().toISOString()
-    }));
-    await upsertServiciosCatalogoCompatible(serviciosRows);
-
-    const inventarioRows = inventario.map(item => ({
-        ...scope,
-        legacy_id: item.id,
-        nombre: item.name || '',
-        stock: parseInt(item.stock || 0),
-        unidad: item.unit || '',
-        categoria: item.categoria || 'Medicamento',
-        stock_minimo: parseInt(item.minStock || 3),
-        lote: item.lote || '',
-        caducidad: item.caducidad || null,
-        proveedor: item.proveedor || '',
-        costo_unitario: parseFloat(item.costoUnitario || 0),
-        updated_at: new Date().toISOString()
-    }));
-    const inventarioGuardado = await upsertTabla('inventario', inventarioRows, 'id, legacy_id');
-    const inventarioDbPorLegacy = new Map(inventarioGuardado.map(row => [row.legacy_id, row.id]));
-
-    const agendaRows = agenda.map(cita => ({
-        ...scope,
-        legacy_id: cita.id,
-        cliente_id: clienteDbPorLegacy.get(cita.clienteId || cita.ownerId) || null,
-        mascota_id: mascotaDbPorLegacy.get(cita.petId) || null,
-        cliente_nombre: cita.clienteNombre || cita.ownerName || '',
-        pet_name: cita.petName || '',
-        fecha: fechaAgenda(cita),
-        hora: horaAgenda(cita),
-        direccion: cita.direccion || cita.address || '',
-        notas: cita.notas || cita.notes || 'Sin notas',
-        estado: cita.estado || 'Programada',
-        origen: cita.origen || 'Consulta',
-        updated_at: new Date().toISOString()
-    }));
-    let agendaGuardada = [];
-    try {
-        agendaGuardada = await upsertTabla('agenda', agendaRows, 'id, legacy_id');
-    } catch (error) {
-        console.warn('No se pudo sincronizar agenda completa; se reintentara sin citas externas sin paciente.', error);
-        sincronizacionParcialPendiente = true;
-        ultimoCodigoSyncParcial = error.__syncCode || codigoErrorSync(error, 'DB-UP-AGENDA');
-        registrarErrorSync(ultimoCodigoSyncParcial, error, 'guardarEstadoBaseNormalizada:agenda');
-        agendaGuardada = await upsertTabla('agenda', agendaRows.filter(row => row.cliente_id || row.mascota_id), 'id, legacy_id');
-    }
-    const agendaDbPorLegacy = new Map((agendaGuardada || []).map(row => [row.legacy_id, row.id]));
-
-    const consultasRows = [];
-    clientes.forEach(cliente => {
-        (cliente.mascotas || []).forEach(mascota => {
-            (mascota.historial || []).forEach(consulta => {
-                consultasRows.push({
-                    ...scope,
-                    legacy_id: consulta.id,
-                    cliente_id: clienteDbPorLegacy.get(cliente.id) || null,
-                    mascota_id: mascotaDbPorLegacy.get(mascota.id) || null,
-                    fecha_iso: fechaISOConsulta(consulta),
-                    fecha_texto: consulta.fecha || '',
-                    tipo: consulta.tipo || '',
-                    peso: consulta.peso || '',
-                    temperatura: consulta.temp || '',
-                    motivo: consulta.motivo || '',
-                    tratamiento: consulta.tratamiento || '',
-                    sintomas: consulta.sintomas || '',
-                    vacunas: consulta.vacunas,
-                    desparasitante: consulta.desparasitante,
-                    disclaimer: consulta.disclaimer || '',
-                    notas_rapidas: consulta.notasRapidas || '',
-                    insumos: consulta.insumos || [],
-                    vacunas_control_stock: consulta.vacunasControlStock || null,
-                    seguimiento: { ...(consulta.seguimiento || {}), agendaId: consulta.agendaId || consulta.seguimiento?.agendaId || null },
-                    firma_dueno: consulta.firmaDueno || '',
-                    firma_vet: consulta.firmaVet || '',
-                    updated_at: new Date().toISOString()
-                });
-            });
-        });
-    });
-    const consultasGuardadas = await upsertTabla('consultas', consultasRows.filter(row => row.mascota_id), 'id, legacy_id');
-    const consultaDbPorLegacy = new Map(consultasGuardadas.map(row => [row.legacy_id, row.id]));
-
-    if (tablaVacunasPacienteDisponible) {
-        const vacunasRows = [];
-        clientes.forEach(cliente => {
-            (cliente.mascotas || []).forEach(mascota => {
-                (mascota.vacunasManuales || []).forEach(vacuna => {
-                    vacunasRows.push({
-                        ...scope,
-                        legacy_id: vacuna.id,
-                        cliente_id: clienteDbPorLegacy.get(cliente.id) || null,
-                        mascota_id: mascotaDbPorLegacy.get(mascota.id) || null,
-                        consulta_id: vacuna.consultaId ? consultaDbPorLegacy.get(vacuna.consultaId) || null : null,
-                        nombre: vacuna.nombre || 'Vacuna manual',
-                        fecha_aplicacion: vacuna.fecha || null,
-                        fecha_refuerzo: vacuna.fechaRefuerzo || null,
-                        lote: vacuna.lote || '',
-                        laboratorio: vacuna.laboratorio || '',
-                        desparasitante: vacuna.desparasitante || '',
-                        nota: vacuna.nota || '',
-                        origen: vacuna.origen || 'Manual',
-                        updated_at: new Date().toISOString()
-                    });
-                });
-            });
-        });
-        await upsertTabla('vacunas_paciente', vacunasRows.filter(row => row.mascota_id), 'id, legacy_id');
     }
 
-    const pagosRows = [];
-    clientes.forEach(cliente => {
-        (cliente.mascotas || []).forEach(mascota => {
-            (mascota.historial || []).forEach(consulta => {
-                pagosRows.push({
-                    ...scope,
-                    legacy_id: consulta.id,
-                    consulta_id: consultaDbPorLegacy.get(consulta.id) || null,
-                    cliente_id: clienteDbPorLegacy.get(cliente.id) || null,
-                    mascota_id: mascotaDbPorLegacy.get(mascota.id) || null,
-                    servicio_cobrado: consulta.servicioCobrado || 'Sin servicio registrado',
-                    total: parseFloat(consulta.costoTotal || 0),
-                    metodo_pago: consulta.metodoPago || 'Efectivo',
-                    estado_pago: consulta.estadoPago || 'Pagado',
-                   nota_pago: consulta.notaPago || '',
-                    abonos: consulta.abonos || [],
-                    fecha_iso: fechaISOConsulta(consulta),
-                    updated_at: new Date().toISOString()
-                });
-            });
-        });
-    });
-    await upsertPagosCompatible(pagosRows.filter(row => row.consulta_id));
+    if (syncCatalogo) {
+        const serviciosRows = filtrarRegistrosPendientes(finanzas, 'finanzas', registrosPendientes).map(servicio => ({
+            ...scope,
+            legacy_id: servicio.id,
+            nombre: servicio.nombre || '',
+            precio: parseFloat(servicio.precio || 0),
+            activo: true,
+            updated_at: ahora
+        }));
+        await upsertServiciosCatalogoCompatible(serviciosRows);
+    }
 
-    const agendaLegacyIds = new Set(agenda.map(cita => cita.id));
-    const serviciosExternosRows = serviciosExternos.map(servicio => ({
-        ...scope,
-        legacy_id: servicio.id,
-        fecha_iso: fechaISOServicioExterno(servicio),
-        fecha_texto: servicio.fecha || '',
-        cliente_nombre: servicio.clienteNombre || '',
-        servicio: servicio.servicioCobrado || '',
-        hora: servicio.hora || '',
-        direccion: servicio.direccion || '',
-        agenda_id: agendaLegacyIds.has(servicio.agendaId) ? (agendaDbPorLegacy.get(servicio.agendaId) || null) : null,
-        clinica_legacy_id: servicio.clinicaId || null,
-        total: parseFloat(servicio.total || 0),
-        metodo_pago: servicio.metodoPago || 'Efectivo',
-        estado_pago: servicio.estadoPago || 'Pagado',
-        nota: servicio.notaPago || '',
-        abonos: servicio.abonos || [],
-        tipo: servicio.tipo || 'Servicio externo',
-        updated_at: new Date().toISOString()
-    }));
-    try {
+    let inventarioDbPorLegacy = new Map();
+    if (syncInventario) {
+        const inventarioRows = filtrarRegistrosPendientes(inventario, 'inventario', registrosPendientes).map(item => ({
+            ...scope,
+            legacy_id: item.id,
+            nombre: item.name || '',
+            stock: parseInt(item.stock || 0),
+            unidad: item.unit || '',
+            categoria: item.categoria || 'Medicamento',
+            stock_minimo: parseInt(item.minStock || 3),
+            lote: item.lote || '',
+            caducidad: item.caducidad || null,
+            proveedor: item.proveedor || '',
+            costo_unitario: parseFloat(item.costoUnitario || 0),
+            updated_at: ahora
+        }));
+        const inventarioGuardado = await upsertTabla('inventario', inventarioRows, 'id, legacy_id');
+        inventarioDbPorLegacy = await cargarMapaIdsRemotos('inventario');
+        inventarioGuardado.forEach(row => inventarioDbPorLegacy.set(row.legacy_id, row.id));
+        const movimientosRows = movimientosInventario.map(mov => ({
+            ...scope,
+            legacy_id: mov.id,
+            inventario_id: inventarioDbPorLegacy.get(mov.itemId) || null,
+            item_nombre: mov.itemName || '',
+            tipo: mov.tipo || '',
+            cantidad: parseInt(mov.cantidad || 0),
+            stock_resultante: parseInt(mov.stockResultante || 0),
+            motivo: mov.motivo || '',
+            fecha_iso: mov.fechaISO || ahora
+        }));
+        await upsertTabla('movimientos_inventario', movimientosRows, 'id, legacy_id');
+    }
+
+    if (syncAgenda) {
+        const agendaRows = filtrarRegistrosPendientes(agenda, 'agenda', registrosPendientes).map(cita => ({
+            ...scope,
+            legacy_id: cita.id,
+            cliente_id: clienteDbPorLegacy.get(cita.clienteId || cita.ownerId) || null,
+            mascota_id: mascotaDbPorLegacy.get(cita.petId) || null,
+            cliente_nombre: cita.clienteNombre || cita.ownerName || '',
+            pet_name: cita.petName || '',
+            fecha: fechaAgenda(cita),
+            hora: horaAgenda(cita),
+            direccion: cita.direccion || cita.address || '',
+            notas: cita.notas || cita.notes || 'Sin notas',
+            estado: cita.estado || 'Programada',
+            origen: cita.origen || 'Consulta',
+            updated_at: ahora
+        }));
+        const agendaGuardada = await upsertTabla('agenda', agendaRows, 'id, legacy_id');
+        agendaGuardada.forEach(row => agendaDbPorLegacy.set(row.legacy_id, row.id));
+    }
+
+    if (syncExternos) {
+        if (!agendaDbPorLegacy.size) agendaDbPorLegacy = await cargarMapaIdsRemotos('agenda');
+        const serviciosExternosRows = filtrarRegistrosPendientes(serviciosExternos, 'serviciosExternos', registrosPendientes).map(servicio => ({
+            ...scope,
+            legacy_id: servicio.id,
+            fecha_iso: fechaISOServicioExterno(servicio),
+            fecha_texto: servicio.fecha || '',
+            cliente_nombre: servicio.clienteNombre || '',
+            servicio: servicio.servicioCobrado || '',
+            hora: servicio.hora || '',
+            direccion: servicio.direccion || '',
+            agenda_id: servicio.agendaId ? (agendaDbPorLegacy.get(servicio.agendaId) || null) : null,
+            clinica_legacy_id: servicio.clinicaId || null,
+            total: parseFloat(servicio.total || 0),
+            metodo_pago: servicio.metodoPago || 'Efectivo',
+            estado_pago: servicio.estadoPago || 'Pagado',
+            nota: servicio.notaPago || '',
+            abonos: servicio.abonos || [],
+            tipo: servicio.tipo || 'Servicio externo',
+            updated_at: ahora
+        }));
         await upsertServiciosExternosCompatible(serviciosExternosRows);
-    } catch (error) {
-        console.warn('No se pudo sincronizar servicios externos; se conserva en local.', error);
-        sincronizacionParcialPendiente = true;
-        ultimoCodigoSyncParcial = error.__syncCode || codigoErrorSync(error, 'DB-UP-SERVICIOS_EXTERNOS');
-        registrarErrorSync(ultimoCodigoSyncParcial, error, 'guardarEstadoBaseNormalizada:servicios_externos');
     }
 
-    if (tablaClinicasExternasDisponible) {
-        const clinicasRows = (clinicasExternas || []).map(clinica => ({
+    if (syncClinicas && tablaClinicasExternasDisponible) {
+        const clinicasRows = filtrarRegistrosPendientes(clinicasExternas, 'clinicasExternas', registrosPendientes).map(clinica => ({
             ...scope,
             legacy_id: clinica.id,
             nombre: clinica.nombre || '',
             contacto: clinica.contacto || '',
             telefono: clinica.telefono || '',
             direccion: clinica.direccion || '',
-            updated_at: new Date().toISOString()
+            updated_at: ahora
         }));
-        try {
-            await upsertTabla('clinicas_externas', clinicasRows, 'id, legacy_id');
-        } catch (errorClinicas) {
-            tablaClinicasExternasDisponible = false;
-            console.warn('No se pudo sincronizar clinicas_externas. Se conservaran en copia local.', errorClinicas);
-            ultimoCodigoSyncParcial = errorClinicas.__syncCode || codigoErrorSync(errorClinicas, 'DB-UP-CLINICAS_EXTERNAS');
-            registrarErrorSync(ultimoCodigoSyncParcial, errorClinicas, 'guardarEstadoBaseNormalizada:clinicas_externas');
-        }
+        await upsertTabla('clinicas_externas', clinicasRows, 'id, legacy_id');
     }
 
-    const gastosRows = gastosFinancieros.map(gasto => ({
-        ...scope,
-        legacy_id: gasto.id,
-        fecha_iso: gasto.fechaISO || new Date().toISOString(),
-        fecha_texto: gasto.fecha || '',
-        categoria: gasto.categoria || 'Gasolina',
-        descripcion: gasto.descripcion || '',
-        monto: parseFloat(gasto.monto || 0),
-        updated_at: new Date().toISOString()
-    }));
-    await upsertTabla('gastos', gastosRows, 'id, legacy_id');
-
-    const movimientosRows = movimientosInventario.map(mov => ({
-        ...scope,
-        legacy_id: mov.id,
-        inventario_id: inventarioDbPorLegacy.get(mov.itemId) || null,
-        item_nombre: mov.itemName || '',
-        tipo: mov.tipo || '',
-        cantidad: parseInt(mov.cantidad || 0),
-        stock_resultante: parseInt(mov.stockResultante || 0),
-        motivo: mov.motivo || '',
-        fecha_iso: mov.fechaISO || new Date().toISOString()
-    }));
-    await upsertTabla('movimientos_inventario', movimientosRows, 'id, legacy_id');
+    if (syncGastos) {
+        const gastosRows = filtrarRegistrosPendientes(gastosFinancieros, 'gastosFinancieros', registrosPendientes).map(gasto => ({
+            ...scope,
+            legacy_id: gasto.id,
+            fecha_iso: gasto.fechaISO || ahora,
+            fecha_texto: gasto.fecha || '',
+            categoria: gasto.categoria || 'Gasolina',
+            descripcion: gasto.descripcion || '',
+            monto: parseFloat(gasto.monto || 0),
+            updated_at: ahora
+        }));
+        await upsertTabla('gastos', gastosRows, 'id, legacy_id');
+    }
 
     await procesarEliminacionesPendientes();
 
-    try {
-        const extraQuery = supabaseClient.from('app_state').select('data');
-        const extraActual = await aplicarFiltroScope(extraQuery).maybeSingle();
-        const dataActual = extraActual.data?.data || {};
-        await supabaseClient.from('app_state').upsert({
+    if (syncClientes) {
+        try {
+            await supabaseClient.from('app_state').upsert({
+                ...scopeRemoto(),
+                data: { mascotaExtras: extrasMascotasParaAppState() },
+                updated_at: ahora
+            }, { onConflict: 'user_id' });
+        } catch (error) {
+            console.warn('No se pudo sincronizar estado extra de app_state.', error);
+        }
+    }
+
+    if (tablaSyncEventsDisponible) {
+        const resultadoSync = await supabaseClient.from('sync_events').upsert({
             ...scopeRemoto(),
-            data: { ...dataActual, mascotaExtras: extrasMascotasParaAppState() },
-            updated_at: new Date().toISOString()
+            source_device: typeof obtenerDeviceId === 'function' ? obtenerDeviceId() : 'web',
+            stores: Array.from(storesPendientes || []),
+            changed_at: ahora
         }, { onConflict: 'user_id' });
-    } catch (error) {
-        console.warn('No se pudo sincronizar estado extra de app_state.', error);
-        sincronizacionParcialPendiente = true;
-        ultimoCodigoSyncParcial = error.__syncCode || codigoErrorSync(error, 'DB-UP-APP_STATE_EXTRA');
-        registrarErrorSync(ultimoCodigoSyncParcial, error, 'guardarEstadoBaseNormalizada:app_state_extra');
+        if (resultadoSync.error) {
+            console.warn('No se pudo publicar señal ligera de sincronización.', resultadoSync.error);
+            tablaSyncEventsDisponible = false;
+        }
     }
 }
 
 async function recargarEstadoNormalizadoPorRealtime(detalle = 'Se recibieron cambios de otro dispositivo.') {
     if (guardandoRemoto) return;
+    if (hayCambiosPendientesOffline()) {
+        recargaNormalizadaPendiente = true;
+        return;
+    }
     if (typeof debePausarAplicacionRemota === 'function' && debePausarAplicacionRemota()) {
         actualizarEstadoSync('Edición local activa');
         return;
@@ -831,21 +834,50 @@ async function recargarEstadoNormalizadoPorRealtime(detalle = 'Se recibieron cam
         if (typeof refrescarInterfaz === 'function') refrescarInterfaz();
         actualizarEstadoSync('Sincronizado');
     }
+    tablasRealtimePendientes.clear();
+    recargaNormalizadaPendiente = false;
 }
 
 function programarRecargaNormalizadaRealtime(tabla) {
     if (guardandoRemoto) return;
-    if (typeof debePausarAplicacionRemota === 'function' && debePausarAplicacionRemota()) return;
+    tablasRealtimePendientes.add(tabla);
+    if (hayCambiosPendientesOffline()) {
+        recargaNormalizadaPendiente = true;
+        return;
+    }
+    if (typeof debePausarAplicacionRemota === 'function' && debePausarAplicacionRemota()) {
+        recargaNormalizadaPendiente = true;
+        return;
+    }
     clearTimeout(normalizedReloadTimer);
     normalizedReloadTimer = setTimeout(() => {
-        recargarEstadoNormalizadoPorRealtime(`Cambio recibido en ${tabla}.`);
-    }, 500);
+        const tablas = Array.from(tablasRealtimePendientes).join(', ');
+        recargarEstadoNormalizadoPorRealtime(`Cambios recibidos en ${tablas}.`);
+    }, 5000);
+}
+
+function procesarRecargaNormalizadaPendiente() {
+    if (!recargaNormalizadaPendiente || guardandoRemoto || hayCambiosPendientesOffline()) return;
+    programarRecargaNormalizadaRealtime('pendientes');
 }
 
 function escucharCambiosBaseNormalizada() {
     if (!usuarioActivo) return;
     if (realtimeChannel) supabaseClient.removeChannel(realtimeChannel);
     realtimeChannel = supabaseClient.channel(`vet-data-${usuarioActivo.id}`);
+    if (tablaSyncEventsDisponible) {
+        realtimeChannel.on('postgres_changes', {
+            event: '*',
+            schema: 'public',
+            table: 'sync_events',
+            filter: filtroRealtimeScope()
+        }, payload => {
+            if (payload.new?.source_device === obtenerDeviceId()) return;
+            programarRecargaNormalizadaRealtime((payload.new?.stores || []).join(', ') || 'datos');
+        });
+        realtimeChannel.subscribe();
+        return;
+    }
     TABLAS_NORMALIZADAS.forEach(tabla => {
         realtimeChannel.on('postgres_changes', {
             event: '*',
@@ -874,16 +906,6 @@ function escucharCambiosBaseNormalizada() {
             filter: filtroRealtimeScope()
         }, () => {
             programarRecargaNormalizadaRealtime('clinicas_externas');
-        });
-    }
-    if (tablaAuditLogsDisponible) {
-        realtimeChannel.on('postgres_changes', {
-            event: 'INSERT',
-            schema: 'public',
-            table: 'audit_logs',
-            filter: filtroRealtimeScope()
-        }, () => {
-            programarRecargaNormalizadaRealtime('audit_logs');
         });
     }
     realtimeChannel.subscribe();
