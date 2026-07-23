@@ -431,10 +431,25 @@ function scopeRemoto() {
     if (workspaceActivoId) scope.workspace_id = workspaceActivoId;
     return scope;
 }
+// Filtra tablas normalizadas (clientes, mascotas, agenda, consultas, pagos, etc.).
+// Si el usuario pertenece a un workspace compartido, se filtra por workspace_id para
+// que vea también lo que registraron sus compañeros de equipo. Si no hay workspace
+// (o la migracion 001 no esta aplicada), se mantiene el filtro por user_id de siempre.
 function aplicarFiltroScope(query) {
+    if (workspaceSoportado && workspaceActivoId) {
+        return query.eq('workspace_id', workspaceActivoId);
+    }
+    return query.eq('user_id', usuarioActivo.id);
+}
+// Filtra registros que son estrictamente personales (app_state en modo legado /
+// fallback), donde no tiene sentido mezclar datos de otro usuario del workspace.
+function aplicarFiltroUsuario(query) {
     return query.eq('user_id', usuarioActivo.id);
 }
 function filtroRealtimeScope() {
+    if (workspaceSoportado && workspaceActivoId) {
+        return `workspace_id=eq.${workspaceActivoId}`;
+    }
     return `user_id=eq.${usuarioActivo.id}`;
 }
 async function cargarWorkspaceActivo() {
@@ -689,7 +704,7 @@ async function refrescarEstadoDesdeRemotoSilencioso() {
             let query = supabaseClient
                 .from('app_state')
                 .select('data');
-            const { data, error } = await aplicarFiltroScope(query).maybeSingle();
+            const { data, error } = await aplicarFiltroUsuario(query).maybeSingle();
             if (error) throw error;
             estadoRemoto = data?.data || null;
         }
@@ -709,7 +724,7 @@ async function cargarEstadoRemotoActual() {
         return remoto.estado || null;
     }
     const query = supabaseClient.from('app_state').select('data');
-    const { data, error } = await aplicarFiltroScope(query).maybeSingle();
+    const { data, error } = await aplicarFiltroUsuario(query).maybeSingle();
     if (error) throw error;
     return data?.data || null;
 }
@@ -908,7 +923,7 @@ async function initRemoteStorageCompleto({ permitirLocalSinSesion = false } = {}
                 let legacyQuery = supabaseClient
                     .from('app_state')
                     .select('data')
-                const { data: estadoLegacy } = await aplicarFiltroScope(legacyQuery).maybeSingle();
+                const { data: estadoLegacy } = await aplicarFiltroUsuario(legacyQuery).maybeSingle();
                 if (estadoLegacy?.data) {
                     aplicarEstado(estadoLegacy.data);
                 } else {
@@ -922,18 +937,27 @@ async function initRemoteStorageCompleto({ permitirLocalSinSesion = false } = {}
             actualizarEstadoSync('Sincronizado');
             return true;
         }
+        const codigoNormalizado = codigoErrorSync(normalizado.error, 'SYNC-NORM');
+        registrarErrorSync(codigoNormalizado, normalizado.error, 'initRemoteStorageCompleto:cargarEstadoBaseNormalizada');
         console.warn('Base normalizada no disponible. Se usará app_state temporalmente.', normalizado.error);
+        if (tieneDatos(datosLocalesAnteriores())) {
+            cargarCopiaLocalRapida(`Copia local · ${codigoNormalizado}`);
+            escucharCambiosRemotos();
+            iniciarRefrescoRemotoAutomatico();
+            return true;
+        }
         modoDatosRemotos = 'app_state';
     }
     let query = supabaseClient
         .from('app_state')
         .select('data');
-    const { data, error } = await aplicarFiltroScope(query).maybeSingle();
+    const { data, error } = await aplicarFiltroUsuario(query).maybeSingle();
     if (error) {
-        console.error('No se pudo cargar app_state.', error);
+        const codigo = codigoErrorSync(error, 'APP-STATE');
+        registrarErrorSync(codigo, error, 'initRemoteStorageCompleto:app_state');
         if (cargarModoOffline('Sin conexión · usando copia local')) return true;
-        actualizarEstadoSync('Error de conexión', true);
-        alert("No se pudieron cargar tus datos desde Supabase. Revisa las políticas RLS de app_state.");
+        actualizarEstadoSync(`Error ${codigo}`, true);
+        mostrarLogin(`No se pudo cargar Supabase. Código: ${codigo}. Revisa sql/011-fix-app-state-rls.sql y las tablas normalizadas.`);
         return false;
     }
     if (data?.data) {
