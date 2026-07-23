@@ -278,6 +278,7 @@ function mapearEstadoNormalizado(rows) {
     const clientesPorId = new Map();
     const mascotasPorId = new Map();
     const pagosPorConsulta = new Map();
+    const mascotasSinPropietario = [];
 
     (rows.clientes || []).forEach(row => {
         clientesPorId.set(row.id, {
@@ -309,7 +310,15 @@ function mapearEstadoNormalizado(rows) {
             historial: []
         };
         mascotasPorId.set(row.id, mascota);
-        clientesPorId.get(row.cliente_id)?.mascotas.push(mascota);
+        const cliente = clientesPorId.get(row.cliente_id);
+        if (cliente) {
+            cliente.mascotas.push(mascota);
+        } else {
+            mascotasSinPropietario.push({
+                ...mascota,
+                clienteIdOriginal: row.cliente_id || null
+            });
+        }
     });
 
     (rows.pagos || []).forEach(row => {
@@ -378,6 +387,22 @@ function mapearEstadoNormalizado(rows) {
         delete cliente.dbId;
         return cliente;
     });
+    if (mascotasSinPropietario.length) {
+        clientesMapeados.push({
+            id: `sin-propietario-${usuarioActivo?.id || 'local'}`,
+            owner: 'Propietario no encontrado',
+            phone: '',
+            email: '',
+            address: '',
+            ownerNotes: 'Estas mascotas existen en Supabase, pero su propietario no está visible o su cliente_id quedó roto. Revisa sql/010-diagnostico-clientes-mascotas.sql.',
+            ownerIdFile: '',
+            mascotas: mascotasSinPropietario.map(mascota => {
+                const copia = { ...mascota };
+                delete copia.clienteIdOriginal;
+                return copia;
+            })
+        });
+    }
 
     const mascotasPorLegacy = new Map();
     clientesMapeados.forEach(cliente => {
