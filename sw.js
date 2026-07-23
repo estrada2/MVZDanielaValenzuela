@@ -1,6 +1,6 @@
 // Service worker PWA.
 // Cachea el shell local para abrir la app offline y actualiza recursos cuando hay nueva version.
-const CACHE_NAME = 'vethome-pro-v10-schnauzer-2026-06-27-51';
+const CACHE_NAME = 'vethome-pro-v10-schnauzer-2026-07-22-52';
 const APP_SHELL = [
     '/',
     '/index.html',
@@ -35,7 +35,23 @@ self.addEventListener('activate', event => {
 self.addEventListener('fetch', event => {
     if (event.request.method !== 'GET') return;
     const url = new URL(event.request.url);
-    if (url.origin !== self.location.origin) return;
+    if (url.origin !== self.location.origin) {
+        const CDN_CACHE_HOSTS = ['unpkg.com', 'cdnjs.cloudflare.com', 'cdn.tailwindcss.com'];
+        if (!CDN_CACHE_HOSTS.includes(url.hostname)) return;
+        event.respondWith(
+            caches.match(event.request).then(cached => {
+                const red = fetch(event.request)
+                    .then(response => {
+                        const copy = response.clone();
+                        caches.open(CACHE_NAME).then(cache => cache.put(event.request, copy));
+                        return response;
+                    })
+                    .catch(() => cached);
+                return cached || red;
+            })
+        );
+        return;
+    }
     event.respondWith(
         fetch(event.request)
             .then(response => {

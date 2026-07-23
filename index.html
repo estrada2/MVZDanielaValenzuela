@@ -42,9 +42,14 @@
                     });
                     navigator.serviceWorker.addEventListener('controllerchange', notificarActualizacion);
                     revisarActualizacion();
-                    setInterval(revisarActualizacion, 5 * 60 * 1000);
+                    setInterval(revisarActualizacion, 30 * 60 * 1000);
+                    let ultimaRevisionVisible = 0;
                     document.addEventListener('visibilitychange', () => {
-                        if (document.visibilityState === 'visible') revisarActualizacion();
+                        const vencida = Date.now() - ultimaRevisionVisible > 10 * 60 * 1000;
+                        if (document.visibilityState === 'visible' && vencida) {
+                            ultimaRevisionVisible = Date.now();
+                            revisarActualizacion();
+                        }
                     });
                 }).catch(error => console.warn('Service worker no disponible.', error));
             });
