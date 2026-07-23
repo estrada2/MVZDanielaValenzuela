@@ -27,6 +27,7 @@ let refrescoRemotoEnCurso = false;
 let visibilitySyncRegistrado = false;
 let guardandoRemoto = false;
 let guardadoPendiente = false;
+let arranqueRemotoEnCurso = false;
 let sincronizacionParcialPendiente = false;
 let ultimoCodigoSyncParcial = '';
 let edicionLocalActivaHasta = 0;
@@ -327,6 +328,30 @@ function cargarModoOffline(mensaje = 'Sin conexión. Usando copia local.') {
     actualizarCuentaMovil();
     actualizarEstadoSync(mensaje, true);
     return true;
+}
+function cargarCopiaLocalRapida(mensaje = 'Abriendo copia local...') {
+    const locales = datosLocalesAnteriores();
+    if (!tieneDatos(locales)) return false;
+    aplicarEstado(locales);
+    ocultarLogin();
+    const usuarioLocal = localStorage.getItem(LOCAL_ACTIVE_USER_KEY);
+    if (!usuarioActivo && usuarioLocal) {
+        usuarioActivo = { id: usuarioLocal, email: 'Validando sesión...' };
+    }
+    actualizarCuentaMovil();
+    actualizarEstadoSync(mensaje, hayCambiosPendientesOffline());
+    return true;
+}
+function conTimeout(promise, ms = 8000, codigo = 'TIMEOUT') {
+    let timer = null;
+    const timeout = new Promise((_, reject) => {
+        timer = setTimeout(() => {
+            const error = new Error(`Tiempo de espera agotado (${codigo}).`);
+            error.code = codigo;
+            reject(error);
+        }, ms);
+    });
+    return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
 }
 // Protege formularios activos: evita pisar lo que el usuario está escribiendo con datos remotos.
 function aplicarEstadoRemoto(estado, detalle = 'Se recibieron cambios de otro dispositivo.') {
@@ -790,6 +815,25 @@ async function sincronizarCambiosPendientesOnline() {
         actualizarEstadoSync(`Pendiente ${codigo}`, true);
     }
 }
+async function completarArranqueRemoto() {
+    if (arranqueRemotoEnCurso) return;
+    arranqueRemotoEnCurso = true;
+    try {
+        await conTimeout(initRemoteStorageCompleto({ permitirLocalSinSesion: true }), 12000, 'BOOT-REMOTE-TIMEOUT');
+        if (typeof refrescarInterfaz === 'function') refrescarInterfaz();
+    } catch (error) {
+        const codigo = codigoErrorSync(error, 'BOOT');
+        registrarErrorSync(codigo, error, 'completarArranqueRemoto');
+        if (tieneDatos(datosLocalesAnteriores())) {
+            actualizarEstadoSync(`Copia local · ${codigo}`, true);
+        } else {
+            mostrarLogin('No se pudo conectar con Supabase.');
+            actualizarEstadoSync(`Error ${codigo}`, true);
+        }
+    } finally {
+        arranqueRemotoEnCurso = false;
+    }
+}
 function iniciarRefrescoRemotoAutomatico() {
     clearInterval(remotePollingTimer);
     remotePollingTimer = setInterval(refrescarEstadoDesdeRemotoSilencioso, 15 * 60 * 1000);
@@ -823,11 +867,11 @@ function escucharCambiosRemotos() {
         })
         .subscribe();
 }
-async function initRemoteStorage() {
+async function initRemoteStorageCompleto({ permitirLocalSinSesion = false } = {}) {
     if (estaOffline() && cargarModoOffline('Offline · usando copia local')) return true;
     let session = null;
     try {
-        const resultadoSesion = await supabaseClient.auth.getSession();
+        const resultadoSesion = await conTimeout(supabaseClient.auth.getSession(), 8000, 'AUTH-TIMEOUT');
         session = resultadoSesion.data?.session || null;
     } catch (error) {
         console.warn('No se pudo obtener sesión. Intentando modo offline.', error);
@@ -837,6 +881,7 @@ async function initRemoteStorage() {
     }
     usuarioActivo = session?.user || null;
     if (!usuarioActivo) {
+        if (permitirLocalSinSesion && cargarCopiaLocalRapida('Sin sesión · copia local')) return true;
         mostrarLogin();
         return false;
     }
@@ -902,6 +947,15 @@ async function initRemoteStorage() {
     iniciarRefrescoRemotoAutomatico();
     actualizarEstadoSync('Sincronizado');
     return true;
+}
+async function initRemoteStorage() {
+    if (estaOffline()) return cargarModoOffline('Offline · usando copia local');
+    const tieneLocal = cargarCopiaLocalRapida('Abriendo copia local...');
+    if (tieneLocal) {
+        setTimeout(completarArranqueRemoto, 0);
+        return true;
+    }
+    return initRemoteStorageCompleto();
 }
 function mostrarLogin(mensaje = '') {
     $('login-overlay')?.classList.remove('hidden');

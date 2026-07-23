@@ -492,9 +492,9 @@ async function cargarEstadoBaseNormalizada() {
         const rows = Object.fromEntries(TABLAS_NORMALIZADAS.map((tabla, index) => [tabla, consultas[index].data || []]));
         let estadoExtra = {};
         try {
-            const extraQuery = supabaseClient.from('app_state').select('data');
+            const extraQuery = supabaseClient.from('app_state').select('mascotaExtras:data->mascotaExtras');
             const extra = await aplicarFiltroScope(extraQuery).maybeSingle();
-            estadoExtra = extra.data?.data || {};
+            estadoExtra = { mascotaExtras: extra.data?.mascotaExtras || {} };
         } catch (extraError) {
             console.warn('No se pudo cargar estado extra de app_state.', extraError);
         }
