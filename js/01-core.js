@@ -15,7 +15,6 @@ const $$ = selector => document.querySelectorAll(selector);
 const renderIcons = () => window.lucide?.createIcons();
 const uid = () => Math.floor((Date.now() * 1000) + Math.random() * 1000);
 const setHidden = (id, hidden = true) => $(id)?.classList.toggle('hidden', hidden);
-let workspacesDelUsuario = [];
 let usuarioActivo = null;
 let workspaceActivoId = null;
 let workspaceActivoNombre = 'Workspace personal';
@@ -432,89 +431,60 @@ function scopeRemoto() {
     if (workspaceActivoId) scope.workspace_id = workspaceActivoId;
     return scope;
 }
-// Filtra tablas normalizadas (clientes, mascotas, agenda, consultas, pagos, etc.).
-// Si el usuario pertenece a un workspace compartido, se filtra por workspace_id para
-// que vea también lo que registraron sus compañeros de equipo. Si no hay workspace
-// (o la migracion 001 no esta aplicada), se mantiene el filtro por user_id de siempre.
 function aplicarFiltroScope(query) {
-    if (workspaceSoportado && workspaceActivoId) {
-        //return query.eq('workspace_id', workspaceActivoId);
-        return query.or(`workspace_id.eq.${workspaceActivoId},user_id.eq.${usuarioActivo.id}`);
-    }
-    return query.eq('user_id', usuarioActivo.id);
-}
-// Filtra registros que son estrictamente personales (app_state en modo legado /
-// fallback), donde no tiene sentido mezclar datos de otro usuario del workspace.
-function aplicarFiltroUsuario(query) {
     return query.eq('user_id', usuarioActivo.id);
 }
 function filtroRealtimeScope() {
-    if (workspaceSoportado && workspaceActivoId) {
-        return `workspace_id=eq.${workspaceActivoId}`;
-    }
     return `user_id=eq.${usuarioActivo.id}`;
 }
-// Modifica cargarWorkspaceActivo en tu Archivo 1
 async function cargarWorkspaceActivo() {
     workspaceSoportado = false;
     workspaceActivoId = null;
     workspaceActivoNombre = 'Datos independientes por usuario';
     if ($('sync-workspace')) $('sync-workspace').innerText = workspaceActivoNombre;
     actualizarCuentaMovil();
-
+    /*
+     * Se carga workspace_id solo para satisfacer RLS/constraints existentes.
+     * La app sigue filtrando, escuchando y haciendo upsert por user_id.
+     */
     try {
-        // 1. Quitamos el .limit(1) para obtener TODOS sus workspaces
         let { data, error } = await supabaseClient
             .from('app_workspace_members')
             .select('workspace_id, role')
             .eq('user_id', usuarioActivo.id)
-            .order('created_at', { ascending: true });
-
+            .order('created_at', { ascending: true })
+            .limit(1);
         if (error) throw error;
-
-        // 2. Si no tiene, le creamos uno personal (tu lógica original)
         if (!data?.length) {
             const rpc = await supabaseClient.rpc('ensure_personal_workspace');
             if (rpc.error) throw rpc.error;
-
-            let refresco = await supabaseClient
+            ({ data, error } = await supabaseClient
                 .from('app_workspace_members')
                 .select('workspace_id, role')
-                .eq('user_id', usuarioActivo.id);
-
-            if (refresco.error) throw refresco.error;
-            data = refresco.data;
+                .eq('user_id', usuarioActivo.id)
+                .order('created_at', { ascending: true })
+                .limit(1));
+            if (error) throw error;
         }
-
-        if (!data || !data.length) return;
-
+        const membership = data?.[0];
+        if (!membership?.workspace_id) return;
         workspaceSoportado = true;
-        workspacesDelUsuario = data.map(w => w.workspace_id);
-
-        // 3. Permitir que lea el workspace activo desde localStorage (si existe), 
-        // de lo contrario asignamos el primero por defecto.
-        const workspaceGuardado = localStorage.getItem('vet_pro_workspace_seleccionado');
-        if (workspaceGuardado && workspacesDelUsuario.includes(workspaceGuardado)) {
-            workspaceActivoId = workspaceGuardado;
-        } else {
-            workspaceActivoId = data[0].workspace_id;
-        }
-
+        workspaceActivoId = membership.workspace_id;
         const workspace = await supabaseClient
             .from('app_workspaces')
             .select('nombre')
             .eq('id', workspaceActivoId)
             .maybeSingle();
-
         workspaceActivoNombre = workspace.data?.nombre || 'VetHome';
         if ($('sync-workspace')) $('sync-workspace').innerText = workspaceActivoNombre;
         actualizarCuentaMovil();
     } catch (error) {
         console.warn('Workspace multiusuario no disponible. Se usará el modo por usuario.', error);
-        // ... (mantén el resto de tu catch)
+        if ($('sync-workspace')) $('sync-workspace').innerText = 'Datos por usuario';
+        workspaceActivoNombre = 'Datos por usuario';
+        actualizarCuentaMovil();
     }
 }
-
 function dataUrlToBlob(dataUrl) {
     const [metadata, base64] = String(dataUrl || '').split(',');
     const mime = metadata?.match(/data:(.*?);base64/)?.[1] || 'image/jpeg';
@@ -719,7 +689,7 @@ async function refrescarEstadoDesdeRemotoSilencioso() {
             let query = supabaseClient
                 .from('app_state')
                 .select('data');
-            const { data, error } = await aplicarFiltroUsuario(query).maybeSingle();
+            const { data, error } = await aplicarFiltroScope(query).maybeSingle();
             if (error) throw error;
             estadoRemoto = data?.data || null;
         }
@@ -739,7 +709,7 @@ async function cargarEstadoRemotoActual() {
         return remoto.estado || null;
     }
     const query = supabaseClient.from('app_state').select('data');
-    const { data, error } = await aplicarFiltroUsuario(query).maybeSingle();
+    const { data, error } = await aplicarFiltroScope(query).maybeSingle();
     if (error) throw error;
     return data?.data || null;
 }
@@ -938,7 +908,7 @@ async function initRemoteStorageCompleto({ permitirLocalSinSesion = false } = {}
                 let legacyQuery = supabaseClient
                     .from('app_state')
                     .select('data')
-                const { data: estadoLegacy } = await aplicarFiltroUsuario(legacyQuery).maybeSingle();
+                const { data: estadoLegacy } = await aplicarFiltroScope(legacyQuery).maybeSingle();
                 if (estadoLegacy?.data) {
                     aplicarEstado(estadoLegacy.data);
                 } else {
@@ -952,27 +922,18 @@ async function initRemoteStorageCompleto({ permitirLocalSinSesion = false } = {}
             actualizarEstadoSync('Sincronizado');
             return true;
         }
-        const codigoNormalizado = codigoErrorSync(normalizado.error, 'SYNC-NORM');
-        registrarErrorSync(codigoNormalizado, normalizado.error, 'initRemoteStorageCompleto:cargarEstadoBaseNormalizada');
         console.warn('Base normalizada no disponible. Se usará app_state temporalmente.', normalizado.error);
-        if (tieneDatos(datosLocalesAnteriores())) {
-            cargarCopiaLocalRapida(`Copia local · ${codigoNormalizado}`);
-            escucharCambiosRemotos();
-            iniciarRefrescoRemotoAutomatico();
-            return true;
-        }
         modoDatosRemotos = 'app_state';
     }
     let query = supabaseClient
         .from('app_state')
         .select('data');
-    const { data, error } = await aplicarFiltroUsuario(query).maybeSingle();
+    const { data, error } = await aplicarFiltroScope(query).maybeSingle();
     if (error) {
-        const codigo = codigoErrorSync(error, 'APP-STATE');
-        registrarErrorSync(codigo, error, 'initRemoteStorageCompleto:app_state');
+        console.error('No se pudo cargar app_state.', error);
         if (cargarModoOffline('Sin conexión · usando copia local')) return true;
-        actualizarEstadoSync(`Error ${codigo}`, true);
-        mostrarLogin(`No se pudo cargar Supabase. Código: ${codigo}. Revisa sql/011-fix-app-state-rls.sql y las tablas normalizadas.`);
+        actualizarEstadoSync('Error de conexión', true);
+        alert("No se pudieron cargar tus datos desde Supabase. Revisa las políticas RLS de app_state.");
         return false;
     }
     if (data?.data) {
