@@ -15,6 +15,7 @@ const $$ = selector => document.querySelectorAll(selector);
 const renderIcons = () => window.lucide?.createIcons();
 const uid = () => Math.floor((Date.now() * 1000) + Math.random() * 1000);
 const setHidden = (id, hidden = true) => $(id)?.classList.toggle('hidden', hidden);
+let workspacesDelUsuario = [];
 let usuarioActivo = null;
 let workspaceActivoId = null;
 let workspaceActivoNombre = 'Workspace personal';
@@ -452,54 +453,67 @@ function filtroRealtimeScope() {
     }
     return `user_id=eq.${usuarioActivo.id}`;
 }
+// Modifica cargarWorkspaceActivo en tu Archivo 1
 async function cargarWorkspaceActivo() {
     workspaceSoportado = false;
     workspaceActivoId = null;
     workspaceActivoNombre = 'Datos independientes por usuario';
     if ($('sync-workspace')) $('sync-workspace').innerText = workspaceActivoNombre;
     actualizarCuentaMovil();
-    /*
-     * Se carga workspace_id solo para satisfacer RLS/constraints existentes.
-     * La app sigue filtrando, escuchando y haciendo upsert por user_id.
-     */
+
     try {
+        // 1. Quitamos el .limit(1) para obtener TODOS sus workspaces
         let { data, error } = await supabaseClient
             .from('app_workspace_members')
             .select('workspace_id, role')
             .eq('user_id', usuarioActivo.id)
-            .order('created_at', { ascending: true })
-            .limit(1);
+            .order('created_at', { ascending: true });
+
         if (error) throw error;
+
+        // 2. Si no tiene, le creamos uno personal (tu lógica original)
         if (!data?.length) {
             const rpc = await supabaseClient.rpc('ensure_personal_workspace');
             if (rpc.error) throw rpc.error;
-            ({ data, error } = await supabaseClient
+
+            let refresco = await supabaseClient
                 .from('app_workspace_members')
                 .select('workspace_id, role')
-                .eq('user_id', usuarioActivo.id)
-                .order('created_at', { ascending: true })
-                .limit(1));
-            if (error) throw error;
+                .eq('user_id', usuarioActivo.id);
+
+            if (refresco.error) throw refresco.error;
+            data = refresco.data;
         }
-        const membership = data?.[0];
-        if (!membership?.workspace_id) return;
+
+        if (!data || !data.length) return;
+
         workspaceSoportado = true;
-        workspaceActivoId = membership.workspace_id;
+        workspacesDelUsuario = data.map(w => w.workspace_id);
+
+        // 3. Permitir que lea el workspace activo desde localStorage (si existe), 
+        // de lo contrario asignamos el primero por defecto.
+        const workspaceGuardado = localStorage.getItem('vet_pro_workspace_seleccionado');
+        if (workspaceGuardado && workspacesDelUsuario.includes(workspaceGuardado)) {
+            workspaceActivoId = workspaceGuardado;
+        } else {
+            workspaceActivoId = data[0].workspace_id;
+        }
+
         const workspace = await supabaseClient
             .from('app_workspaces')
             .select('nombre')
             .eq('id', workspaceActivoId)
             .maybeSingle();
+
         workspaceActivoNombre = workspace.data?.nombre || 'VetHome';
         if ($('sync-workspace')) $('sync-workspace').innerText = workspaceActivoNombre;
         actualizarCuentaMovil();
     } catch (error) {
         console.warn('Workspace multiusuario no disponible. Se usará el modo por usuario.', error);
-        if ($('sync-workspace')) $('sync-workspace').innerText = 'Datos por usuario';
-        workspaceActivoNombre = 'Datos por usuario';
-        actualizarCuentaMovil();
+        // ... (mantén el resto de tu catch)
     }
 }
+
 function dataUrlToBlob(dataUrl) {
     const [metadata, base64] = String(dataUrl || '').split(',');
     const mime = metadata?.match(/data:(.*?);base64/)?.[1] || 'image/jpeg';
