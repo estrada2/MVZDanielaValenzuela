@@ -438,7 +438,8 @@ function scopeRemoto() {
 // (o la migracion 001 no esta aplicada), se mantiene el filtro por user_id de siempre.
 function aplicarFiltroScope(query) {
     if (workspaceSoportado && workspaceActivoId) {
-        return query.eq('workspace_id', workspaceActivoId);
+        //return query.eq('workspace_id', workspaceActivoId);
+        return query.eq('user_id', usuarioActivo.id);
     }
     return query.eq('user_id', usuarioActivo.id);
 }
