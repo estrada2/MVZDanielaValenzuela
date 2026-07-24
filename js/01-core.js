@@ -439,7 +439,7 @@ function scopeRemoto() {
 function aplicarFiltroScope(query) {
     if (workspaceSoportado && workspaceActivoId) {
         //return query.eq('workspace_id', workspaceActivoId);
-        return query.eq('user_id', usuarioActivo.id);
+        return query.or(`workspace_id.eq.${workspaceActivoId},user_id.eq.${usuarioActivo.id}`);
     }
     return query.eq('user_id', usuarioActivo.id);
 }
