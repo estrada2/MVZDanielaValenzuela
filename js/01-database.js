@@ -101,22 +101,34 @@ function aplicarExtrasMascotas(estado, estadoExtra = {}) {
     return estado;
 }
 
-// Trae TODAS las filas de una consulta paginando en bloques de 1000.
+// Trae TODAS las filas de una tabla paginando en bloques de 1000.
 // PostgREST (Supabase) limita cada select a un máximo de filas por defecto
 // (normalmente 1000). Sin paginación, tablas grandes se truncan en silencio
 // y eso rompe tanto el listado como los mapas de ids usados al sincronizar.
-async function seleccionarTodasLasFilas(construirQuery, tamanoPagina = 1000) {
-    let desde = 0;
-    let filas = [];
-    while (true) {
-        const { data, error } = await construirQuery().range(desde, desde + tamanoPagina - 1);
-        if (error) return { data: null, error };
-        const lote = data || [];
-        filas = filas.concat(lote);
-        if (lote.length < tamanoPagina) break;
-        desde += tamanoPagina;
-    }
-    return { data: filas, error: null };
+// Primero se pide el conteo exacto (una peticion liviana, sin traer filas) y
+// luego se piden todas las paginas necesarias EN PARALELO, en vez de una por
+// una: para cuentas con miles de registros esto reduce el tiempo de carga de
+// varios segundos secuenciales a practicamente el tiempo de una sola vuelta
+// de red.
+// tabla: nombre de la tabla. columnas: string para .select(). aplicarFiltro:
+// función que recibe el query builder recien creado y le aplica el scope
+// (aplicarFiltroScope), igual que antes.
+async function seleccionarTodasLasFilas(tabla, columnas, aplicarFiltro, tamanoPagina = 1000) {
+    const conteo = await aplicarFiltro(supabaseClient.from(tabla).select(columnas, { count: 'exact', head: true }));
+    if (conteo.error) return { data: null, error: conteo.error };
+    const total = conteo.count ?? 0;
+    if (total === 0) return { data: [], error: null };
+
+    const totalPaginas = Math.ceil(total / tamanoPagina);
+    const peticiones = Array.from({ length: totalPaginas }, (_, indice) => {
+        const desde = indice * tamanoPagina;
+        return aplicarFiltro(supabaseClient.from(tabla).select(columnas)).range(desde, desde + tamanoPagina - 1);
+    });
+    const resultados = await Promise.all(peticiones);
+    const errorEncontrado = resultados.find(resultado => resultado.error);
+    if (errorEncontrado) return { data: null, error: errorEncontrado.error };
+
+    return { data: resultados.flatMap(resultado => resultado.data || []), error: null };
 }
 
 async function upsertTabla(nombre, registros, columnas = '*') {
@@ -528,7 +540,7 @@ function mapearEstadoNormalizado(rows) {
 async function cargarEstadoBaseNormalizada() {
     try {
         const consultas = await Promise.all(TABLAS_NORMALIZADAS.map(tabla =>
-            seleccionarTodasLasFilas(() => aplicarFiltroScope(supabaseClient.from(tabla).select('*')))
+            seleccionarTodasLasFilas(tabla, '*', aplicarFiltroScope)
         ));
         const error = consultas.find(resultado => resultado.error)?.error;
         if (error) return { ok: false, error };
@@ -548,14 +560,14 @@ async function cargarEstadoBaseNormalizada() {
             console.warn('No se pudo cargar estado extra de app_state.', extraError);
         }
         try {
-            const vacunas = await seleccionarTodasLasFilas(() => aplicarFiltroScope(supabaseClient.from('vacunas_paciente').select('*')));
+            const vacunas = await seleccionarTodasLasFilas('vacunas_paciente', '*', aplicarFiltroScope);
             tablaVacunasPacienteDisponible = !vacunas.error;
             if (!vacunas.error) rows.vacunas_paciente = vacunas.data || [];
         } catch (errorVacunas) {
             tablaVacunasPacienteDisponible = false;
         }
         try {
-            const clinicas = await seleccionarTodasLasFilas(() => aplicarFiltroScope(supabaseClient.from('clinicas_externas').select('*')));
+            const clinicas = await seleccionarTodasLasFilas('clinicas_externas', '*', aplicarFiltroScope);
             tablaClinicasExternasDisponible = !clinicas.error;
             if (!clinicas.error) rows.clinicas_externas = clinicas.data || [];
         } catch (errorClinicas) {
@@ -586,7 +598,7 @@ function filtrarRegistrosPendientes(lista, nombreStore, registrosPendientes = {}
 }
 
 async function cargarMapaIdsRemotos(tabla) {
-    const resultado = await seleccionarTodasLasFilas(() => aplicarFiltroScope(supabaseClient.from(tabla).select('id, legacy_id')));
+    const resultado = await seleccionarTodasLasFilas(tabla, 'id, legacy_id', aplicarFiltroScope);
     if (resultado.error) throw resultado.error;
     return new Map((resultado.data || []).map(row => [row.legacy_id, row.id]));
 }
