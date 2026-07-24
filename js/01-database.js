@@ -101,28 +101,6 @@ function aplicarExtrasMascotas(estado, estadoExtra = {}) {
     return estado;
 }
 
-// Trae TODAS las filas de una tabla paginando en bloques de 1000.
-// PostgREST (Supabase) limita cada select a un máximo de filas por defecto
-// (normalmente 1000). Sin paginación, tablas grandes se truncan en silencio
-// y eso rompe tanto el listado como los mapas de ids usados al sincronizar.
-// Nota: se intento optimizar esto pidiendo un count:'exact' antes de paginar
-// en paralelo, pero en tablas grandes combinado con RLS eso genera un conteo
-// fila por fila que puede exceder el statement_timeout del servidor (error
-// 57014). Por eso se pagina de forma secuencial: mas lento, pero confiable.
-async function seleccionarTodasLasFilas(tabla, columnas, aplicarFiltro, tamanoPagina = 1000) {
-    let desde = 0;
-    let filas = [];
-    while (true) {
-        const { data, error } = await aplicarFiltro(supabaseClient.from(tabla).select(columnas)).range(desde, desde + tamanoPagina - 1);
-        if (error) return { data: null, error };
-        const lote = data || [];
-        filas = filas.concat(lote);
-        if (lote.length < tamanoPagina) break;
-        desde += tamanoPagina;
-    }
-    return { data: filas, error: null };
-}
-
 async function upsertTabla(nombre, registros, columnas = '*') {
     if (!registros.length) return [];
     const { data, error } = await supabaseClient
@@ -532,34 +510,28 @@ function mapearEstadoNormalizado(rows) {
 async function cargarEstadoBaseNormalizada() {
     try {
         const consultas = await Promise.all(TABLAS_NORMALIZADAS.map(tabla =>
-            seleccionarTodasLasFilas(tabla, '*', aplicarFiltroScope)
+            aplicarFiltroScope(supabaseClient.from(tabla).select('*'))
         ));
         const error = consultas.find(resultado => resultado.error)?.error;
         if (error) return { ok: false, error };
         const rows = Object.fromEntries(TABLAS_NORMALIZADAS.map((tabla, index) => [tabla, consultas[index].data || []]));
         let estadoExtra = {};
         try {
-            // app_state tiene una fila por usuario (aunque compartan workspace), asi que
-            // aqui no usamos maybeSingle: puede haber una fila por cada miembro del
-            // equipo y hay que combinar las responsivas/examenes que cada quien guardo.
-            const extraQuery = supabaseClient.from('app_state').select('data');
-            const extra = await aplicarFiltroScope(extraQuery);
-            if (extra.error) throw extra.error;
-            const mascotaExtras = {};
-            (extra.data || []).forEach(fila => Object.assign(mascotaExtras, fila?.data?.mascotaExtras || {}));
-            estadoExtra = { mascotaExtras };
+            const extraQuery = supabaseClient.from('app_state').select('mascotaExtras:data->mascotaExtras');
+            const extra = await aplicarFiltroScope(extraQuery).maybeSingle();
+            estadoExtra = { mascotaExtras: extra.data?.mascotaExtras || {} };
         } catch (extraError) {
             console.warn('No se pudo cargar estado extra de app_state.', extraError);
         }
         try {
-            const vacunas = await seleccionarTodasLasFilas('vacunas_paciente', '*', aplicarFiltroScope);
+            const vacunas = await aplicarFiltroScope(supabaseClient.from('vacunas_paciente').select('*'));
             tablaVacunasPacienteDisponible = !vacunas.error;
             if (!vacunas.error) rows.vacunas_paciente = vacunas.data || [];
         } catch (errorVacunas) {
             tablaVacunasPacienteDisponible = false;
         }
         try {
-            const clinicas = await seleccionarTodasLasFilas('clinicas_externas', '*', aplicarFiltroScope);
+            const clinicas = await aplicarFiltroScope(supabaseClient.from('clinicas_externas').select('*'));
             tablaClinicasExternasDisponible = !clinicas.error;
             if (!clinicas.error) rows.clinicas_externas = clinicas.data || [];
         } catch (errorClinicas) {
@@ -590,7 +562,7 @@ function filtrarRegistrosPendientes(lista, nombreStore, registrosPendientes = {}
 }
 
 async function cargarMapaIdsRemotos(tabla) {
-    const resultado = await seleccionarTodasLasFilas(tabla, 'id, legacy_id', aplicarFiltroScope);
+    const resultado = await aplicarFiltroScope(supabaseClient.from(tabla).select('id, legacy_id'));
     if (resultado.error) throw resultado.error;
     return new Map((resultado.data || []).map(row => [row.legacy_id, row.id]));
 }
