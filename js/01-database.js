@@ -105,30 +105,22 @@ function aplicarExtrasMascotas(estado, estadoExtra = {}) {
 // PostgREST (Supabase) limita cada select a un máximo de filas por defecto
 // (normalmente 1000). Sin paginación, tablas grandes se truncan en silencio
 // y eso rompe tanto el listado como los mapas de ids usados al sincronizar.
-// Primero se pide el conteo exacto (una peticion liviana, sin traer filas) y
-// luego se piden todas las paginas necesarias EN PARALELO, en vez de una por
-// una: para cuentas con miles de registros esto reduce el tiempo de carga de
-// varios segundos secuenciales a practicamente el tiempo de una sola vuelta
-// de red.
-// tabla: nombre de la tabla. columnas: string para .select(). aplicarFiltro:
-// función que recibe el query builder recien creado y le aplica el scope
-// (aplicarFiltroScope), igual que antes.
+// Nota: se intento optimizar esto pidiendo un count:'exact' antes de paginar
+// en paralelo, pero en tablas grandes combinado con RLS eso genera un conteo
+// fila por fila que puede exceder el statement_timeout del servidor (error
+// 57014). Por eso se pagina de forma secuencial: mas lento, pero confiable.
 async function seleccionarTodasLasFilas(tabla, columnas, aplicarFiltro, tamanoPagina = 1000) {
-    const conteo = await aplicarFiltro(supabaseClient.from(tabla).select(columnas, { count: 'exact', head: true }));
-    if (conteo.error) return { data: null, error: conteo.error };
-    const total = conteo.count ?? 0;
-    if (total === 0) return { data: [], error: null };
-
-    const totalPaginas = Math.ceil(total / tamanoPagina);
-    const peticiones = Array.from({ length: totalPaginas }, (_, indice) => {
-        const desde = indice * tamanoPagina;
-        return aplicarFiltro(supabaseClient.from(tabla).select(columnas)).range(desde, desde + tamanoPagina - 1);
-    });
-    const resultados = await Promise.all(peticiones);
-    const errorEncontrado = resultados.find(resultado => resultado.error);
-    if (errorEncontrado) return { data: null, error: errorEncontrado.error };
-
-    return { data: resultados.flatMap(resultado => resultado.data || []), error: null };
+    let desde = 0;
+    let filas = [];
+    while (true) {
+        const { data, error } = await aplicarFiltro(supabaseClient.from(tabla).select(columnas)).range(desde, desde + tamanoPagina - 1);
+        if (error) return { data: null, error };
+        const lote = data || [];
+        filas = filas.concat(lote);
+        if (lote.length < tamanoPagina) break;
+        desde += tamanoPagina;
+    }
+    return { data: filas, error: null };
 }
 
 async function upsertTabla(nombre, registros, columnas = '*') {
