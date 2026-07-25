@@ -26,6 +26,28 @@ function idsLegacy(lista) {
     return lista.map(item => item?.id ?? item?.legacy_id).filter(id => id !== undefined && id !== null);
 }
 
+// Trae TODAS las filas de una tabla paginando en bloques de 1000.
+// PostgREST (Supabase) limita cada select a un máximo de filas por defecto
+// (normalmente 1000). Sin paginación, tablas grandes se truncan en silencio
+// y eso rompe tanto el listado como los mapas de ids usados al sincronizar.
+// Se pagina de forma secuencial (una pagina a la vez) a proposito: se probo
+// una version en paralelo pidiendo el conteo exacto primero, pero eso genera
+// carga extra en el servidor bajo RLS y puede provocar errores de timeout
+// (57014). Esta version es mas lenta con muchisimos registros, pero confiable.
+async function seleccionarTodasLasFilas(tabla, columnas, aplicarFiltro, tamanoPagina = 1000) {
+    let desde = 0;
+    let filas = [];
+    while (true) {
+        const { data, error } = await aplicarFiltro(supabaseClient.from(tabla).select(columnas)).range(desde, desde + tamanoPagina - 1);
+        if (error) return { data: null, error };
+        const lote = data || [];
+        filas = filas.concat(lote);
+        if (lote.length < tamanoPagina) break;
+        desde += tamanoPagina;
+    }
+    return { data: filas, error: null };
+}
+
 function numeroONulo(valor) {
     const numero = Number(valor);
     return Number.isFinite(numero) ? numero : null;
@@ -510,7 +532,7 @@ function mapearEstadoNormalizado(rows) {
 async function cargarEstadoBaseNormalizada() {
     try {
         const consultas = await Promise.all(TABLAS_NORMALIZADAS.map(tabla =>
-            aplicarFiltroScope(supabaseClient.from(tabla).select('*'))
+            seleccionarTodasLasFilas(tabla, '*', aplicarFiltroScope)
         ));
         const error = consultas.find(resultado => resultado.error)?.error;
         if (error) return { ok: false, error };
@@ -524,14 +546,14 @@ async function cargarEstadoBaseNormalizada() {
             console.warn('No se pudo cargar estado extra de app_state.', extraError);
         }
         try {
-            const vacunas = await aplicarFiltroScope(supabaseClient.from('vacunas_paciente').select('*'));
+            const vacunas = await seleccionarTodasLasFilas('vacunas_paciente', '*', aplicarFiltroScope);
             tablaVacunasPacienteDisponible = !vacunas.error;
             if (!vacunas.error) rows.vacunas_paciente = vacunas.data || [];
         } catch (errorVacunas) {
             tablaVacunasPacienteDisponible = false;
         }
         try {
-            const clinicas = await aplicarFiltroScope(supabaseClient.from('clinicas_externas').select('*'));
+            const clinicas = await seleccionarTodasLasFilas('clinicas_externas', '*', aplicarFiltroScope);
             tablaClinicasExternasDisponible = !clinicas.error;
             if (!clinicas.error) rows.clinicas_externas = clinicas.data || [];
         } catch (errorClinicas) {
@@ -562,7 +584,7 @@ function filtrarRegistrosPendientes(lista, nombreStore, registrosPendientes = {}
 }
 
 async function cargarMapaIdsRemotos(tabla) {
-    const resultado = await aplicarFiltroScope(supabaseClient.from(tabla).select('id, legacy_id'));
+    const resultado = await seleccionarTodasLasFilas(tabla, 'id, legacy_id', aplicarFiltroScope);
     if (resultado.error) throw resultado.error;
     return new Map((resultado.data || []).map(row => [row.legacy_id, row.id]));
 }
