@@ -823,7 +823,7 @@ async function completarArranqueRemoto() {
     if (arranqueRemotoEnCurso) return;
     arranqueRemotoEnCurso = true;
     try {
-        await conTimeout(initRemoteStorageCompleto({ permitirLocalSinSesion: true }), 25000, 'BOOT-REMOTE-TIMEOUT');
+        await conTimeout(initRemoteStorageCompleto({ permitirLocalSinSesion: true }), 12000, 'BOOT-REMOTE-TIMEOUT');
         if (typeof refrescarInterfaz === 'function') refrescarInterfaz();
     } catch (error) {
         const codigo = codigoErrorSync(error, 'BOOT');
