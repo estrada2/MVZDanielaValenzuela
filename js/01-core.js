@@ -470,6 +470,10 @@ async function cargarWorkspaceActivo() {
         if (!membership?.workspace_id) return;
         workspaceSoportado = true;
         workspaceActivoId = membership.workspace_id;
+        console.log("Usuario:", usuarioActivo.id);
+        console.log("Workspace activo:", workspaceActivoId);
+        console.log("Membership:", membership);
+
         const workspace = await supabaseClient
             .from('app_workspaces')
             .select('nombre')
