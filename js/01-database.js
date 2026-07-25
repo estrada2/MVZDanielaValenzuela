@@ -26,6 +26,23 @@ function idsLegacy(lista) {
     return lista.map(item => item?.id ?? item?.legacy_id).filter(id => id !== undefined && id !== null);
 }
 
+// Trae TODAS las filas de una tabla paginando en bloques de 1000.
+// PostgREST (Supabase) limita cada select a un máximo de filas por defecto
+// (normalmente 1000). Sin paginación, tablas grandes se truncan en silencio.
+async function seleccionarTodasLasFilas(tabla, columnas, aplicarFiltro, tamanoPagina = 1000) {
+    let desde = 0;
+    let filas = [];
+    while (true) {
+        const { data, error } = await aplicarFiltro(supabaseClient.from(tabla).select(columnas)).range(desde, desde + tamanoPagina - 1);
+        if (error) return { data: null, error };
+        const lote = data || [];
+        filas = filas.concat(lote);
+        if (lote.length < tamanoPagina) break;
+        desde += tamanoPagina;
+    }
+    return { data: filas, error: null };
+}
+
 function numeroONulo(valor) {
     const numero = Number(valor);
     return Number.isFinite(numero) ? numero : null;
@@ -103,96 +120,59 @@ function aplicarExtrasMascotas(estado, estadoExtra = {}) {
 
 async function upsertTabla(nombre, registros, columnas = '*') {
     if (!registros.length) return [];
-    const { data, error } = await supabaseClient
-        .from(nombre)
-        .upsert(registros, { onConflict: 'user_id,legacy_id' })
-        .select(columnas);
-    if (error) {
+    let payload = registros;
+    for (let intento = 0; intento < 12; intento++) {
+        const { data, error } = await supabaseClient
+            .from(nombre)
+            .upsert(payload, { onConflict: 'user_id,legacy_id' })
+            .select(columnas);
+        if (!error) return data || [];
+
         const sinIndiceUnico = error.code === '42P10' || /unique|exclusion|conflict/i.test(error.message || '');
-        if (sinIndiceUnico) return upsertTablaManual(nombre, registros, columnas);
+        if (sinIndiceUnico) return upsertTablaManual(nombre, payload, columnas);
+
+        // PGRST204: la columna no existe en el esquema real de Supabase (por
+        // ejemplo si el codigo se adelanto a una migracion, o el esquema real
+        // difiere del que se penso al escribir esto). En vez de mantener una
+        // lista fija de columnas "seguras" que se desactualiza, se detecta el
+        // nombre exacto de la columna en el mensaje de error, se quita de
+        // todos los registros, y se reintenta. Repite por si faltan varias.
+        const columnaFaltante = error.code === 'PGRST204'
+            ? (error.message || '').match(/'([^']+)' column/)?.[1]
+            : null;
+        if (columnaFaltante) {
+            console.warn(`Columna '${columnaFaltante}' no existe en '${nombre}' segun Supabase. Se omite y se reintenta.`, error);
+            payload = payload.map(registro => {
+                const copia = { ...registro };
+                delete copia[columnaFaltante];
+                return copia;
+            });
+            continue;
+        }
+
         error.__syncCode = `DB-UP-${nombre}`.toUpperCase().replace(/[^A-Z0-9_-]/g, '-');
         throw error;
     }
-    return data || [];
+    const agotado = new Error(`No se pudo guardar '${nombre}' tras varios reintentos quitando columnas inexistentes.`);
+    agotado.__syncCode = `DB-UP-${nombre}`.toUpperCase().replace(/[^A-Z0-9_-]/g, '-');
+    throw agotado;
 }
 
 async function upsertServiciosExternosCompatible(registros) {
-    try {
-        return await upsertTabla('servicios_externos', registros, 'id, legacy_id');
-    } catch (error) {
-        const mensaje = `${error?.message || ''} ${error?.details || ''} ${error?.hint || ''}`;
-        const pareceColumnaOpcional = /workspace_id|clinica_legacy_id|tipo|abonos/i.test(mensaje)
-            || error?.code === 'PGRST204'
-            || error?.code === '42703';
-        if (!pareceColumnaOpcional) throw error;
-        console.warn('Reintentando servicios_externos con columnas compatibles.', error);
-        const registrosCompatibles = registros.map(registro => ({
-            user_id: registro.user_id,
-            legacy_id: registro.legacy_id,
-            fecha_iso: registro.fecha_iso,
-            fecha_texto: registro.fecha_texto,
-            hora: registro.hora,
-            cliente_nombre: registro.cliente_nombre,
-            servicio: registro.servicio,
-            direccion: registro.direccion,
-            agenda_id: registro.agenda_id,
-            total: registro.total,
-            metodo_pago: registro.metodo_pago,
-            estado_pago: registro.estado_pago,
-            nota: registro.nota,
-            updated_at: registro.updated_at
-        }));
-        return upsertTabla('servicios_externos', registrosCompatibles, 'id, legacy_id');
-    }
+    // upsertTabla ya quita automaticamente cualquier columna que Supabase
+    // reporte como inexistente (ver PGRST204 arriba), asi que ya no hace
+    // falta mantener aqui una lista fija de "columnas compatibles" a mano.
+    return upsertTabla('servicios_externos', registros, 'id, legacy_id');
 }
 
 async function upsertPagosCompatible(registros) {
-    try {
-        return await upsertTabla('pagos', registros, 'id, legacy_id');
-    } catch (error) {
-        const mensaje = `${error?.message || ''} ${error?.details || ''} ${error?.hint || ''}`;
-        const pareceColumnaOpcional = /workspace_id|abonos/i.test(mensaje)
-            || error?.code === 'PGRST204'
-            || error?.code === '42703';
-        if (!pareceColumnaOpcional) throw error;
-        console.warn('Reintentando pagos con columnas compatibles.', error);
-        const registrosCompatibles = registros.map(registro => ({
-            user_id: registro.user_id,
-            legacy_id: registro.legacy_id,
-            consulta_id: registro.consulta_id,
-            cliente_id: registro.cliente_id,
-            mascota_id: registro.mascota_id,
-            servicio_cobrado: registro.servicio_cobrado,
-            total: registro.total,
-            metodo_pago: registro.metodo_pago,
-            estado_pago: registro.estado_pago,
-            nota_pago: registro.nota_pago,
-            fecha_iso: registro.fecha_iso,
-            updated_at: registro.updated_at
-        }));
-        return upsertTabla('pagos', registrosCompatibles, 'id, legacy_id');
-    }
+    // upsertTabla ya quita automaticamente cualquier columna inexistente.
+    return upsertTabla('pagos', registros, 'id, legacy_id');
 }
 
 async function upsertServiciosCatalogoCompatible(registros) {
-    try {
-        return await upsertTabla('servicios', registros, 'id, legacy_id');
-    } catch (error) {
-        const mensaje = `${error?.message || ''} ${error?.details || ''} ${error?.hint || ''}`;
-        const pareceColumnaOpcional = /workspace_id|activo/i.test(mensaje)
-            || error?.code === 'PGRST204'
-            || error?.code === '42703';
-        if (!pareceColumnaOpcional) throw error;
-        console.warn('Reintentando servicios con columnas compatibles.', error);
-        const registrosCompatibles = registros.map(registro => ({
-            user_id: registro.user_id,
-            legacy_id: registro.legacy_id,
-            nombre: registro.nombre,
-            precio: registro.precio,
-            updated_at: registro.updated_at
-        }));
-        return upsertTabla('servicios', registrosCompatibles, 'id, legacy_id');
-    }
+    // upsertTabla ya quita automaticamente cualquier columna inexistente.
+    return upsertTabla('servicios', registros, 'id, legacy_id');
 }
 
 async function upsertTablaManual(nombre, registros, columnas = '*') {
@@ -510,7 +490,7 @@ function mapearEstadoNormalizado(rows) {
 async function cargarEstadoBaseNormalizada() {
     try {
         const consultas = await Promise.all(TABLAS_NORMALIZADAS.map(tabla =>
-            aplicarFiltroScope(supabaseClient.from(tabla).select('*'))
+            seleccionarTodasLasFilas(tabla, '*', aplicarFiltroScope)
         ));
         const error = consultas.find(resultado => resultado.error)?.error;
         if (error) return { ok: false, error };
@@ -524,14 +504,14 @@ async function cargarEstadoBaseNormalizada() {
             console.warn('No se pudo cargar estado extra de app_state.', extraError);
         }
         try {
-            const vacunas = await aplicarFiltroScope(supabaseClient.from('vacunas_paciente').select('*'));
+            const vacunas = await seleccionarTodasLasFilas('vacunas_paciente', '*', aplicarFiltroScope);
             tablaVacunasPacienteDisponible = !vacunas.error;
             if (!vacunas.error) rows.vacunas_paciente = vacunas.data || [];
         } catch (errorVacunas) {
             tablaVacunasPacienteDisponible = false;
         }
         try {
-            const clinicas = await aplicarFiltroScope(supabaseClient.from('clinicas_externas').select('*'));
+            const clinicas = await seleccionarTodasLasFilas('clinicas_externas', '*', aplicarFiltroScope);
             tablaClinicasExternasDisponible = !clinicas.error;
             if (!clinicas.error) rows.clinicas_externas = clinicas.data || [];
         } catch (errorClinicas) {
@@ -562,7 +542,7 @@ function filtrarRegistrosPendientes(lista, nombreStore, registrosPendientes = {}
 }
 
 async function cargarMapaIdsRemotos(tabla) {
-    const resultado = await aplicarFiltroScope(supabaseClient.from(tabla).select('id, legacy_id'));
+    const resultado = await seleccionarTodasLasFilas(tabla, 'id, legacy_id', aplicarFiltroScope);
     if (resultado.error) throw resultado.error;
     return new Map((resultado.data || []).map(row => [row.legacy_id, row.id]));
 }
