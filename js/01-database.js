@@ -43,6 +43,35 @@ async function seleccionarTodasLasFilas(tabla, columnas, aplicarFiltro, tamanoPa
     return { data: filas, error: null };
 }
 
+// Corre una lista de tareas asincronas (funciones que devuelven promesa) en
+// grupos pequeños en vez de todas a la vez. Al arrancar la app se piden ~10
+// tablas al mismo tiempo; en rafaga eso puede saturar momentaneamente el
+// limite de conexiones del proyecto y provocar fallas intermitentes aunque
+// cada consulta individual sea rapida. Pedirlas en grupos de a pocas reduce
+// esa rafaga sin volver la carga completamente secuencial.
+async function enLotes(tareas, tamanoLote = 4) {
+    const resultados = [];
+    for (let inicio = 0; inicio < tareas.length; inicio += tamanoLote) {
+        const grupo = tareas.slice(inicio, inicio + tamanoLote);
+        resultados.push(...await Promise.all(grupo.map(tarea => tarea())));
+    }
+    return resultados;
+}
+
+// Reintenta una vez una tabla que fallo, con una pequeña pausa. Las fallas
+// por rafaga de conexiones suelen ser transitorias: un segundo intento a
+// veces basta para que ya no truene.
+async function conReintento(fn, intentos = 2, pausaMs = 400) {
+    let ultimoError;
+    for (let i = 0; i < intentos; i++) {
+        const resultado = await fn();
+        if (!resultado.error) return resultado;
+        ultimoError = resultado.error;
+        if (i < intentos - 1) await new Promise(resolve => setTimeout(resolve, pausaMs));
+    }
+    return { data: null, error: ultimoError };
+}
+
 function numeroONulo(valor) {
     const numero = Number(valor);
     return Number.isFinite(numero) ? numero : null;
@@ -489,9 +518,10 @@ function mapearEstadoNormalizado(rows) {
 
 async function cargarEstadoBaseNormalizada() {
     try {
-        const consultas = await Promise.all(TABLAS_NORMALIZADAS.map(tabla =>
-            seleccionarTodasLasFilas(tabla, '*', aplicarFiltroScope)
-        ));
+        const consultas = await enLotes(
+            TABLAS_NORMALIZADAS.map(tabla => () => conReintento(() => seleccionarTodasLasFilas(tabla, '*', aplicarFiltroScope))),
+            4
+        );
         const error = consultas.find(resultado => resultado.error)?.error;
         if (error) return { ok: false, error };
         const rows = Object.fromEntries(TABLAS_NORMALIZADAS.map((tabla, index) => [tabla, consultas[index].data || []]));
