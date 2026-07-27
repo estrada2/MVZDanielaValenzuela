@@ -296,14 +296,40 @@ function registrarErrorSync(codigo, error, contexto = '') {
     console.error(`[${codigo}] ${contexto || 'Error de sincronización'}`, error);
     return detalle;
 }
+let reintentandoConexionManual = false;
+async function reintentarConexionManual() {
+    if (reintentandoConexionManual) return;
+    reintentandoConexionManual = true;
+    actualizarEstadoSync('Reintentando...');
+    try {
+        await conTimeout(initRemoteStorageCompleto({ permitirLocalSinSesion: true }), 25000, 'BOOT-REMOTE-TIMEOUT');
+    } catch (error) {
+        console.warn('Reintento manual fallo.', error);
+        actualizarEstadoSync('Sigue sin conectar · toca para reintentar', true);
+    } finally {
+        reintentandoConexionManual = false;
+    }
+}
 function actualizarEstadoSync(texto, error = false) {
+    const textoMostrado = error ? `${texto} · toca para reintentar` : texto;
     if ($('sync-status')) {
-        $('sync-status').innerText = texto;
+        $('sync-status').innerText = textoMostrado;
         $('sync-status').className = error ? 'text-red-300' : '';
+        $('sync-status').style.cursor = error ? 'pointer' : '';
+        $('sync-status').title = error ? 'Toca para reintentar la conexión' : '';
+        if (!$('sync-status').__reintentoConectado) {
+            $('sync-status').addEventListener('click', () => { if ($('sync-status').style.cursor === 'pointer') reintentarConexionManual(); });
+            $('sync-status').__reintentoConectado = true;
+        }
     }
     if ($('sync-status-mobile')) {
-        $('sync-status-mobile').innerText = texto;
+        $('sync-status-mobile').innerText = textoMostrado;
         $('sync-status-mobile').className = `text-sm font-black ${error ? 'text-rose-700' : 'text-slate-900'}`;
+        $('sync-status-mobile').style.cursor = error ? 'pointer' : '';
+        if (!$('sync-status-mobile').__reintentoConectado) {
+            $('sync-status-mobile').addEventListener('click', () => { if ($('sync-status-mobile').style.cursor === 'pointer') reintentarConexionManual(); });
+            $('sync-status-mobile').__reintentoConectado = true;
+        }
     }
 }
 function actualizarCuentaMovil() {

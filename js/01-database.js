@@ -518,9 +518,8 @@ function mapearEstadoNormalizado(rows) {
 
 async function cargarEstadoBaseNormalizada() {
     try {
-        const consultas = await enLotes(
-            TABLAS_NORMALIZADAS.map(tabla => () => conReintento(() => seleccionarTodasLasFilas(tabla, '*', aplicarFiltroScope))),
-            4
+        const consultas = await Promise.all(
+            TABLAS_NORMALIZADAS.map(tabla => conReintento(() => seleccionarTodasLasFilas(tabla, '*', aplicarFiltroScope)))
         );
         const error = consultas.find(resultado => resultado.error)?.error;
         if (error) return { ok: false, error };
