@@ -453,9 +453,7 @@ function prepararCacheParaUsuarioActivo() {
     localStorage.setItem(LOCAL_ACTIVE_USER_KEY, usuarioActivo.id);
 }
 function scopeRemoto() {
-    const scope = { user_id: usuarioActivo?.id };
-    if (workspaceActivoId) scope.workspace_id = workspaceActivoId;
-    return scope;
+    return { user_id: usuarioActivo?.id };
 }
 function aplicarFiltroScope(query) {
     return query.eq('user_id', usuarioActivo.id);
@@ -469,51 +467,6 @@ async function cargarWorkspaceActivo() {
     workspaceActivoNombre = 'Datos independientes por usuario';
     if ($('sync-workspace')) $('sync-workspace').innerText = workspaceActivoNombre;
     actualizarCuentaMovil();
-    /*
-     * Se carga workspace_id solo para satisfacer RLS/constraints existentes.
-     * La app sigue filtrando, escuchando y haciendo upsert por user_id.
-     */
-    try {
-        let { data, error } = await supabaseClient
-            .from('app_workspace_members')
-            .select('workspace_id, role')
-            .eq('user_id', usuarioActivo.id)
-            .order('created_at', { ascending: true })
-            .limit(1);
-        if (error) throw error;
-        if (!data?.length) {
-            const rpc = await supabaseClient.rpc('ensure_personal_workspace');
-            if (rpc.error) throw rpc.error;
-            ({ data, error } = await supabaseClient
-                .from('app_workspace_members')
-                .select('workspace_id, role')
-                .eq('user_id', usuarioActivo.id)
-                .order('created_at', { ascending: true })
-                .limit(1));
-            if (error) throw error;
-        }
-        const membership = data?.[0];
-        if (!membership?.workspace_id) return;
-        workspaceSoportado = true;
-        workspaceActivoId = membership.workspace_id;
-        console.log("Usuario:", usuarioActivo.id);
-        console.log("Workspace activo:", workspaceActivoId);
-        console.log("Membership:", membership);
-
-        const workspace = await supabaseClient
-            .from('app_workspaces')
-            .select('nombre')
-            .eq('id', workspaceActivoId)
-            .maybeSingle();
-        workspaceActivoNombre = workspace.data?.nombre || 'VetHome';
-        if ($('sync-workspace')) $('sync-workspace').innerText = workspaceActivoNombre;
-        actualizarCuentaMovil();
-    } catch (error) {
-        console.warn('Workspace multiusuario no disponible. Se usará el modo por usuario.', error);
-        if ($('sync-workspace')) $('sync-workspace').innerText = 'Datos por usuario';
-        workspaceActivoNombre = 'Datos por usuario';
-        actualizarCuentaMovil();
-    }
 }
 function dataUrlToBlob(dataUrl) {
     const [metadata, base64] = String(dataUrl || '').split(',');
@@ -653,7 +606,7 @@ function registrarAuditoria(tabla, accion, resumen, registroId = '') {
     };
     auditLogs = [item, ...(auditLogs || [])].slice(0, 500);
     try {
-        if (usuarioActivo && workspaceSoportado && workspaceActivoId) {
+        if (usuarioActivo && usuarioActivo.id !== 'offline') {
             supabaseClient.from('audit_logs').insert({
                 ...scopeRemoto(),
                 tabla,
@@ -829,7 +782,7 @@ async function sincronizarCambiosPendientesOnline() {
             }
             if ($('sync-user')) $('sync-user').innerText = usuarioActivo.email || '';
             actualizarCuentaMovil();
-            await cargarWorkspaceActivo();
+            cargarWorkspaceActivo();
         }
         if (hayCambiosPendientesOffline()) {
             guardarStoresLocales();
@@ -919,14 +872,7 @@ async function initRemoteStorageCompleto({ permitirLocalSinSesion = false } = {}
     ocultarLogin();
     if ($('sync-user')) $('sync-user').innerText = usuarioActivo.email || '';
     actualizarCuentaMovil();
-    try {
-        await cargarWorkspaceActivo();
-    } catch (error) {
-        console.warn('No se pudo cargar workspace. Intentando modo offline.', error);
-        if (cargarModoOffline('Sin conexión · usando copia local')) return true;
-        mostrarLogin('No se pudo cargar el workspace y no hay copia local disponible.');
-        return false;
-    }
+    cargarWorkspaceActivo();
     actualizarEstadoSync('Cargando...');
     if (typeof cargarEstadoBaseNormalizada === 'function') {
         const normalizado = await cargarEstadoBaseNormalizada();
@@ -952,7 +898,15 @@ async function initRemoteStorageCompleto({ permitirLocalSinSesion = false } = {}
             actualizarEstadoSync('Sincronizado');
             return true;
         }
+        const codigoNormalizado = codigoErrorSync(normalizado.error, 'SYNC-NORM');
+        registrarErrorSync(codigoNormalizado, normalizado.error, 'initRemoteStorageCompleto:cargarEstadoBaseNormalizada');
         console.warn('Base normalizada no disponible. Se usará app_state temporalmente.', normalizado.error);
+        if (tieneDatos(datosLocalesAnteriores())) {
+            cargarCopiaLocalRapida(`Copia local · ${codigoNormalizado}`);
+            escucharCambiosRemotos();
+            iniciarRefrescoRemotoAutomatico();
+            return true;
+        }
         modoDatosRemotos = 'app_state';
     }
     let query = supabaseClient
@@ -960,10 +914,11 @@ async function initRemoteStorageCompleto({ permitirLocalSinSesion = false } = {}
         .select('data');
     const { data, error } = await aplicarFiltroScope(query).maybeSingle();
     if (error) {
-        console.error('No se pudo cargar app_state.', error);
+        const codigo = codigoErrorSync(error, 'APP-STATE');
+        registrarErrorSync(codigo, error, 'initRemoteStorageCompleto:app_state');
         if (cargarModoOffline('Sin conexión · usando copia local')) return true;
-        actualizarEstadoSync('Error de conexión', true);
-        alert("No se pudieron cargar tus datos desde Supabase. Revisa las políticas RLS de app_state.");
+        actualizarEstadoSync(`Error ${codigo}`, true);
+        mostrarLogin(`No se pudo cargar Supabase. Código: ${codigo}. Revisa sql/012-v11-user-scope-stabilize.sql.`);
         return false;
     }
     if (data?.data) {

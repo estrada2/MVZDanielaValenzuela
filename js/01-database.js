@@ -518,12 +518,26 @@ function mapearEstadoNormalizado(rows) {
 
 async function cargarEstadoBaseNormalizada() {
     try {
-        const consultas = await Promise.all(
-            TABLAS_NORMALIZADAS.map(tabla => conReintento(() => seleccionarTodasLasFilas(tabla, '*', aplicarFiltroScope)))
+        const consultas = await enLotes(
+            TABLAS_NORMALIZADAS.map(tabla => async () => ({
+                tabla,
+                ...await conReintento(() => seleccionarTodasLasFilas(tabla, '*', aplicarFiltroScope))
+            })),
+            3
         );
-        const error = consultas.find(resultado => resultado.error)?.error;
-        if (error) return { ok: false, error };
-        const rows = Object.fromEntries(TABLAS_NORMALIZADAS.map((tabla, index) => [tabla, consultas[index].data || []]));
+        const tablasCriticas = new Set(['clientes', 'mascotas']);
+        const errorCritico = consultas.find(resultado => tablasCriticas.has(resultado.tabla) && resultado.error)?.error;
+        if (errorCritico) return { ok: false, error: errorCritico };
+        consultas
+            .filter(resultado => resultado.error)
+            .forEach(resultado => {
+                const codigo = resultado.error.__syncCode || codigoErrorSync(resultado.error, `DB-LOAD-${resultado.tabla}`);
+                registrarErrorSync(codigo, resultado.error, `cargarEstadoBaseNormalizada:${resultado.tabla}`);
+            });
+        const rows = Object.fromEntries(TABLAS_NORMALIZADAS.map(tabla => {
+            const resultado = consultas.find(item => item.tabla === tabla);
+            return [tabla, resultado?.error ? [] : (resultado?.data || [])];
+        }));
         let estadoExtra = {};
         try {
             const extraQuery = supabaseClient.from('app_state').select('mascotaExtras:data->mascotaExtras');
