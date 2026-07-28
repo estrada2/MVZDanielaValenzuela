@@ -22,6 +22,16 @@ const TABLAS_NORMALIZADAS = [
     'movimientos_inventario'
 ];
 
+const COLUMNAS_ARRANQUE = {
+    clientes: 'id,created_at,user_id,nombre,telefono,email,direccion,notas,legacy_id,updated_at',
+    mascotas: 'id,cliente_id,nombre,especie,raza,edad,peso,created_at,user_id,esterilizado,legacy_id,updated_at',
+    consultas: 'id,user_id,cliente_id,mascota_id,cita_id,fecha_iso,fecha_texto,tipo,peso,temperatura,motivo,tratamiento,sintomas,vacunas,desparasitante,disclaimer,notas_rapidas,insumos,vacunas_control_stock,seguimiento,legacy_id,created_at,updated_at'
+};
+
+function columnasArranque(tabla) {
+    return COLUMNAS_ARRANQUE[tabla] || '*';
+}
+
 function idsLegacy(lista) {
     return lista.map(item => item?.id ?? item?.legacy_id).filter(id => id !== undefined && id !== null);
 }
@@ -288,24 +298,39 @@ function mapearEstadoNormalizado(rows) {
     const mascotasPorId = new Map();
     const pagosPorConsulta = new Map();
     const mascotasSinPropietario = [];
+    const clientesLocalesPorLegacy = new Map((clientes || []).map(cliente => [String(cliente.id), cliente]));
+    const mascotasLocalesPorLegacy = new Map();
+    const consultasLocalesPorLegacy = new Map();
+    (clientes || []).forEach(cliente => {
+        (cliente.mascotas || []).forEach(mascota => {
+            mascotasLocalesPorLegacy.set(String(mascota.id), mascota);
+            (mascota.historial || []).forEach(consulta => {
+                consultasLocalesPorLegacy.set(String(consulta.id), consulta);
+            });
+        });
+    });
 
     (rows.clientes || []).forEach(row => {
+        const legacyId = row.legacy_id || row.id;
+        const clienteLocal = clientesLocalesPorLegacy.get(String(legacyId));
         clientesPorId.set(row.id, {
-            id: row.legacy_id || row.id,
+            id: legacyId,
             dbId: row.id,
             owner: row.nombre || '',
             phone: row.telefono || '',
             email: row.email || '',
             address: row.direccion || '',
             ownerNotes: row.notas || '',
-            ownerIdFile: row.id_photo || '',
+            ownerIdFile: row.id_photo !== undefined ? (row.id_photo || '') : (clienteLocal?.ownerIdFile || ''),
             mascotas: []
         });
     });
 
     (rows.mascotas || []).forEach(row => {
+        const legacyId = row.legacy_id || row.id;
+        const mascotaLocal = mascotasLocalesPorLegacy.get(String(legacyId));
         const mascota = {
-            id: row.legacy_id || row.id,
+            id: legacyId,
             dbId: row.id,
             name: row.nombre || '',
             species: row.especie || '',
@@ -313,9 +338,9 @@ function mapearEstadoNormalizado(rows) {
             age: row.edad ?? '',
             peso: row.peso ?? '',
             spayed: row.esterilizado || '',
-            photo: row.foto || '',
-            estudios: row.estudios || [],
-            vacunasManuales: rows.vacunas_paciente ? [] : (row.vacunas_manuales || []),
+            photo: row.foto !== undefined ? (row.foto || '') : (mascotaLocal?.photo || ''),
+            estudios: row.estudios !== undefined ? (row.estudios || []) : (mascotaLocal?.estudios || []),
+            vacunasManuales: rows.vacunas_paciente ? [] : (row.vacunas_manuales !== undefined ? (row.vacunas_manuales || []) : (mascotaLocal?.vacunasManuales || [])),
             historial: []
         };
         mascotasPorId.set(row.id, mascota);
@@ -336,8 +361,10 @@ function mapearEstadoNormalizado(rows) {
 
     (rows.consultas || []).forEach(row => {
         const pago = pagosPorConsulta.get(row.id);
+        const legacyId = row.legacy_id || row.id;
+        const consultaLocal = consultasLocalesPorLegacy.get(String(legacyId));
         const consulta = {
-            id: row.legacy_id || row.id,
+            id: legacyId,
             fecha: row.fecha_texto || new Date(row.fecha_iso).toLocaleString('es-MX'),
             fechaISO: row.fecha_iso,
             tipo: row.tipo || '',
@@ -360,8 +387,8 @@ function mapearEstadoNormalizado(rows) {
             vacunasControlStock: row.vacunas_control_stock,
             seguimiento: row.seguimiento || {},
             agendaId: row.seguimiento?.agendaId || null,
-            firmaDueno: row.firma_dueno || '',
-            firmaVet: row.firma_vet || ''
+            firmaDueno: row.firma_dueno !== undefined ? (row.firma_dueno || '') : (consultaLocal?.firmaDueno || ''),
+            firmaVet: row.firma_vet !== undefined ? (row.firma_vet || '') : (consultaLocal?.firmaVet || '')
         };
         mascotasPorId.get(row.mascota_id)?.historial.push(consulta);
     });
@@ -521,7 +548,7 @@ async function cargarEstadoBaseNormalizada() {
         const consultas = await enLotes(
             TABLAS_NORMALIZADAS.map(tabla => async () => ({
                 tabla,
-                ...await conReintento(() => seleccionarTodasLasFilas(tabla, '*', aplicarFiltroScope))
+                ...await conReintento(() => seleccionarTodasLasFilas(tabla, columnasArranque(tabla), aplicarFiltroScope))
             })),
             3
         );
@@ -618,7 +645,7 @@ async function guardarEstadoBaseNormalizada(storesPendientes = new Set(), regist
             email: cliente.email || '',
             direccion: cliente.address || '',
             notas: cliente.ownerNotes || '',
-            id_photo: cliente.ownerIdFile || '',
+            ...(cliente.ownerIdFile ? { id_photo: cliente.ownerIdFile } : {}),
             updated_at: ahora
         }));
         const guardados = await upsertTabla('clientes', clientesRows, 'id, legacy_id');
@@ -634,9 +661,9 @@ async function guardarEstadoBaseNormalizada(storesPendientes = new Set(), regist
             edad: numeroONulo(mascota.age),
             peso: numeroONulo(mascota.peso),
             esterilizado: textoBooleano(mascota.spayed),
-            foto: textoONulo(mascota.photo),
-            estudios: mascota.estudios || [],
-            vacunas_manuales: mascota.vacunasManuales || [],
+            ...(mascota.photo ? { foto: textoONulo(mascota.photo) } : {}),
+            ...(mascota.estudios?.length ? { estudios: mascota.estudios } : {}),
+            ...(mascota.vacunasManuales?.length ? { vacunas_manuales: mascota.vacunasManuales } : {}),
             updated_at: ahora
         }))).filter(row => row.cliente_id);
         const mascotasGuardadas = await upsertTabla('mascotas', mascotasRows, 'id, legacy_id');
@@ -663,8 +690,8 @@ async function guardarEstadoBaseNormalizada(storesPendientes = new Set(), regist
                 insumos: consulta.insumos || [],
                 vacunas_control_stock: consulta.vacunasControlStock || null,
                 seguimiento: { ...(consulta.seguimiento || {}), agendaId: consulta.agendaId || consulta.seguimiento?.agendaId || null },
-                firma_dueno: consulta.firmaDueno || '',
-                firma_vet: consulta.firmaVet || '',
+                ...(consulta.firmaDueno ? { firma_dueno: consulta.firmaDueno } : {}),
+                ...(consulta.firmaVet ? { firma_vet: consulta.firmaVet } : {}),
                 updated_at: ahora
             }))
         ));
